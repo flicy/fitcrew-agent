@@ -12,7 +12,7 @@ from bodyos_api.db import get_session
 from bodyos_api.models import Consent, DeviceBinding, IdentityBinding, User
 from bodyos_api.runtime import get_field_cipher
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 USER_ID = "11111111-1111-4111-8111-111111111111"
@@ -129,6 +129,51 @@ def test_sync_rejects_token_bound_to_a_different_device(
 
     assert response.status_code == 403
     assert response.json()["detail"] == "device binding mismatch"
+
+
+def test_sync_rejects_cross_user_token_without_creating_samples(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_device(session)
+    second_user_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    second_device_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    second_consent_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    session.add(User(fitcrew_user_id=second_user_id))
+    session.add(
+        DeviceBinding(
+            id=second_device_id,
+            fitcrew_user_id=second_user_id,
+            device_public_id="second-iphone",
+            token_hash=hashlib.sha256(b"second-device-secret").hexdigest(),
+        )
+    )
+    session.add(
+        Consent(
+            id=second_consent_id,
+            fitcrew_user_id=second_user_id,
+            category="blood_glucose",
+            purpose="private_coaching",
+            granted=True,
+            receipt_version="v1",
+            granted_at=datetime(2026, 8, 1, tzinfo=UTC),
+        )
+    )
+    session.commit()
+    cross_user_batch = payload()
+    cross_user_batch["device_binding_id"] = second_device_id
+    cross_user_batch["consent_id"] = second_consent_id
+
+    response = client_for(session, field_cipher).post(
+        "/v1/health/sync",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+        json=cross_user_batch,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "device binding mismatch"
+    from bodyos_api.models import HealthSample
+
+    assert session.scalar(select(func.count(HealthSample.id))) == 0
 
 
 def test_status_returns_only_deidentified_operational_counts(

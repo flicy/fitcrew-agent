@@ -1,13 +1,9 @@
-import base64
-import hashlib
-import hmac
-import json
 import secrets
 from datetime import UTC, datetime
 from typing import Annotated
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +12,15 @@ from bodyos_api.auth import hash_device_token, require_owner
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
+from bodyos_api.enrollment import (
+    EnrollmentConflict,
+    EnrollmentNotFound,
+    build_pairing_url,
+    find_invited_user_id,
+    hash_subject,
+    invite_feishu_user,
+    pair_invited_user,
+)
 from bodyos_api.models import Consent, DeviceBinding, IdentityBinding, User
 from bodyos_api.runtime import get_field_cipher
 from bodyos_api.schemas import HealthKind
@@ -38,17 +43,20 @@ class OwnerIdentityRebindIn(BaseModel):
     device_public_id: str = Field(min_length=3, max_length=128)
 
 
-def _subject_hash(subject: str, pepper: str) -> str:
-    if not pepper:
-        raise RuntimeError("BODYOS_IDENTITY_PEPPER is required")
-    return hmac.new(pepper.encode(), subject.encode(), hashlib.sha256).hexdigest()
+class UserInviteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feishu_subject: str = Field(min_length=3, max_length=200)
+    locale: str = Field(default="zh-CN", min_length=2, max_length=16)
+    timezone: str = Field(default="Asia/Shanghai", min_length=1, max_length=64)
 
 
-def _pairing_url(payload: dict) -> str:
-    encoded = base64.urlsafe_b64encode(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
-    return f"fitcrew-health://configure?{urlencode({'payload': encoded})}"
+class UserPairIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feishu_subject: str = Field(min_length=3, max_length=200)
+    device_public_id: str = Field(min_length=3, max_length=128)
+    categories: set[HealthKind] = Field(min_length=1)
 
 
 @router.post("/bootstrap", status_code=status.HTTP_201_CREATED)
@@ -59,7 +67,7 @@ def bootstrap_owner_device(
     cipher: Annotated[FieldCipher, Depends(get_field_cipher)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
-    subject_hash = _subject_hash(
+    subject_hash = hash_subject(
         request.feishu_subject, settings.identity_pepper.get_secret_value()
     )
     identity = session.scalar(
@@ -132,7 +140,64 @@ def bootstrap_owner_device(
         "device_binding_id": binding.id,
         "consent_ids": consent_ids,
         "device_token": device_token,
-        "pairing_url": _pairing_url(pairing_payload),
+        "pairing_url": build_pairing_url(pairing_payload),
+    }
+
+
+@router.post("/users/invite")
+def invite_user(
+    request: UserInviteIn,
+    _: Annotated[None, Depends(require_owner)],
+    session: Annotated[Session, Depends(get_session)],
+    cipher: Annotated[FieldCipher, Depends(get_field_cipher)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> JSONResponse:
+    try:
+        result = invite_feishu_user(
+            session,
+            cipher,
+            subject=request.feishu_subject,
+            pepper=settings.identity_pepper.get_secret_value(),
+            locale=request.locale,
+            timezone=request.timezone,
+        )
+    except EnrollmentConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return JSONResponse(
+        status_code=201 if result.created else 200,
+        content={"created": result.created, "status": result.status},
+    )
+
+
+@router.post("/users/pair", status_code=status.HTTP_201_CREATED)
+def pair_user(
+    request: UserPairIn,
+    _: Annotated[None, Depends(require_owner)],
+    session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    try:
+        user_id = find_invited_user_id(
+            session,
+            subject=request.feishu_subject,
+            pepper=settings.identity_pepper.get_secret_value(),
+        )
+        result = pair_invited_user(
+            session,
+            fitcrew_user_id=user_id,
+            device_public_id=request.device_public_id,
+            categories=request.categories,
+            public_base_url=settings.public_base_url,
+        )
+    except EnrollmentNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except EnrollmentConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "device_binding_id": result.device_binding_id,
+        "consent_ids": result.consent_ids,
+        "device_token": result.device_token,
+        "pairing_url": result.pairing_url,
     }
 
 
@@ -154,7 +219,7 @@ def rebind_owner_identity(
         raise HTTPException(status_code=404, detail="active owner device not found")
 
     now = datetime.now(UTC)
-    subject_hash = _subject_hash(
+    subject_hash = hash_subject(
         request.feishu_subject, settings.identity_pepper.get_secret_value()
     )
     current = session.scalar(

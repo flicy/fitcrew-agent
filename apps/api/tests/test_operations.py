@@ -85,3 +85,21 @@ def test_alembic_uses_the_production_database_environment() -> None:
     migration_environment = (ROOT / "apps/api/migrations/env.py").read_text()
     assert 'os.environ.get("BODYOS_DATABASE_URL")' in migration_environment
     assert 'config.set_main_option("sqlalchemy.url"' in migration_environment
+
+
+def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:
+    script_path = ROOT / "scripts/bootstrap_invited_user.py"
+
+    assert script_path.is_file()
+    source = script_path.read_text()
+    assert "print(payload)" not in source
+    assert "mode=0o700" in source
+    assert "os.chmod(record, 0o600)" in source
+    assert "os.chmod(qr_path, 0o600)" in source
+    assert 'print("Invited user pairing stored outside Git.")' in source
+
+
+def test_invited_user_runtime_mount_is_explicitly_private_and_writable() -> None:
+    compose = (ROOT / "infra/tencent/compose.yaml").read_text()
+
+    assert "./runtime/owner:/owner-runtime:rw" in compose
