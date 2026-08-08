@@ -27,6 +27,18 @@ final class ConsentStore {
         }
     }
 
+    func replaceConfiguration(_ newConfiguration: BridgeConfiguration, startedAt: Date = Date()) {
+        let deviceChanged = configuration?.deviceBindingID != newConfiguration.deviceBindingID
+        configuration = newConfiguration
+        if deviceChanged {
+            lastSync = nil
+            lastFullReconciliation = nil
+            studyStart = startedAt
+        } else if studyStart == nil {
+            studyStart = startedAt
+        }
+    }
+
     var lastSync: Date? {
         get { defaults.object(forKey: lastSyncKey) as? Date }
         set { defaults.set(newValue, forKey: lastSyncKey) }

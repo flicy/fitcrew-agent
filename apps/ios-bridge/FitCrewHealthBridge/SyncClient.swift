@@ -52,14 +52,12 @@ final class BridgeViewModel: ObservableObject {
         do {
             let pairing = try PairingDecoder.decode(url)
             try KeychainStore.saveDeviceToken(pairing.deviceToken)
-            consentStore.configuration = BridgeConfiguration(
+            consentStore.replaceConfiguration(BridgeConfiguration(
                 baseURL: pairing.baseURL,
                 deviceBindingID: pairing.deviceBindingID,
                 consentIDs: pairing.consentIDs
-            )
-            if consentStore.studyStart == nil {
-                consentStore.studyStart = Date()
-            }
+            ))
+            lastSync = consentStore.lastSync
             statusMessage = "设备绑定成功，请授权 Apple 健康"
         } catch {
             statusMessage = "设备绑定失败：\(error.localizedDescription)"

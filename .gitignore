@@ -17,6 +17,7 @@ evidence/private/
 *.xcuserstate
 xcuserdata/
 DerivedData/
+apps/ios-bridge/FitCrewHealthBridge.xcodeproj/
 .build/
 health-export*/
 infra/tencent/runtime/

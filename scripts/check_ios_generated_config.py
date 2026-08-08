@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import plistlib
+import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +24,23 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     info = load_plist(BRIDGE / "Info.plist")
     entitlements = load_plist(BRIDGE / "FitCrewHealthBridge.entitlements")
+    project = (ROOT / "apps" / "ios-bridge" / "project.yml").read_text()
+
+    require(
+        info.get("CFBundleShortVersionString") == "2.0.0",
+        "generated Info.plist has the wrong release version",
+    )
+    build_version = info.get("CFBundleVersion")
+    require(
+        isinstance(build_version, str)
+        and build_version.isdigit()
+        and int(build_version) > 0,
+        "generated Info.plist needs a positive numeric build version",
+    )
+    require(
+        info.get("ITSAppUsesNonExemptEncryption") is False,
+        "generated Info.plist is missing the export-compliance declaration",
+    )
 
     require(
         bool(info.get("NSHealthShareUsageDescription")),
@@ -54,8 +72,23 @@ def main() -> None:
         "com.apple.developer.healthkit.access" not in entitlements,
         "generated entitlements unexpectedly request Verifiable Health Records",
     )
+    require(
+        "ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon" in project,
+        "XcodeGen project is missing the AppIcon build setting",
+    )
+    icon = BRIDGE / "Assets.xcassets" / "AppIcon.appiconset" / "AppIcon-1024.png"
+    require(icon.is_file(), "AppIcon asset is missing its 1024px source image")
+    with icon.open("rb") as handle:
+        header = handle.read(26)
+    require(
+        header[:8] == b"\x89PNG\r\n\x1a\n" and len(header) == 26,
+        "AppIcon source is not a PNG",
+    )
+    width, height = struct.unpack(">II", header[16:24])
+    require((width, height) == (1024, 1024), "AppIcon source must be 1024x1024")
+    require(header[25] not in {4, 6}, "AppIcon source must not contain an alpha channel")
 
-    print("Generated iOS configuration preserves HealthKit and pairing metadata.")
+    print("Generated iOS configuration is HealthKit and TestFlight ready.")
 
 
 if __name__ == "__main__":
