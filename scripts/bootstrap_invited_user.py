@@ -5,7 +5,9 @@ import json
 import os
 import re
 import secrets
+from datetime import UTC, datetime
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import qrcode
@@ -60,6 +62,74 @@ def read_or_create_idempotency_key(path: Path) -> str:
     return key
 
 
+def atomic_write_text(path: Path, value: str) -> None:
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(value)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def rotate_idempotency_key(path: Path) -> str:
+    key = secrets.token_urlsafe(32)
+    atomic_write_text(path, key)
+    return key
+
+
+def pairing_expired(record: Path) -> bool:
+    try:
+        value = json.loads(record.read_text(encoding="utf-8"))["expires_at"]
+        expires_at = datetime.fromisoformat(value)
+        if expires_at.tzinfo is None:
+            return False
+        return expires_at <= datetime.now(UTC)
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
+        return False
+
+
+def write_pairing_artifact(output_dir: Path, payload: dict) -> None:
+    record = output_dir / "pairing.json"
+    atomic_write_text(record, json.dumps(payload, ensure_ascii=False, indent=2))
+    qr_path = output_dir / "pairing.png"
+    temporary = qr_path.with_name(f".{qr_path.stem}.{secrets.token_hex(8)}.png")
+    try:
+        qrcode.make(payload["pairing_url"]).save(temporary)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, qr_path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def issue_pairing_with_expiry_rotation(
+    *,
+    output_dir: Path,
+    owner_token: str,
+    subject: str,
+    device_public_id: str,
+    idempotency_key: str,
+) -> dict:
+    request_payload = {
+        "feishu_subject": subject,
+        "device_public_id": device_public_id,
+        "categories": CATEGORIES,
+        "idempotency_key": idempotency_key,
+    }
+    try:
+        return post("/v1/owner/users/pair", request_payload, owner_token)
+    except HTTPError:
+        if not pairing_expired(output_dir / "pairing.json"):
+            raise
+        rotated_key = rotate_idempotency_key(output_dir / "pairing-idempotency-key")
+        request_payload["idempotency_key"] = rotated_key
+        return post("/v1/owner/users/pair", request_payload, owner_token)
+
+
 def main() -> None:
     os.umask(0o077)
     owner_token = required("BODYOS_OWNER_TOKEN")
@@ -83,23 +153,15 @@ def main() -> None:
         },
         owner_token,
     )
-    payload = post(
-        "/v1/owner/users/pair",
-        {
-            "feishu_subject": subject,
-            "device_public_id": device_public_id,
-            "categories": CATEGORIES,
-            "idempotency_key": idempotency_key,
-        },
-        owner_token,
+    payload = issue_pairing_with_expiry_rotation(
+        output_dir=output_dir,
+        owner_token=owner_token,
+        subject=subject,
+        device_public_id=device_public_id,
+        idempotency_key=idempotency_key,
     )
 
-    record = output_dir / "pairing.json"
-    record.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.chmod(record, 0o600)
-    qr_path = output_dir / "pairing.png"
-    qrcode.make(payload["pairing_url"]).save(qr_path)
-    os.chmod(qr_path, 0o600)
+    write_pairing_artifact(output_dir, payload)
     print("Invited user pairing stored outside Git.")
 
 

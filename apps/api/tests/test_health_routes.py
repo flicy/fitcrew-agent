@@ -9,7 +9,7 @@ from bodyos_api.app import create_app
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
-from bodyos_api.models import Consent, DeviceBinding, IdentityBinding, User
+from bodyos_api.models import Consent, DeviceBinding, IdentityBinding, PairingExchangeSession, User
 from bodyos_api.runtime import get_field_cipher
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -197,30 +197,52 @@ def test_status_returns_only_deidentified_operational_counts(
     assert USER_ID not in response.text
 
 
-def test_owner_bootstrap_returns_one_time_pairing_and_category_consents(
+def test_owner_bootstrap_issues_an_opaque_exchange_without_mutating_device_or_consents(
     session: Session, field_cipher: FieldCipher
 ) -> None:
-    response = client_for(session, field_cipher).post(
+    client = client_for(session, field_cipher)
+    request = {
+        "feishu_subject": "ou_private_owner",
+        "device_public_id": "owner-iphone-15",
+        "categories": ["blood_glucose", "sleep_deep", "workout"],
+        "idempotency_key": "O" * 48,
+    }
+    response = client.post(
         "/v1/owner/bootstrap",
         headers={"X-Owner-Token": "owner-admin-secret"},
-        json={
-            "feishu_subject": "ou_private_owner",
-            "device_public_id": "owner-iphone-15",
-            "categories": ["blood_glucose", "sleep_deep", "workout"],
-        },
+        json=request,
+    )
+    retry = client.post(
+        "/v1/owner/bootstrap",
+        headers={"X-Owner-Token": "owner-admin-secret"},
+        json=request,
     )
 
     assert response.status_code == 201
+    assert retry.status_code == 200
+    assert retry.json() == response.json()
     body = response.json()
-    assert set(body["consent_ids"]) == {"blood_glucose", "sleep_deep", "workout"}
+    assert set(body) == {"pairing_url", "expires_at"}
     assert body["pairing_url"].startswith("fitcrew-health://configure?")
     encoded = parse_qs(urlparse(body["pairing_url"]).query)["payload"][0]
     decoded = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-    assert decoded["deviceToken"] == body["device_token"]
+    assert set(decoded) == {"baseURL", "expiresAt", "pairingCode"}
     assert "ou_private_owner" not in response.text
-    binding = session.get(DeviceBinding, body["device_binding_id"])
+    assert session.scalar(select(func.count(DeviceBinding.id))) == 0
+    assert session.scalar(select(func.count(Consent.id))) == 0
+    assert session.scalar(select(func.count(PairingExchangeSession.id))) == 1
+
+    exchanged = client.post(
+        "/v1/pairing/exchange",
+        headers={"Authorization": f"Bearer {decoded['pairingCode']}"},
+    )
+
+    assert exchanged.status_code == 200
+    provisioning = exchanged.json()
+    assert set(provisioning["consent_ids"]) == {"blood_glucose", "sleep_deep", "workout"}
+    binding = session.get(DeviceBinding, provisioning["device_binding_id"])
     assert binding is not None
-    assert binding.token_hash != body["device_token"]
+    assert binding.token_hash != provisioning["device_token"]
 
 
 def test_owner_bootstrap_fails_closed_without_correct_owner_token(
@@ -231,6 +253,7 @@ def test_owner_bootstrap_fails_closed_without_correct_owner_token(
         "feishu_subject": "ou_private_owner",
         "device_public_id": "owner-iphone-15",
         "categories": ["blood_glucose"],
+        "idempotency_key": "O" * 48,
     }
 
     assert client.post("/v1/owner/bootstrap", json=request).status_code == 401

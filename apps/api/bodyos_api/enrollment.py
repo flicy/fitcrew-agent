@@ -156,6 +156,45 @@ def invite_feishu_user(
         return InvitationResult(user.fitcrew_user_id, False, user.status)
 
 
+def ensure_owner_feishu_user(
+    session: Session,
+    cipher: FieldCipher,
+    *,
+    subject: str,
+    pepper: str,
+) -> str:
+    subject_hash = hash_subject(subject, pepper)
+    identity = session.scalar(
+        select(IdentityBinding).where(
+            IdentityBinding.provider == "feishu",
+            IdentityBinding.subject_hash == subject_hash,
+        )
+    )
+    if identity is not None:
+        if identity.revoked_at is not None:
+            raise EnrollmentConflict("identity is revoked")
+        user = session.get(User, identity.fitcrew_user_id)
+        if user is None or user.status == "revoked":
+            raise EnrollmentConflict("identity user is unavailable")
+        return user.fitcrew_user_id
+
+    user = User()
+    session.add(user)
+    session.flush()
+    identity = IdentityBinding(
+        fitcrew_user_id=user.fitcrew_user_id,
+        provider="feishu",
+        subject_hash=subject_hash,
+        encrypted_subject=b"",
+        verified_at=datetime.now(UTC),
+    )
+    session.add(identity)
+    session.flush()
+    encrypted = cipher.encrypt_json({"subject": subject}, aad=f"identity:{identity.id}")
+    identity.encrypted_subject = encrypted.nonce + encrypted.ciphertext
+    return user.fitcrew_user_id
+
+
 def find_invited_user_id(session: Session, *, subject: str, pepper: str) -> str:
     subject_hash = hash_subject(subject, pepper)
     identity = session.scalar(

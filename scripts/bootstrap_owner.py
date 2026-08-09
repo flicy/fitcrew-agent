@@ -3,6 +3,7 @@
 
 import json
 import os
+import secrets
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -31,9 +32,30 @@ def required(name: str) -> str:
     return value
 
 
+def read_or_create_idempotency_key(path: Path) -> str:
+    if path.is_file():
+        return path.read_text(encoding="utf-8").strip()
+    key = secrets.token_urlsafe(32)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return path.read_text(encoding="utf-8").strip()
+    with os.fdopen(descriptor, "w", encoding="utf-8") as key_file:
+        key_file.write(key)
+    os.chmod(path, 0o600)
+    return key
+
+
 def main() -> None:
+    os.umask(0o077)
     owner_token = required("BODYOS_OWNER_TOKEN")
     subject = required("FEISHU_ALLOWED_USERS").split(",", maxsplit=1)[0]
+    output_dir = Path("/owner-runtime")
+    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(output_dir, 0o700)
+    idempotency_key = read_or_create_idempotency_key(
+        output_dir / "owner-pairing-idempotency-key"
+    )
     request = Request(
         "http://127.0.0.1:8000/v1/owner/bootstrap",
         data=json.dumps(
@@ -41,6 +63,7 @@ def main() -> None:
                 "feishu_subject": subject,
                 "device_public_id": "owner-iphone-healthkit",
                 "categories": CATEGORIES,
+                "idempotency_key": idempotency_key,
             }
         ).encode(),
         headers={"Content-Type": "application/json", "X-Owner-Token": owner_token},
@@ -48,8 +71,6 @@ def main() -> None:
     )
     with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed loopback URL
         payload = json.load(response)
-    output_dir = Path("/owner-runtime")
-    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     record = output_dir / "owner-bootstrap.json"
     record.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.chmod(record, 0o600)
