@@ -7,7 +7,39 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError
 
+import pytest
+from bodyos_api.models import IdentityBinding, User
+
 ROOT = Path(__file__).parents[3]
+
+
+def _load_reconciliation_module(name: str):
+    script_path = ROOT / "scripts/reconcile_feishu_allowlist.py"
+    spec = importlib.util.spec_from_file_location(name, script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _add_feishu_identity(
+    session, cipher, *, binding_id: str, user_id: str, status: str, subject: str, revoked: bool
+) -> None:
+    user = User(fitcrew_user_id=user_id, status=status)
+    session.add(user)
+    identity = IdentityBinding(
+        id=binding_id,
+        fitcrew_user_id=user_id,
+        provider="feishu",
+        subject_hash=f"hash-{binding_id}",
+        encrypted_subject=b"",
+        verified_at=datetime.now(UTC),
+        revoked_at=datetime.now(UTC) if revoked else None,
+    )
+    session.add(identity)
+    encrypted = cipher.encrypt_json({"subject": subject}, aad=f"identity:{binding_id}")
+    identity.encrypted_subject = encrypted.nonce + encrypted.ciphertext
+    session.flush()
 
 
 def test_tencent_compose_has_owner_alpha_hardening() -> None:
@@ -551,3 +583,225 @@ def test_controlled_invitation_wrapper_uses_ephemeral_no_echo_inputs_and_restart
     assert "./bootstrap-invited-user.sh" in document
     assert "不得根据姓名猜测" in document
     assert "must never be guessed from a person’s name" in document
+
+
+def test_reconciliation_derives_a_canonical_private_allowlist_from_active_identities(
+    session, field_cipher, tmp_path: Path
+) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_active")
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="owner-binding",
+        user_id="owner-user",
+        status="active",
+        subject="ou_owner",
+        revoked=False,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="invited-binding",
+        user_id="invited-user",
+        status="invited",
+        subject="ou_invited",
+        revoked=False,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="revoked-binding",
+        user_id="revoked-user",
+        status="active",
+        subject="ou_revoked",
+        revoked=True,
+    )
+
+    allowlist = tmp_path / "owner-runtime" / "feishu-allowed-users"
+    users = module.reconcile_and_store_allowed_users(
+        session,
+        field_cipher,
+        initial_allowed_users="ou_owner",
+        path=allowlist,
+    )
+
+    assert users == ("ou_invited", "ou_owner")
+    assert allowlist.read_text(encoding="utf-8") == "ou_invited\nou_owner\n"
+    assert allowlist.stat().st_mode & 0o777 == 0o600
+    assert allowlist.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_reconciliation_fails_closed_without_writing_for_an_unreadable_active_identity(
+    session, field_cipher, tmp_path: Path
+) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_unreadable")
+    user = User(fitcrew_user_id="unreadable-user", status="active")
+    session.add(user)
+    session.add(
+        IdentityBinding(
+            id="unreadable-binding",
+            fitcrew_user_id=user.fitcrew_user_id,
+            provider="feishu",
+            subject_hash="unreadable-hash",
+            encrypted_subject=b"not-an-encrypted-subject",
+            verified_at=datetime.now(UTC),
+        )
+    )
+    session.flush()
+    allowlist = tmp_path / "owner-runtime" / "feishu-allowed-users"
+
+    with pytest.raises(module.ReconciliationError, match="reconciliation failed"):
+        module.reconcile_and_store_allowed_users(
+            session,
+            field_cipher,
+            initial_allowed_users="ou_owner",
+            path=allowlist,
+        )
+
+    assert not allowlist.exists()
+
+
+def test_reconciliation_does_not_reauthorize_a_revoked_subject_left_in_environment(
+    session, field_cipher
+) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_rebind")
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="old-owner-binding",
+        user_id="old-owner-user",
+        status="active",
+        subject="ou_old_owner",
+        revoked=True,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="current-owner-binding",
+        user_id="current-owner-user",
+        status="active",
+        subject="ou_current_owner",
+        revoked=False,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="invited-binding",
+        user_id="invited-user",
+        status="invited",
+        subject="ou_invited",
+        revoked=False,
+    )
+
+    users = module.derive_allowed_users(
+        session,
+        field_cipher,
+        initial_allowed_users="ou_old_owner",
+    )
+
+    assert users == ("ou_current_owner", "ou_invited")
+
+
+def test_reconciliation_excludes_unverified_active_identity(session, field_cipher) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_unverified")
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="owner-binding",
+        user_id="owner-user",
+        status="active",
+        subject="ou_owner",
+        revoked=False,
+    )
+    unverified_user = User(fitcrew_user_id="unverified-user", status="invited")
+    session.add(unverified_user)
+    identity = IdentityBinding(
+        id="unverified-binding",
+        fitcrew_user_id=unverified_user.fitcrew_user_id,
+        provider="feishu",
+        subject_hash="unverified-hash",
+        encrypted_subject=b"",
+        verified_at=None,
+    )
+    session.add(identity)
+    encrypted = field_cipher.encrypt_json(
+        {"subject": "ou_unverified"}, aad=f"identity:{identity.id}"
+    )
+    identity.encrypted_subject = encrypted.nonce + encrypted.ciphertext
+    session.flush()
+
+    users = module.derive_allowed_users(
+        session,
+        field_cipher,
+        initial_allowed_users="ou_owner",
+    )
+
+    assert users == ("ou_owner",)
+
+
+def test_reconciliation_wrapper_runs_api_then_restarts_only_gateway(tmp_path: Path) -> None:
+    source_path = ROOT / "infra/tencent/reconcile-feishu-allowlist.sh"
+    assert source_path.stat().st_mode & 0o111
+    source = source_path.read_text(encoding="utf-8")
+    script = tmp_path / "reconcile-feishu-allowlist.sh"
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / ".env.runtime").write_text(
+        "FEISHU_ALLOWED_USERS=ou_owner\nBODYOS_ENCRYPTION_KEY=test-key\n",
+        encoding="utf-8",
+    )
+    script.write_text(
+        source.replace(
+            'HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
+            f"HERE={shlex.quote(str(tmp_path))}",
+        ),
+        encoding="utf-8",
+    )
+    script.chmod(0o700)
+
+    command_dir = tmp_path / "bin"
+    command_dir.mkdir()
+    calls = tmp_path / "docker-calls"
+    docker = command_dir / "docker"
+    docker.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o700)
+
+    environment = {
+        **os.environ,
+        "PATH": f"{command_dir}{os.pathsep}{os.environ['PATH']}",
+        "CALLS": str(calls),
+    }
+    result = subprocess.run(
+        ["sh", str(script)],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "Private Feishu allowlist reconciliation completed.\n"
+    assert result.stderr == ""
+    compose_prefix = (
+        f"compose --env-file {tmp_path}/runtime/.env.runtime -f {tmp_path}/compose.yaml"
+    )
+    assert calls.read_text(encoding="utf-8").splitlines() == [
+        f"{compose_prefix} exec -T api python /app/scripts/reconcile_feishu_allowlist.py",
+        f"{compose_prefix} restart gateway",
+    ]
+
+
+def test_reconciliation_wrapper_and_api_script_do_not_accept_or_print_subject_values() -> None:
+    wrapper = (ROOT / "infra/tencent/reconcile-feishu-allowlist.sh").read_text(encoding="utf-8")
+    script = (ROOT / "scripts/reconcile_feishu_allowlist.py").read_text(encoding="utf-8")
+
+    assert "read " not in wrapper
+    assert "open_id" not in wrapper
+    assert "docker compose config" not in wrapper
+    assert 'echo "Private Feishu allowlist reconciliation completed."' in wrapper
+    assert "print(subject" not in script
+    assert "print(users" not in script
+    assert 'print("Private Feishu allowlist reconciled.")' in script

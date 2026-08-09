@@ -34,6 +34,10 @@
 4. 配对 JSON、二维码和仅用于安全重试的高熵幂等键只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。二维码只含 HTTPS 地址、一次性配对码和 15 分钟过期时间；扫描后由 App 交换短期凭据，不能重复兑换。若记录的邀请已过期，安全重跑会只在该私有目录中原子替换配对工件并轮换高熵幂等键；不会重绑设备、改变 consent 或打印 bearer 凭据。
 5. 分别验证两位用户私聊隔离、群聊固定低敏回复及 Owner 原有同步状态不变。二维码只通过已核实收件人的私密渠道交付；未得到明确发送授权时不得发送，也不得粘贴到终端、飞书群、日志或 PR。
 
+### 已有受邀用户的白名单迁移
+
+如果第二位用户是在私有 gateway allowlist 引入之前创建的，在完成本版本部署后、要求该用户测试前，在 `infra/tencent/` 运行 `./reconcile-feishu-allowlist.sh`。该迁移只在 API 容器内使用现有加密、已验证、未撤销且用户状态为 `invited` 或 `active` 的飞书身份重建 `runtime/owner/feishu-allowed-users`，并在成功后只重启 gateway。`FEISHU_ALLOWED_USERS` 只用于检查运行环境格式，绝不是授权来源，因此旧的或被撤销 subject 不会因残留在环境变量中重新获得访问。它不会创建用户、重新配对设备、修改授权，也不会人工猜测姓名或 `open_id`。任何本应有效的身份无法解密或校验时，脚本会关闭式失败且不会写入新的 allowlist；请先排障，不要改为允许所有用户。
+
 ### 私人书籍
 
 把三份本人有权用于私人分析的 PDF 以以下名称放入 `runtime/private-books/`：`glucose-revolution.pdf`、`sleep-guide.pdf`、`longevity-handbook.pdf`。目录权限保持 `0700`，文件不提交、不公开、不进入 CI。执行 `./import-private-books.sh` 后，正文按页分段并以 AES-GCM 加密；相同哈希重复导入幂等，内容变化产生新版本，检索保留书名与页码。权利状态默认是 `user_provided_private_use_unverified`，不能自动发布到公共知识库。
@@ -78,6 +82,10 @@ If any post-switch gate fails, the script restores the runtime image tag and pre
 3. After the API invitation succeeds and before pairing issuance, it atomically stores the Owner and invitee subjects in `runtime/owner/feishu-allowed-users`. The directory is `0700` and file `0600`; the gateway loads that private list read-only and only gateway restarts so its closed allowlist takes effect. `FEISHU_ALLOW_ALL_USERS=false` and `GATEWAY_ALLOW_ALL_USERS=false` must remain unchanged.
 4. The pairing JSON, QR, and high-entropy idempotency key used only for a safe retry remain under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`. The QR contains only an HTTPS address, one-time pairing code, and 15-minute expiry; the app exchanges it for short-lived provisioning data exactly once. If the recorded invitation has expired, a safe rerun rotates the high-entropy key and atomically replaces only this private pairing artifact; it does not rebind a device, change consent, or print bearer credentials.
 5. Verify isolated DMs for both users, the fixed low-sensitivity group reply, and the Owner's unchanged sync status. Deliver the QR only through a verified private channel. Without explicit transmission authorization, do not send it or paste it into a terminal, Feishu group, logs, or a PR.
+
+### Existing invitee allowlist migration
+
+If the second user was created before the private gateway allowlist was introduced, run `./reconcile-feishu-allowlist.sh` from `infra/tencent/` after deploying this version and before asking that existing invitee to test. The migration reconstructs `runtime/owner/feishu-allowed-users` only inside the API container from existing encrypted, verified, non-revoked Feishu identities whose users are `invited` or `active`, then restarts only the gateway after success. `FEISHU_ALLOWED_USERS` is checked only for runtime-environment format; it is never an authorization source, so an old or revoked subject cannot regain access merely by remaining in that environment variable. It does not create a user, re-pair a device, change consent, or manually guess a name or `open_id`. If any expected active identity cannot be decrypted or validated, it fails closed and writes no new allowlist; investigate first and do not switch to allow-all access.
 
 ### Private books
 
