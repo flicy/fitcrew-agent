@@ -5,7 +5,9 @@
 Hermes 在 V2 中是飞书通道壳与 Codex Harness 的备用能力，不是原始健康数据访问者。`gateway_hook` 先把事件交给 BodyOS API；`bodyos_guard` 再用经校验的去标识化 envelope 完整替换模型消息。任一步失败都拒绝请求，保持安全关闭（fail closed），不把原消息回退给模型。
 
 - 保持 `FEISHU_ALLOW_ALL_USERS=false`；只有同时位于 `FEISHU_ALLOWED_USERS` 且已明确绑定的受控 BodyOS 身份可以进入私聊与私人教练。未知或未受邀身份继续拒绝。
-- 未列入 `group_rules` 的群默认拒绝；白名单群仍须 @，只走固定的低敏行为 token，绝不返回健康数据或私有内容。
+- 未列入 `group_rules` 的群默认拒绝；白名单群仍须 @。打卡与加入流程走固定低敏 token；饮食、训练、睡眠与控糖的通用问题只能使用 `bodyos-public.v1`，且不得带入身份、个人特征、私人知识、健康数值或聊天历史。API 审核后的 `bodyos-group-answer.v1` 才能发回群聊。
+- 涉及第一人称个人情境、用户输入数值、疾病、治疗或用药的问题必须安全引导到私聊或专业人员，不得在群里个性化回答。
+- 私聊模型只能使用对应用户的授权日级聚合特征、私人知识和 `request_context.sanitized_text`；不得使用原始消息、身份、联系方式、用户输入数值或原始健康序列。
 - 模型端点只能是 BodyOS 的 OpenAI 兼容代理；不得配置付费 API Key 作为静默备用。
 - Codex CLI 主路由失败两次后，才调用 Hermes `openai-codex` OAuth 备用；两者失败则安全报错。
 - 日志只记录路由、策略结果、计数、错误码与散列引用，不记录消息正文、身份、样本值或书摘。
@@ -16,7 +18,9 @@ Hermes 在 V2 中是飞书通道壳与 Codex Harness 的备用能力，不是原
 In V2, Hermes is the Feishu channel shell and the fallback capability for Codex Harness; it is not a raw-health-data reader. `gateway_hook` sends the event to the BodyOS API first, then `bodyos_guard` replaces the entire model request with a validated de-identified envelope. Any failure denies the request and fails closed; the original message is never used as fallback model input.
 
 - Keep `FEISHU_ALLOW_ALL_USERS=false`; only explicitly bound, controlled-allowlisted BodyOS identities may use DMs and private coaching. Unknown and uninvited users remain denied.
-- Groups absent from `group_rules` are denied. An allowlisted group still requires a mention and only follows fixed low-sensitivity behavior tokens, never health data or private content.
+- Groups absent from `group_rules` are denied, and allowlisted groups still require a mention. Check-ins and joining use fixed low-sensitivity behavior tokens. Group paths contain only fixed/public material—never health data or private content. General food, training, sleep, and glucose-management questions may use only `bodyos-public.v1`, without identity, personal features, private knowledge, entered values, or chat history. Only an API-checked `bodyos-group-answer.v1` may return to the group.
+- First-person personal context, entered values, disease, treatment, or medication questions must fail closed to a DM or professional care; never personalize them in a group.
+- A DM model may use only the corresponding user's authorized daily aggregates, private knowledge, and `request_context.sanitized_text`; never the raw message, identity, contact details, entered values, or raw health samples.
 - The model endpoint must be the BodyOS OpenAI-compatible proxy. Never configure a paid API key as a silent fallback.
 - Retry Codex CLI twice before invoking Hermes `openai-codex` OAuth fallback. Fail closed if both routes fail.
 - Logs contain only route, policy result, counts, error codes, and hashed references—never message text, identity, sample values, or book excerpts.

@@ -13,10 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bodyos_api.auth import require_internal, require_model_proxy
-from bodyos_api.bodyos import BodyOSService, classify_group_token
+from bodyos_api.bodyos import (
+    BodyOSService,
+    build_public_group_envelope,
+    classify_explicit_group_token,
+)
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
+from bodyos_api.dlp import SensitiveOutput, assert_public_group_answer
 from bodyos_api.model_gateway import HarnessFailure, validate_model_envelope
 from bodyos_api.models import IdentityBinding
 from bodyos_api.policy import BehaviorToken
@@ -53,9 +58,7 @@ def _identity_user(session: Session, request: EnvelopeRequest, settings: Setting
     pepper = settings.identity_pepper.get_secret_value()
     if not pepper:
         raise HTTPException(status_code=503, detail="identity mapping unavailable")
-    subject_hash = hmac.new(
-        pepper.encode(), request.subject.encode(), hashlib.sha256
-    ).hexdigest()
+    subject_hash = hmac.new(pepper.encode(), request.subject.encode(), hashlib.sha256).hexdigest()
     identity = session.scalar(
         select(IdentityBinding).where(
             IdentityBinding.provider == request.provider,
@@ -78,7 +81,26 @@ def create_bodyos_envelope(
     gateway: Annotated[Any, Depends(get_model_gateway)],
 ) -> dict:
     if request.channel == "group":
-        token = classify_group_token(request.text)
+        token = classify_explicit_group_token(request.text)
+        public_envelope = build_public_group_envelope(request.text)
+        if token is None and public_envelope is not None:
+            try:
+                result = gateway.respond(public_envelope)
+                reply = assert_public_group_answer(result.text)
+            except (HarnessFailure, SensitiveOutput):
+                token = BehaviorToken.PRIVATE_COACHING
+            else:
+                return {
+                    "mode": "group_public",
+                    "reply": reply,
+                    "envelope": {
+                        "schema_version": "bodyos-group-answer.v1",
+                        "channel": "group",
+                        "reply": reply,
+                    },
+                }
+        if token is None:
+            token = BehaviorToken.PRIVATE_COACHING
         return {
             "mode": "deterministic",
             "reply": token.message,
@@ -109,7 +131,18 @@ def _extract_envelope(request: ChatCompletionRequest) -> dict:
 
 def _bodyos_reply(request: ChatCompletionRequest, gateway: Any) -> tuple[str, str]:
     envelope = _extract_envelope(request)
-    if envelope.get("schema_version") == "bodyos-group.v1":
+    if envelope.get("schema_version") == "bodyos-group-answer.v1":
+        if (
+            set(envelope) != {"schema_version", "channel", "reply"}
+            or envelope.get("channel") != "group"
+        ):
+            raise HTTPException(status_code=403, detail="invalid public group answer")
+        try:
+            text = assert_public_group_answer(envelope.get("reply", ""))
+        except SensitiveOutput as error:
+            raise HTTPException(status_code=403, detail="invalid public group answer") from error
+        route = "deterministic"
+    elif envelope.get("schema_version") == "bodyos-group.v1":
         try:
             token = BehaviorToken(envelope.get("behavior_token"))
         except (TypeError, ValueError) as error:
@@ -141,8 +174,7 @@ def _sync_status_reply(envelope: dict) -> str:
         envelope.get("knowledge") != []
         or envelope.get("constraints") != ["no_raw_health_values"]
         or not isinstance(features, dict)
-        or set(features)
-        != {"connection_status", "latest_sync_at", "category_coverage"}
+        or set(features) != {"connection_status", "latest_sync_at", "category_coverage"}
     ):
         raise HTTPException(status_code=403, detail="invalid sync status envelope")
 
@@ -170,11 +202,7 @@ def _sync_status_reply(envelope: dict) -> str:
     status_text = "已连接" if connection_status == "connected" else "未连接"
     sync_time_text = latest_sync_at or "无"
     coverage_text = "、".join(category_coverage) or "无"
-    return (
-        f"同步状态：{status_text}\n"
-        f"最新同步时间：{sync_time_text}\n"
-        f"数据类别覆盖：{coverage_text}"
-    )
+    return f"同步状态：{status_text}\n最新同步时间：{sync_time_text}\n数据类别覆盖：{coverage_text}"
 
 
 def _stream_chat_completion(

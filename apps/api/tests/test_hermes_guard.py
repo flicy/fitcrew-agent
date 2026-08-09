@@ -73,3 +73,30 @@ def test_middleware_reads_only_the_sanitized_session_sidecar(tmp_path, monkeypat
     rendered = str(result["request"])
     assert "raw sleep message" not in rendered
     assert "sleep_coaching" in rendered
+
+
+def test_group_middleware_uses_only_the_prechecked_public_answer_sidecar(
+    tmp_path, monkeypatch
+) -> None:
+    guard = load_guard_module()
+    monkeypatch.setenv("BODYOS_SANITIZED_CACHE_DIR", str(tmp_path))
+    session_id = "group-session"
+    envelope = {
+        "schema_version": "bodyos-group-answer.v1",
+        "channel": "group",
+        "reply": "餐后舒适散步有助于肌肉利用葡萄糖。",
+    }
+    guard.cache_path(session_id).write_text(
+        json.dumps({"mode": "group_public", "envelope": envelope}),
+        encoding="utf-8",
+    )
+
+    result = guard._middleware(
+        request={"messages": [{"role": "user", "content": "我的血糖是 10.2"}]},
+        session_id=session_id,
+    )
+
+    rendered = str(result["request"])
+    assert "我的血糖是 10.2" not in rendered
+    assert "bodyos-group-answer.v1" in rendered
+    assert envelope["reply"] in rendered

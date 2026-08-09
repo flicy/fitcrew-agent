@@ -34,6 +34,61 @@ SAFE_GROUP_REPLIES = {
     "今天选择把行动再变小一点。",
     "个性化健康建议请私聊 BodyOS。",
 }
+SAFE_GROUP_TOKENS = {
+    "completed": "今天完成了一个健康小行动。",
+    "need_buddy": "今天需要一个搭子陪我完成小行动。",
+    "willing_to_share": "今天愿意分享一个健康小行动。",
+    "smaller_action": "今天选择把行动再变小一点。",
+    "private_coaching": "个性化健康建议请私聊 BodyOS。",
+    "contact_bodyos": "请私聊 BodyOS 并发送“加入 BodyOS”，获取加入流程。",
+}
+_PUBLIC_IDENTIFIER_RE = re.compile(
+    r"(?i)(?:\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b|"
+    r"\b(?:https?://|www\.)\S+|"
+    r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)|"
+    r"\b(?:ou|oc|on|om|cli|msg)_[a-z0-9_-]{6,}\b|"
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b)"
+)
+
+
+def checked_group_reply(payload: dict) -> str | None:
+    """Accept only fixed tokens or an API-checked public-answer envelope."""
+    if not isinstance(payload, dict):
+        return None
+    reply = payload.get("reply")
+    envelope = payload.get("envelope")
+    if not isinstance(reply, str) or not isinstance(envelope, dict):
+        return None
+    if payload.get("mode") == "deterministic":
+        token = envelope.get("behavior_token")
+        expected_envelope = {
+            "schema_version": "bodyos-group.v1",
+            "channel": "group",
+            "behavior_token": token,
+        }
+        if envelope != expected_envelope or SAFE_GROUP_TOKENS.get(token) != reply:
+            return None
+        return reply if reply in SAFE_GROUP_REPLIES or token == "contact_bodyos" else None
+    if payload.get("mode") != "group_public":
+        return None
+    if set(payload) != {"mode", "reply", "envelope"}:
+        return None
+    if envelope != {
+        "schema_version": "bodyos-group-answer.v1",
+        "channel": "group",
+        "reply": reply,
+    }:
+        return None
+    normalized = reply.strip()
+    if (
+        normalized != reply
+        or not normalized
+        or len(normalized) > 800
+        or _PUBLIC_IDENTIFIER_RE.search(normalized)
+        or any(ord(character) < 32 for character in normalized)
+    ):
+        return None
+    return normalized
 
 
 def load_groups() -> list[tuple[str, str]]:
@@ -115,8 +170,7 @@ def bodyos_group_reply(subject: str, text: str) -> str | None:
             payload = json.loads(response.read())
     except (OSError, ValueError, TypeError, urllib.error.URLError):
         return None
-    reply = payload.get("reply") if payload.get("mode") == "deterministic" else None
-    return reply if reply in SAFE_GROUP_REPLIES else None
+    return checked_group_reply(payload)
 
 
 def reply_as_bot(message_id: str, reply: str) -> bool:

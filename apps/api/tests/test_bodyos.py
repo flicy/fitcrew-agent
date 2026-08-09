@@ -40,7 +40,7 @@ def seed_feature(session: Session, cipher: FieldCipher) -> None:
     session.commit()
 
 
-def test_group_never_calls_model_and_only_returns_a_fixed_behavior_token(
+def test_personal_group_question_never_calls_model_and_returns_private_coaching_token(
     session: Session, field_cipher: FieldCipher
 ) -> None:
     gateway = RecordingGateway()
@@ -55,6 +55,38 @@ def test_group_never_calls_model_and_only_returns_a_fixed_behavior_token(
     assert result.text == "个性化健康建议请私聊 BodyOS。"
     assert gateway.envelopes == []
     assert "10.2" not in result.text
+
+
+def test_general_group_question_uses_only_a_public_model_envelope(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+    service = BodyOSService(session, field_cipher, gateway)
+
+    result = service.handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "codex"
+    assert result.text == "从一顿饭的进食顺序开始。"
+    assert gateway.envelopes == [
+        {
+            "schema_version": "bodyos-public.v1",
+            "intent": "glucose_coaching",
+            "channel": "group",
+            "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
+            "constraints": [
+                "general_knowledge_only",
+                "no_personal_health_data",
+                "not_medical_diagnosis",
+            ],
+        }
+    ]
+    rendered = str(gateway.envelopes[0])
+    assert USER_ID not in rendered
+    assert "features" not in rendered
+    assert "knowledge" not in gateway.envelopes[0]
 
 
 def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(
@@ -95,6 +127,31 @@ def test_dm_sends_only_deterministic_features_not_raw_question_or_identity(
     assert "Chris" not in rendered
     assert "10.2" not in rendered
     assert USER_ID not in rendered
+
+
+def test_dm_preserves_food_and_perception_in_a_redacted_request_context(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_feature(session, field_cipher)
+    gateway = RecordingGateway()
+    raw_question = (
+        "我叫 Chris，晚饭吃了米饭，餐后血糖 10.2，有点困，电话 13800138000，"
+        "open_id=ou_private123。"
+    )
+
+    BodyOSService(session, field_cipher, gateway).handle(
+        USER_ID, ConversationRequest(channel="dm", text=raw_question)
+    )
+
+    envelope = gateway.envelopes[0]
+    safe_text = envelope["request_context"]["sanitized_text"]
+    assert "晚饭吃了米饭" in safe_text
+    assert "有点困" in safe_text
+    assert "Chris" not in safe_text
+    assert "10.2" not in safe_text
+    assert "13800138000" not in safe_text
+    assert "ou_private123" not in safe_text
+    assert raw_question not in str(envelope)
 
 
 def test_sync_status_envelope_contains_only_connection_time_and_category_coverage(

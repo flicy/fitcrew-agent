@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from bodyos_api.dlp import (
+    SensitiveOutput,
+    assert_private_request_context,
+    sanitize_public_group_question,
+)
+
 
 class HarnessFailure(RuntimeError):
     pass
@@ -25,12 +31,19 @@ class Harness(Protocol):
     def run(self, prompt: str) -> HarnessResult: ...
 
 
-_ALLOWED_TOP_LEVEL = {
+_PRIVATE_TOP_LEVEL = {
     "schema_version",
     "intent",
     "channel",
     "features",
     "knowledge",
+    "constraints",
+}
+_PUBLIC_TOP_LEVEL = {
+    "schema_version",
+    "intent",
+    "channel",
+    "public_context",
     "constraints",
 }
 _FORBIDDEN_KEYS = {
@@ -48,12 +61,40 @@ _FORBIDDEN_KEYS = {
 
 
 def validate_model_envelope(envelope: dict) -> None:
-    if set(envelope) != _ALLOWED_TOP_LEVEL:
-        raise ModelEnvelopeRejected("model envelope keys are not allowlisted")
-    if envelope.get("schema_version") != "bodyos-model.v1":
+    schema_version = envelope.get("schema_version")
+    if schema_version == "bodyos-public.v1":
+        if set(envelope) != _PUBLIC_TOP_LEVEL or envelope.get("channel") != "group":
+            raise ModelEnvelopeRejected("public model envelope keys are not allowlisted")
+        context = envelope.get("public_context")
+        if not isinstance(context, dict) or set(context) != {"sanitized_text"}:
+            raise ModelEnvelopeRejected("public context is invalid")
+        safe_text = context.get("sanitized_text")
+        if not isinstance(safe_text, str) or sanitize_public_group_question(safe_text) != safe_text:
+            raise ModelEnvelopeRejected("public context is not safely general")
+        if envelope.get("constraints") != [
+            "general_knowledge_only",
+            "no_personal_health_data",
+            "not_medical_diagnosis",
+        ]:
+            raise ModelEnvelopeRejected("public constraints are invalid")
+    elif schema_version == "bodyos-model.v1":
+        allowed = _PRIVATE_TOP_LEVEL | {"request_context"}
+        if not _PRIVATE_TOP_LEVEL.issubset(envelope) or not set(envelope).issubset(allowed):
+            raise ModelEnvelopeRejected("private model envelope keys are not allowlisted")
+        if envelope.get("channel") != "dm":
+            raise ModelEnvelopeRejected("only de-identified DM envelopes may use a model")
+        request_context = envelope.get("request_context")
+        if request_context is not None:
+            if not isinstance(request_context, dict) or set(request_context) != {"sanitized_text"}:
+                raise ModelEnvelopeRejected("private request context is invalid")
+            try:
+                assert_private_request_context(request_context.get("sanitized_text", ""))
+            except SensitiveOutput as error:
+                raise ModelEnvelopeRejected(
+                    "private request context is not safely redacted"
+                ) from error
+    else:
         raise ModelEnvelopeRejected("unsupported model envelope")
-    if envelope.get("channel") != "dm":
-        raise ModelEnvelopeRejected("only de-identified DM envelopes may use a model")
 
     def walk(value) -> None:
         if isinstance(value, dict):
@@ -71,12 +112,18 @@ def validate_model_envelope(envelope: dict) -> None:
 def render_model_prompt(envelope: dict) -> str:
     validate_model_envelope(envelope)
     context = json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if envelope["schema_version"] == "bodyos-public.v1":
+        return (
+            "You are BodyOS in a public Feishu group. Answer only with concise general knowledge "
+            "about food, training, sleep, or glucose management. Never personalize, diagnose, "
+            "mention private data, request measurements, or use private knowledge/history. "
+            "Answer in Chinese.\nBODYOS_PUBLIC_ENVELOPE=" + context
+        )
     return (
         "You are BodyOS, FitCrew's private health coach. Use only the supplied "
         "de-identified aggregate features and cited knowledge excerpts. Do not diagnose, "
         "invent measurements, infer identity, or request raw health data. Answer in concise "
-        "Chinese and preserve page citations.\nBODYOS_ENVELOPE="
-        + context
+        "Chinese and preserve page citations.\nBODYOS_ENVELOPE=" + context
     )
 
 

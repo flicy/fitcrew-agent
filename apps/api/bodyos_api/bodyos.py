@@ -5,7 +5,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
+from bodyos_api.dlp import (
+    SensitiveOutput,
+    assert_public_group_answer,
+    sanitize_private_request_context,
+    sanitize_public_group_question,
+)
 from bodyos_api.knowledge import KnowledgeService
+from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample
 from bodyos_api.policy import BehaviorToken
 
@@ -25,8 +32,7 @@ class ConversationReply:
 def classify_intent(text: str) -> str:
     lowered = text.casefold()
     if any(
-        term in lowered
-        for term in ("同步状态", "最新同步", "类别覆盖", "数据覆盖", "sync status")
+        term in lowered for term in ("同步状态", "最新同步", "类别覆盖", "数据覆盖", "sync status")
     ):
         return "sync_status"
     if any(term in lowered for term in ("血糖", "葡萄糖", "餐后", "控糖", "glucose")):
@@ -40,7 +46,7 @@ def classify_intent(text: str) -> str:
     return "general_health_coaching"
 
 
-def classify_group_token(text: str) -> BehaviorToken:
+def classify_explicit_group_token(text: str) -> BehaviorToken | None:
     lowered = text.casefold()
     if any(
         term in lowered
@@ -62,7 +68,30 @@ def classify_group_token(text: str) -> BehaviorToken:
         return BehaviorToken.WILLING_TO_SHARE
     if any(term in lowered for term in ("已完成", "完成打卡", "completed")):
         return BehaviorToken.COMPLETED
-    return BehaviorToken.PRIVATE_COACHING
+    return None
+
+
+def classify_group_token(text: str) -> BehaviorToken:
+    return classify_explicit_group_token(text) or BehaviorToken.PRIVATE_COACHING
+
+
+def build_public_group_envelope(text: str) -> dict | None:
+    if classify_explicit_group_token(text) is not None:
+        return None
+    safe_text = sanitize_public_group_question(text)
+    if safe_text is None:
+        return None
+    return {
+        "schema_version": "bodyos-public.v1",
+        "intent": classify_intent(safe_text),
+        "channel": "group",
+        "public_context": {"sanitized_text": safe_text},
+        "constraints": [
+            "general_knowledge_only",
+            "no_personal_health_data",
+            "not_medical_diagnosis",
+        ],
+    }
 
 
 _KNOWLEDGE_QUERY = {
@@ -103,8 +132,24 @@ class BodyOSService:
 
     def handle(self, fitcrew_user_id: str, request: ConversationRequest) -> ConversationReply:
         if request.channel == "group":
-            token = classify_group_token(request.text)
-            return ConversationReply(text=token.message, route="deterministic")
+            explicit_token = classify_explicit_group_token(request.text)
+            if explicit_token is not None:
+                return ConversationReply(text=explicit_token.message, route="deterministic")
+            envelope = build_public_group_envelope(request.text)
+            if envelope is None:
+                return ConversationReply(
+                    text=BehaviorToken.PRIVATE_COACHING.message,
+                    route="deterministic",
+                )
+            try:
+                reply = self._model_gateway.respond(envelope)
+                safe_reply = assert_public_group_answer(reply.text)
+            except (HarnessFailure, SensitiveOutput):
+                return ConversationReply(
+                    text=BehaviorToken.PRIVATE_COACHING.message,
+                    route="deterministic",
+                )
+            return ConversationReply(text=safe_reply, route=reply.route)
         if request.channel != "dm":
             raise PermissionError("unsupported conversation channel")
 
@@ -123,7 +168,7 @@ class BodyOSService:
                 "knowledge": [],
                 "constraints": ["no_raw_health_values"],
             }
-        return {
+        envelope = {
             "schema_version": "bodyos-model.v1",
             "intent": intent,
             "channel": "dm",
@@ -135,6 +180,10 @@ class BodyOSService:
                 "no_raw_health_data",
             ],
         }
+        request_context = sanitize_private_request_context(text)
+        if request_context is not None:
+            envelope["request_context"] = {"sanitized_text": request_context}
+        return envelope
 
     def _sync_status(self, fitcrew_user_id: str) -> dict:
         device = self._session.scalar(
@@ -172,9 +221,7 @@ class BodyOSService:
         )
         if feature is None:
             return {"status": "insufficient_data"}
-        aad = (
-            f"feature:{fitcrew_user_id}:{feature.feature_date}:{feature.feature_set}"
-        )
+        aad = f"feature:{fitcrew_user_id}:{feature.feature_date}:{feature.feature_set}"
         payload = self._cipher.decrypt_json(
             EncryptedValue(feature.payload_nonce, feature.payload_ciphertext), aad=aad
         )
