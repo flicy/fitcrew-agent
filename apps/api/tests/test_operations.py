@@ -1,5 +1,8 @@
 import importlib.util
 import json
+import os
+import shlex
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError
@@ -280,3 +283,169 @@ def test_invited_user_runtime_mount_is_explicitly_private_and_writable() -> None
     compose = (ROOT / "infra/tencent/compose.yaml").read_text()
 
     assert "./runtime/owner:/owner-runtime:rw" in compose
+
+
+def _load_invited_bootstrap_module(name: str):
+    script_path = ROOT / "scripts/bootstrap_invited_user.py"
+    spec = importlib.util.spec_from_file_location(name, script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_invited_bootstrap_atomically_preserves_owner_and_adds_subject_to_private_allowlist(
+    tmp_path: Path,
+) -> None:
+    module = _load_invited_bootstrap_module("bootstrap_invited_user_allowlist")
+    owner_runtime = tmp_path / "owner-runtime"
+    allowlist = owner_runtime / "feishu-allowed-users"
+
+    allowed = module.store_allowed_users(
+        allowlist,
+        initial_allowed_users="ou_owner",
+        invited_subject="ou_invited",
+    )
+
+    assert allowed == ("ou_owner", "ou_invited")
+    assert allowlist.read_text(encoding="utf-8") == "ou_owner\nou_invited\n"
+    assert allowlist.stat().st_mode & 0o777 == 0o600
+    assert owner_runtime.stat().st_mode & 0o777 == 0o700
+
+    repeated = module.store_allowed_users(
+        allowlist,
+        initial_allowed_users="ou_owner",
+        invited_subject="ou_invited",
+    )
+
+    assert repeated == allowed
+    assert allowlist.read_text(encoding="utf-8") == "ou_owner\nou_invited\n"
+
+    expanded = module.store_allowed_users(
+        allowlist,
+        initial_allowed_users="ou_owner",
+        invited_subject="ou_second_invited",
+    )
+
+    assert expanded == ("ou_owner", "ou_invited", "ou_second_invited")
+    assert allowlist.read_text(encoding="utf-8") == (
+        "ou_owner\nou_invited\nou_second_invited\n"
+    )
+
+
+def test_invited_bootstrap_rejects_newline_subject_before_writing_allowlist(tmp_path: Path) -> None:
+    module = _load_invited_bootstrap_module("bootstrap_invited_user_invalid_subject")
+    allowlist = tmp_path / "owner-runtime" / "feishu-allowed-users"
+
+    import pytest
+
+    with pytest.raises(ValueError, match="newline"):
+        module.store_allowed_users(
+            allowlist,
+            initial_allowed_users="ou_owner",
+            invited_subject="ou_invalid\nnext",
+        )
+
+    assert not allowlist.exists()
+
+
+def test_gateway_uses_private_read_only_allowlist_and_fails_closed_when_it_is_invalid() -> None:
+    compose = (ROOT / "infra/tencent/compose.yaml").read_text()
+    entrypoint = (ROOT / "infra/tencent/gateway-entrypoint.sh").read_text()
+
+    assert "./runtime/owner:/owner-runtime:ro" in compose
+    assert "ALLOWLIST_FILE=/owner-runtime/feishu-allowed-users" in entrypoint
+    assert "Invalid private Feishu allowlist; gateway refused to start." in entrypoint
+    assert 'export FEISHU_ALLOWED_USERS="$allowed_users"' in entrypoint
+    assert "if [ -e \"$ALLOWLIST_FILE\" ]" in entrypoint
+    assert 'stat -c %a "$ALLOWLIST_FILE"' in entrypoint
+    assert "hermes --profile bodyos gateway --accept-hooks run" in entrypoint
+
+
+def test_gateway_allowlist_falls_back_when_missing_and_rejects_invalid_private_file(
+    tmp_path: Path,
+) -> None:
+    source = (ROOT / "infra/tencent/gateway-entrypoint.sh").read_text()
+    allowlist = tmp_path / "feishu-allowed-users"
+    entrypoint = tmp_path / "gateway-entrypoint.sh"
+    entrypoint.write_text(
+        source.replace(
+            "ALLOWLIST_FILE=/owner-runtime/feishu-allowed-users",
+            f"ALLOWLIST_FILE={shlex.quote(str(allowlist))}",
+        ),
+        encoding="utf-8",
+    )
+    entrypoint.chmod(0o700)
+    command_dir = tmp_path / "bin"
+    command_dir.mkdir()
+    for name, body in {
+        "python": "#!/bin/sh\nexit 0\n",
+        "hermes": "#!/bin/sh\nprintf '%s' \"$FEISHU_ALLOWED_USERS\"\n",
+        "stat": "#!/bin/sh\nprintf '600\\n'\n",
+    }.items():
+        command = command_dir / name
+        command.write_text(body, encoding="utf-8")
+        command.chmod(0o700)
+    environment = {
+        **os.environ,
+        "PATH": f"{command_dir}{os.pathsep}{os.environ['PATH']}",
+        "FEISHU_ALLOWED_USERS": "ou_owner",
+    }
+
+    missing_file = subprocess.run(
+        ["sh", str(entrypoint)],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert missing_file.returncode == 0
+    assert missing_file.stdout == "ou_owner"
+
+    allowlist.write_text("ou_owner\nou_invited\n", encoding="utf-8")
+    allowlist.chmod(0o600)
+    valid_file = subprocess.run(
+        ["sh", str(entrypoint)],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert valid_file.returncode == 0
+    assert valid_file.stdout == "ou_owner,ou_invited"
+
+    allowlist.write_text("ou_owner\nnot valid\n", encoding="utf-8")
+    allowlist.chmod(0o600)
+    invalid_file = subprocess.run(
+        ["sh", str(entrypoint)],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert invalid_file.returncode != 0
+    assert invalid_file.stdout == ""
+    assert invalid_file.stderr == "Invalid private Feishu allowlist; gateway refused to start.\n"
+
+
+def test_controlled_invitation_wrapper_uses_ephemeral_no_echo_inputs_and_restarts_gateway_only(
+) -> None:
+    wrapper = (ROOT / "infra/tencent/bootstrap-invited-user.sh").read_text()
+    document = (ROOT / "docs/operations/deployment-and-rollback.md").read_text()
+
+    assert "read_private" in wrapper
+    assert "stty -echo" in wrapper
+    assert "BODYOS_INVITEE_FEISHU_SUBJECT" in wrapper
+    assert "BODYOS_INVITEE_DEVICE_PUBLIC_ID" in wrapper
+    assert "BODYOS_INVITEE_SLUG" in wrapper
+    assert "$COMPOSE restart gateway" in wrapper
+    assert "--force-recreate api gateway" not in wrapper
+    assert "docker compose config" not in wrapper
+    assert 'echo "$SUBJECT"' not in wrapper
+    assert 'echo "$DEVICE_PUBLIC_ID"' not in wrapper
+    assert "./bootstrap-invited-user.sh" in document
+    assert "不得根据姓名猜测" in document
+    assert "must never be guessed from a person’s name" in document

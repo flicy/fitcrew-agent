@@ -21,6 +21,7 @@ class BehaviorToken(StrEnum):
     NEED_BUDDY = "need_buddy"
     WILLING_TO_SHARE = "willing_to_share"
     SMALLER_ACTION = "smaller_action"
+    CONTACT_BODYOS = "contact_bodyos"
     PRIVATE_COACHING = "private_coaching"
 
     @property
@@ -30,6 +31,7 @@ class BehaviorToken(StrEnum):
             BehaviorToken.NEED_BUDDY: "今天需要一个搭子陪我完成小行动。",
             BehaviorToken.WILLING_TO_SHARE: "今天愿意分享一个健康小行动。",
             BehaviorToken.SMALLER_ACTION: "今天选择把行动再变小一点。",
+            BehaviorToken.CONTACT_BODYOS: "请私聊 BodyOS 并发送“加入 BodyOS”，获取加入流程。",
             BehaviorToken.PRIVATE_COACHING: "个性化健康建议请私聊 BodyOS。",
         }[self]
 

@@ -57,6 +57,24 @@ def test_group_never_calls_model_and_only_returns_a_fixed_behavior_token(
     assert "10.2" not in result.text
 
 
+def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+    raw_group_text = "请提供 BodyOS 的联系方式；我刚测到血糖 10.2，想加入。"
+
+    result = BodyOSService(session, field_cipher, gateway).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text=raw_group_text),
+    )
+
+    assert result.route == "deterministic"
+    assert result.text == "请私聊 BodyOS 并发送“加入 BodyOS”，获取加入流程。"
+    assert gateway.envelopes == []
+    assert "10.2" not in result.text
+    assert raw_group_text not in result.text
+
+
 def test_dm_sends_only_deterministic_features_not_raw_question_or_identity(
     session: Session, field_cipher: FieldCipher
 ) -> None:

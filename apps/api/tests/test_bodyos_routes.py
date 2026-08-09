@@ -182,6 +182,39 @@ def test_group_envelope_is_a_fixed_token_and_never_calls_gateway(
     assert gateway.envelopes == []
 
 
+def test_group_contact_request_is_a_fixed_join_token_and_never_calls_gateway(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher)
+    gateway = RecordingGateway()
+    raw_group_text = "@BodyOS 提供我 BodyOS 的联系方式；我的血糖是 10.2。"
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/envelope",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": SUBJECT,
+            "channel": "group",
+            "text": raw_group_text,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "deterministic",
+        "reply": "请私聊 BodyOS 并发送“加入 BodyOS”，获取加入流程。",
+        "envelope": {
+            "schema_version": "bodyos-group.v1",
+            "channel": "group",
+            "behavior_token": "contact_bodyos",
+        },
+    }
+    assert gateway.envelopes == []
+    assert "10.2" not in response.text
+    assert raw_group_text not in response.text
+
+
 def test_openai_compatible_proxy_routes_only_sanitized_dm_envelope(
     session: Session, field_cipher: FieldCipher
 ) -> None:

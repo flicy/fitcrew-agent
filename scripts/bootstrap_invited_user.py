@@ -28,6 +28,7 @@ CATEGORIES = [
 ]
 LOOPBACK_API = "http://127.0.0.1:8000"
 SAFE_SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
+ALLOWLIST_FILE_NAME = "feishu-allowed-users"
 
 
 def required(name: str) -> str:
@@ -73,6 +74,66 @@ def atomic_write_text(path: Path, value: str) -> None:
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def validate_allowed_subject(value: str) -> str:
+    """Validate one Feishu subject for the private newline-delimited allowlist."""
+    if not value:
+        raise ValueError("Feishu subject must not be empty")
+    if "\n" in value or "\r" in value:
+        raise ValueError("Feishu subject must not contain a newline")
+    if "," in value:
+        raise ValueError("Feishu subject must not contain a comma")
+    if any(character.isspace() for character in value):
+        raise ValueError("Feishu subject must not contain whitespace")
+    return value
+
+
+def parse_allowed_users(value: str) -> tuple[str, ...]:
+    """Read the existing comma-delimited runtime allowlist without widening it."""
+    users: list[str] = []
+    for raw_user in value.split(","):
+        candidate = raw_user.strip()
+        if not candidate:
+            continue
+        subject = validate_allowed_subject(candidate)
+        if subject not in users:
+            users.append(subject)
+    if not users:
+        raise ValueError("FEISHU_ALLOWED_USERS must contain an owner subject")
+    return tuple(users)
+
+
+def read_private_allowed_users(path: Path) -> tuple[str, ...]:
+    """Read a previous private allowlist so a new invite never removes an existing user."""
+    if not path.exists():
+        return ()
+    users: list[str] = []
+    for raw_user in path.read_text(encoding="utf-8").splitlines():
+        subject = validate_allowed_subject(raw_user)
+        if subject not in users:
+            users.append(subject)
+    if not users:
+        raise ValueError("private Feishu allowlist must not be empty")
+    return tuple(users)
+
+
+def store_allowed_users(
+    path: Path, *, initial_allowed_users: str, invited_subject: str
+) -> tuple[str, ...]:
+    """Atomically persist the closed owner-plus-invitee allowlist outside Git."""
+    users = list(parse_allowed_users(initial_allowed_users))
+    for existing_subject in read_private_allowed_users(path):
+        if existing_subject not in users:
+            users.append(existing_subject)
+    invited = validate_allowed_subject(invited_subject)
+    if invited not in users:
+        users.append(invited)
+
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    atomic_write_text(path, "\n".join(users) + "\n")
+    return tuple(users)
 
 
 def rotate_idempotency_key(path: Path) -> str:
@@ -152,6 +213,11 @@ def main() -> None:
             "timezone": "Asia/Shanghai",
         },
         owner_token,
+    )
+    store_allowed_users(
+        Path("/owner-runtime") / ALLOWLIST_FILE_NAME,
+        initial_allowed_users=required("FEISHU_ALLOWED_USERS"),
+        invited_subject=subject,
     )
     payload = issue_pairing_with_expiry_rotation(
         output_dir=output_dir,
