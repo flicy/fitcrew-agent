@@ -662,7 +662,9 @@ def test_reconciliation_fails_closed_without_writing_for_an_unreadable_active_id
 
 
 def test_reconciliation_wrapper_runs_api_then_restarts_only_gateway(tmp_path: Path) -> None:
-    source = (ROOT / "infra/tencent/reconcile-feishu-allowlist.sh").read_text(encoding="utf-8")
+    source_path = ROOT / "infra/tencent/reconcile-feishu-allowlist.sh"
+    assert source_path.stat().st_mode & 0o111
+    source = source_path.read_text(encoding="utf-8")
     script = tmp_path / "reconcile-feishu-allowlist.sh"
     runtime = tmp_path / "runtime"
     runtime.mkdir()
