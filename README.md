@@ -1,32 +1,60 @@
-# FitCrew / BodyOS V2.0
+# FitCrew · AI 健身管理专家
+
+> **BodyOS 是你在飞书中接触到的私人生活方式教练。**
+> **BodyOS is the private lifestyle coach you meet in Feishu.**
+
+[产品介绍](https://flicy.github.io/cola-pages/fitcrew/) · [V2 版本说明](https://github.com/flicy/fitcrew-agent/releases/tag/v2.0.0)
 
 ## 中文
 
-FitCrew 是产品与社区品牌，BodyOS 是用户在飞书中接触的私人生活方式教练，Moticlaw 是 Agent 的配置与管理入口。V2.0 提供一条双用户 Alpha 路径：在用户选择授权时，可通过可选的 iOS HealthKit Bridge 接入 Apple Health、Apple Watch、Apple 健身，以及写入 Apple Health 的鱼跃 Anytime 5 Pro 数据；不使用 Apple 设备或不授权健康数据的用户仍可使用服务的非健康数据能力。
+FitCrew 把持续汇集的身体数据、你的主观感受和科学知识放进同一段长期对话里，帮助你看懂生活方式与身体状态之间可能存在的关系，并把建议落实成今天能做的小行动。
 
-飞书账号是主账号，内部用不可变的 `fitcrew_user_id` 绑定身份。一次性配对把每位用户、设备和每个健康类别的同意分别绑定；跨用户上传会被拒绝，设备更换会轮换关联，授权可撤回。Apple 设备和健康授权均为可选项。原始健康数据以 AES-GCM 加密保存，模型只接收确定性聚合特征、意图和带页码的私人知识摘录，不接收姓名、飞书 ID、聊天原文或原始健康序列。
+BodyOS 不是一个只会回答问题的 AI 客服。它是运行在飞书里的私人生活方式教练：群聊时陪大家一起行动和学习，私聊时在你主动授权的边界内理解你的身体数据与感受。
 
-群聊只允许五种固定低敏行为结果：完成今日行动、需要搭子、愿意分享、把行动变小、转到私聊获取个性化建议。群聊不会展示原始健康数据；个性化健康信息只在对应用户的私聊出现，BodyOS 不做医疗诊断。
+### V2 现在能做什么
 
-### V2.0 现状与验证
+1. **汇集 Apple Watch 与鱼跃血糖数据**
+   经你授权，iPhone HealthKit Bridge 读取已经进入 Apple Health 的 Apple Watch 与鱼跃 Anytime 5 Pro 数据。Apple 设备和健康授权都不是使用 FitCrew 群聊能力的前提。
 
-- 代码基线为 PR #2 合并提交 [`3438e02770a04478913dfeeead029d23a55167f5`](https://github.com/flicy/fitcrew-agent/commit/3438e02770a04478913dfeeead029d23a55167f5)。
-- Python / policy、Swift Core 和 iOS Simulator CI 已通过。
-- 生产 TLS 已验证；公开健康检查端点 <https://124.156.218.104/healthz> 当前观测返回 `v2.0.0-alpha.1`。
-- TestFlight 提交流程已准备，但外部分发尚未完成；受邀测试者的真机验收也尚未完成。
-- 现实世界的 16 天研究尚未完成；本项目未对任何健康结果作出主张。
+2. **理解食物 × 血糖 × 身体感知**
+   在 BodyOS 私聊中，你可以讨论今天吃了什么、血糖如何变化、自己当时有什么感受。BodyOS 结合授权数据与知识库，帮助你寻找可能的生活方式关系，并给出可执行的小行动。
 
-这些证据说明工程路径、隔离边界和部署连接性已被验证，不构成任何个人健康结果、医疗诊断或远程 TestFlight 安装可用性的承诺。
+3. **在群聊里一起行动和学习**
+   BodyOS 可以回答通用的饮食、训练、睡眠与控糖知识问题，也可以参与打卡和日常健康互动。群聊不会读取或展示任何成员的个人健康数据、私聊内容或私人知识库。
 
-### 组件
+4. **用科学书籍辅助判断**
+   私人知识库收录《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》。BodyOS 会在可取得来源时引用相关内容，但不会把书中的观点包装成医疗结论。
 
-- `apps/api/`：FastAPI、授权、加密摄取、日特征、知识/需求池与 BodyOS 模型边界。
-- `apps/ios-bridge/`：HealthKit 最小读取授权、增量同步及第 16 天全量对账。
-- `integrations/hermes/`：Moticlaw/Hermes 通道的预模型 Guard；Codex CLI 为主路由，Hermes OpenAI Codex OAuth 为备用。
-- `infra/tencent/`：现有腾讯云东京 Lighthouse 的零新增现金部署、IP HTTPS、加密备份与 SHA 回滚。
-- `scripts/import_private_books.py`：在 Git 外把本人提供的 PDF 加密导入私人知识库。
+### 群聊与私聊怎么分工
 
-### 本地验证
+| 场景 | 适合做什么 | 明确不做什么 |
+| --- | --- | --- |
+| 飞书群聊 | 通用饮食、训练、睡眠、控糖知识；共同打卡；日常健康互动 | 不读取个人健康数据，不引用私聊，不公开原始数值 |
+| BodyOS 私聊 | 基于本人授权数据，讨论食物、血糖、睡眠、训练与身体感知 | 不向其他用户泄露，不跨用户调用数据，不进行医疗诊断 |
+
+简单说：**群里谈通用知识与行动，私聊才谈属于你的数据和感受。**
+
+### 数据与隐私
+
+- 飞书账号是主账号，系统用不可变的内部用户 ID 隔离每位用户。
+- Apple Health 授权是可选项；没有 Apple 设备或不授权健康数据，也可以使用群聊与非健康数据能力。
+- 健康类别按用户、设备和同意状态分别绑定；授权可撤回，跨用户上传会被拒绝。
+- 原始健康字段加密保存；模型只接收完成回答所需的聚合特征、意图和知识摘录，不接收姓名、飞书 ID、聊天原文或完整原始健康序列。
+- BodyOS 提供生活方式指导，不提供疾病诊断、治疗或用药建议，也不能替代医生。
+
+### 开发者与验证
+
+V2 的用户体验由以下组件组成：
+
+- `apps/api/`：授权、加密摄取、日级特征、知识库和 BodyOS 数据边界。
+- `apps/ios-bridge/`：HealthKit 最小读取授权、增量同步和实验期对账。
+- `integrations/hermes/`：飞书通道、身份隔离、群聊隐私策略和模型路由。
+- `infra/tencent/`：腾讯云部署、严格 HTTPS、加密备份与 SHA 回滚。
+- `scripts/import_private_books.py`：在 Git 外加密导入本人拥有使用权的 PDF。
+
+已验证：Python / policy、Swift Core、iOS Simulator CI，以及生产 HTTPS 健康检查。公开端点 <https://124.156.218.104/healthz> 当前报告后端版本 `v2.0.0-alpha.1`。
+
+尚未完成：TestFlight 外部分发、受邀测试者的完整真机验收，以及真实世界 16 天实验结论。项目不宣称已经获得任何健康效果。
 
 ```bash
 uv sync --extra dev
@@ -35,37 +63,58 @@ uv run ruff check apps/api scripts infra/tencent
 (cd apps/ios-bridge/Core && swift test)
 ```
 
-生产部署和物理设备步骤见 `docs/operations/deployment-and-rollback.md` 与 `docs/experiments/owner-cgm-16-day-runbook.md`。三本私人 PDF、健康导出、OAuth 凭据、飞书密钥、运行环境文件与真实证据均不得进入 Git。
-
-产品介绍页保持在 <https://flicy.github.io/cola-pages/fitcrew/>。本仓库所有变更通过 PR 进入 `main`；未经 Owner 明确批准不合并或发布版本。
+生产与真机操作见 `docs/operations/deployment-and-rollback.md` 和 `docs/experiments/owner-cgm-16-day-runbook.md`。私人 PDF、健康导出、身份信息、OAuth 凭据、飞书密钥、运行环境文件、配对信息和真实健康证据不得进入 Git。
 
 ## English
 
-FitCrew is the product and community brand, BodyOS is the private lifestyle coach users meet in Feishu, and Moticlaw is the Agent configuration and management surface. V2.0 provides a two-user Alpha path: with a person's permission, an optional iOS HealthKit Bridge can connect Apple Health, Apple Watch, Apple Fitness, and Yuwell Anytime 5 Pro data written into Apple Health. People without an Apple device or health authorization can still use the service's non-health-data capabilities.
+FitCrew brings continuously collected body data, subjective perception, and scientific knowledge into one long-running conversation. It helps people explore possible relationships between lifestyle and body state, then turn guidance into a small action they can take today.
 
-Feishu is the primary account while an immutable internal `fitcrew_user_id` binds identities. One-time pairing separately binds each person, device, and health-category consent; cross-user uploads are rejected, device replacement rotates the association, and consent can be withdrawn. Apple devices and health authorization are optional. Raw health fields are encrypted with AES-GCM. A model receives only deterministic aggregates, intent, and page-cited private knowledge excerpts—never names, Feishu IDs, raw chat, or raw health series.
+BodyOS is not an AI support bot that forgets after each answer. It is a private lifestyle coach in Feishu: it helps a group learn and act together, while DMs use only the personal data and context that the corresponding person has explicitly authorized.
 
-Group chat permits only five fixed low-sensitivity outcomes: today's action completed, need a buddy, willing to share, make the action smaller, or move to DM for personalized guidance. Groups never expose raw health data; personalized health information stays in the corresponding user's DM, and BodyOS does not diagnose.
+### What V2 can do now
 
-### V2.0 status and verification
+1. **Bring Apple Watch and Yuwell glucose data together**
+   With permission, the iPhone HealthKit Bridge reads Apple Watch and Yuwell Anytime 5 Pro data that has reached Apple Health. Apple hardware and health authorization are not prerequisites for FitCrew's group capabilities.
 
-- The code baseline is PR #2 merge commit [`3438e02770a04478913dfeeead029d23a55167f5`](https://github.com/flicy/fitcrew-agent/commit/3438e02770a04478913dfeeead029d23a55167f5).
-- Python / policy, Swift Core, and iOS Simulator CI are green.
-- Production TLS is verified. The public health endpoint, <https://124.156.218.104/healthz>, currently reports `v2.0.0-alpha.1`.
-- The TestFlight submission flow is prepared, but external distribution is not complete, nor is an invited tester's physical-device acceptance.
-- The real-world 16-day study is not complete, and this project makes no claim about any health outcome.
+2. **Understand food × glucose × body perception**
+   In a BodyOS DM, a person can discuss what they ate, how glucose changed, and how they felt at the time. BodyOS combines authorized data with the knowledge base to explore possible lifestyle relationships and suggest a practical small action.
 
-This evidence verifies the engineering path, isolation boundaries, and deployment connectivity. It is not a promise of an individual health outcome, medical diagnosis, or available remote TestFlight installation.
+3. **Learn and act together in group chat**
+   BodyOS can answer general questions about food, training, sleep, and glucose management, and it can participate in check-ins and everyday health interaction. A group never reads or exposes personal health data, DMs, or private knowledge.
 
-### Components
+4. **Use guidance from scientific books**
+   The private knowledge base includes the confirmed Chinese titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. BodyOS cites available sources without presenting a book claim as a medical conclusion.
 
-- `apps/api/`: FastAPI, consent, encrypted ingestion, daily features, knowledge/demand pools, and the BodyOS model boundary.
-- `apps/ios-bridge/`: minimum HealthKit read authorization, incremental sync, and day-16 reconciliation.
-- `integrations/hermes/`: the pre-model guard for Moticlaw/Hermes channels; Codex CLI is primary and Hermes OpenAI Codex OAuth is fallback.
-- `infra/tencent/`: zero-new-cash deployment, IP HTTPS, encrypted backups, and SHA rollback on the existing Tokyo Lighthouse.
-- `scripts/import_private_books.py`: encrypted private-book import outside Git.
+### How groups and DMs divide the work
 
-### Local verification
+| Space | Appropriate use | Explicit boundary |
+| --- | --- | --- |
+| Feishu group | General food, training, sleep, and glucose-management knowledge; shared check-ins; everyday health interaction | No personal health-data access, no DM context, and no raw values |
+| BodyOS DM | Personal discussion of food, glucose, sleep, training, and body perception based on that person's authorization | No cross-user disclosure, no cross-user data access, and no medical diagnosis |
+
+In short: **groups are for general knowledge and shared action; DMs are where your authorized data and perception belong.**
+
+### Data and privacy
+
+- Feishu is the primary account, and an immutable internal user ID isolates each person.
+- Apple Health authorization is optional. People without Apple hardware or health permission can still use group and non-health-data capabilities.
+- Health categories bind separately to the person, device, and current consent. Consent can be withdrawn, and cross-user uploads are rejected.
+- Raw health fields are encrypted at rest. A model receives only the aggregates, intent, and knowledge excerpts required for the answer—never names, Feishu IDs, raw chats, or a complete raw health series.
+- BodyOS provides lifestyle guidance, not disease diagnosis, treatment, or medication advice, and it does not replace a clinician.
+
+### Developer and verification
+
+The V2 experience is composed of:
+
+- `apps/api/`: consent, encrypted ingestion, daily features, the knowledge base, and BodyOS data boundaries.
+- `apps/ios-bridge/`: minimum HealthKit read authorization, incremental sync, and study-period reconciliation.
+- `integrations/hermes/`: Feishu channels, identity isolation, group privacy policy, and model routing.
+- `infra/tencent/`: Tencent Cloud deployment, strict HTTPS, encrypted backups, and SHA rollback.
+- `scripts/import_private_books.py`: encrypted import of privately supplied PDFs outside Git.
+
+Verified evidence includes Python / policy, Swift Core, and iOS Simulator CI, plus the production HTTPS health check. The public endpoint at <https://124.156.218.104/healthz> currently reports backend version `v2.0.0-alpha.1`.
+
+Not complete: external TestFlight distribution, full invited-tester physical-device acceptance, and results from the real-world 16-day study. The project makes no claim that a health outcome has already been achieved.
 
 ```bash
 uv sync --extra dev
@@ -74,6 +123,4 @@ uv run ruff check apps/api scripts infra/tencent
 (cd apps/ios-bridge/Core && swift test)
 ```
 
-See `docs/operations/deployment-and-rollback.md` and `docs/experiments/owner-cgm-16-day-runbook.md` for production and physical-device steps. Private PDFs, health exports, OAuth credentials, Feishu secrets, runtime environments, and real private evidence must never enter Git.
-
-The product page remains at <https://flicy.github.io/cola-pages/fitcrew/>. All repository changes reach `main` through a PR; no merge or release occurs without explicit owner approval.
+See `docs/operations/deployment-and-rollback.md` and `docs/experiments/owner-cgm-16-day-runbook.md` for production and physical-device operations. Private PDFs, health exports, identities, OAuth credentials, Feishu secrets, runtime files, pairing artifacts, and real health evidence must never enter Git.
