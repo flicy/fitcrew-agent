@@ -1,17 +1,27 @@
 import hashlib
 import hmac
+from datetime import UTC, datetime
 
 from bodyos_api.app import create_app
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
-from bodyos_api.models import IdentityBinding, User
+from bodyos_api.models import (
+    Consent,
+    DeviceBinding,
+    HealthSample,
+    IdentityBinding,
+    SyncBatch,
+    User,
+)
 from bodyos_api.runtime import get_field_cipher, get_model_gateway
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 USER_ID = "11111111-1111-4111-8111-111111111111"
 SUBJECT = "ou_private_owner"
+SECOND_USER_ID = "22222222-2222-4222-8222-222222222222"
+SECOND_SUBJECT = "ou_private_invited"
 
 
 class RecordingGateway:
@@ -37,21 +47,91 @@ def client_for(session: Session, cipher: FieldCipher, gateway: RecordingGateway)
     return TestClient(app)
 
 
-def seed_identity(session: Session, cipher: FieldCipher) -> None:
-    session.add(User(fitcrew_user_id=USER_ID))
+def seed_identity(
+    session: Session,
+    cipher: FieldCipher,
+    *,
+    user_id: str = USER_ID,
+    subject: str = SUBJECT,
+    binding_id: str = "binding-1",
+) -> None:
+    session.add(User(fitcrew_user_id=user_id))
     subject_hash = hmac.new(
-        b"identity-pepper", SUBJECT.encode(), hashlib.sha256
+        b"identity-pepper", subject.encode(), hashlib.sha256
     ).hexdigest()
-    encrypted = cipher.encrypt_json({"subject": SUBJECT}, aad="identity:binding-1")
+    encrypted = cipher.encrypt_json({"subject": subject}, aad=f"identity:{binding_id}")
     session.add(
         IdentityBinding(
-            id="binding-1",
-            fitcrew_user_id=USER_ID,
+            id=binding_id,
+            fitcrew_user_id=user_id,
             provider="feishu",
             subject_hash=subject_hash,
             encrypted_subject=encrypted.nonce + encrypted.ciphertext,
         )
     )
+    session.commit()
+
+
+def seed_private_sync_status(
+    session: Session,
+    *,
+    user_id: str,
+    prefix: str,
+    kinds: list[str],
+    synced_at: datetime,
+) -> None:
+    device_id = f"{prefix}-0000-4000-8000-000000000001"
+    consent_id = f"{prefix}-0000-4000-8000-000000000002"
+    batch_id = f"{prefix}-0000-4000-8000-000000000003"
+    session.add(
+        DeviceBinding(
+            id=device_id,
+            fitcrew_user_id=user_id,
+            device_public_id=f"{prefix}-iphone",
+            token_hash=f"{prefix}-token-hash",
+            last_sync_at=synced_at,
+        )
+    )
+    session.add(
+        Consent(
+            id=consent_id,
+            fitcrew_user_id=user_id,
+            category="private_status_test",
+            purpose="private_coaching",
+            granted=True,
+            receipt_version="test-v1",
+            granted_at=synced_at,
+        )
+    )
+    session.add(
+        SyncBatch(
+            id=batch_id,
+            fitcrew_user_id=user_id,
+            batch_id=f"{prefix}-0000-4000-8000-000000000004",
+            device_binding_id=device_id,
+            consent_id=consent_id,
+            source="test-source",
+            timezone="Asia/Shanghai",
+        )
+    )
+    for index, kind in enumerate(kinds, start=5):
+        sample_id = f"{prefix}-0000-4000-8000-0000000000{index}"
+        session.add(
+            HealthSample(
+                id=sample_id,
+                fitcrew_user_id=user_id,
+                sync_batch_id=batch_id,
+                sample_id=sample_id,
+                kind=kind,
+                start_at=synced_at,
+                end_at=synced_at,
+                original_unit="private",
+                normalized_unit="private",
+                source="test-source",
+                value_nonce=b"opaque-nonce",
+                value_ciphertext=b"opaque-ciphertext",
+            )
+        )
     session.commit()
 
 
@@ -222,6 +302,71 @@ def test_sync_status_proxy_is_deterministic_and_never_calls_model(
     )
     assert response.json()["bodyos_route"] == "deterministic"
     assert gateway.envelopes == []
+
+
+def test_dm_sync_status_isolated_between_two_feishu_users(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher)
+    seed_identity(
+        session,
+        field_cipher,
+        user_id=SECOND_USER_ID,
+        subject=SECOND_SUBJECT,
+        binding_id="binding-2",
+    )
+    owner_synced_at = datetime(2026, 8, 3, 0, 43, 26, tzinfo=UTC)
+    invited_synced_at = datetime(2026, 8, 4, 1, 2, 3, tzinfo=UTC)
+    seed_private_sync_status(
+        session,
+        user_id=USER_ID,
+        prefix="11111111",
+        kinds=["blood_glucose", "sleep_asleep"],
+        synced_at=owner_synced_at,
+    )
+    seed_private_sync_status(
+        session,
+        user_id=SECOND_USER_ID,
+        prefix="22222222",
+        kinds=["heart_rate_variability", "workout"],
+        synced_at=invited_synced_at,
+    )
+    client = client_for(session, field_cipher, RecordingGateway())
+
+    owner = client.post(
+        "/v1/bodyos/envelope",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={"provider": "feishu", "subject": SUBJECT, "channel": "dm", "text": "同步状态"},
+    )
+    invited = client.post(
+        "/v1/bodyos/envelope",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": SECOND_SUBJECT,
+            "channel": "dm",
+            "text": "同步状态",
+        },
+    )
+
+    assert owner.status_code == invited.status_code == 200
+    owner_features = owner.json()["envelope"]["features"]
+    invited_features = invited.json()["envelope"]["features"]
+    assert owner_features == {
+        "connection_status": "connected",
+        "latest_sync_at": owner_synced_at.isoformat(),
+        "category_coverage": ["血糖", "睡眠"],
+    }
+    assert invited_features == {
+        "connection_status": "connected",
+        "latest_sync_at": invited_synced_at.isoformat(),
+        "category_coverage": ["心率与恢复", "健身与活动"],
+    }
+    assert "opaque" not in owner.text + invited.text
+    assert SECOND_SUBJECT not in owner.text
+    assert SUBJECT not in invited.text
+    assert SECOND_USER_ID not in owner.text
+    assert USER_ID not in invited.text
 
 
 def test_proxy_rejects_raw_chat_even_with_valid_proxy_token(

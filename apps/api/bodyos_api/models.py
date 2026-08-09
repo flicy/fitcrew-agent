@@ -81,6 +81,23 @@ class Consent(TimestampMixin, Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PairingExchangeSession(TimestampMixin, Base):
+    __tablename__ = "pairing_exchange_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    fitcrew_user_id: Mapped[str] = mapped_column(ForeignKey("users.fitcrew_user_id"), index=True)
+    device_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    categories_json: Mapped[str] = mapped_column(Text, nullable=False)
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    idempotency_key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    pairing_code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SyncBatch(TimestampMixin, Base):
     __tablename__ = "sync_batches"
     __table_args__ = (UniqueConstraint("fitcrew_user_id", "batch_id"),)

@@ -59,7 +59,7 @@ services:
       - codex_auth:/home/bodyos/.codex
       - hermes_home:/home/bodyos/.hermes
       - ./runtime/private-books:/private-books:ro
-      - ./runtime/owner:/owner-runtime
+      - ./runtime/owner:/owner-runtime:rw
     healthcheck:
       test:
         ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]

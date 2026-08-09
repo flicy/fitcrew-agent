@@ -12,10 +12,27 @@
 
 1. 在服务器安装 Git、Docker Engine、Docker Compose plugin、OpenSSL 和 Python 3。
 2. 把仓库放在固定私有工作目录，切到 PR 中经过测试的完整 SHA；不要从未经测试的 `main` 临时构建。
-3. 在 `infra/tencent/` 执行 `./deploy.sh`。脚本首次运行会无回显收集公网 IPv4、飞书应用凭据、Owner `open_id`、测试群与私聊 `chat_id`，生成 `runtime/.env.runtime` 和备份密钥，权限为 `0600`。
-4. 确认 `https://<公网IP>/healthz` 返回版本。随后执行 `./model-login.sh`，分别完成 Codex 与 Hermes 的一次设备 OAuth；凭据只保存在 Docker volume。
-5. 执行 `sudo ./install-timers.sh`，再用 `systemctl list-timers 'fitcrew-*'` 确认证书和每日备份任务已启用。
-6. 执行 `./bootstrap-owner.sh`。私有目录会生成一次性 `owner-pairing.png` 与身份记录，不打印 token，也不进入 Git。
+3. 首次部署前，由账户持有人通过已审阅的证书流程取得并放置有效的受信任证书。`deploy.sh` 不自动同意新的证书法律条款，也不会在证书缺失时继续构建或切换服务。
+4. 在 `infra/tencent/` 执行 `./deploy.sh`。脚本首次运行会无回显收集公网 IPv4、飞书应用凭据、Owner `open_id`、测试群与私聊 `chat_id`，生成 `runtime/.env.runtime` 和备份密钥，权限为 `0600`。
+5. 确认 `https://<公网IP>/healthz` 返回版本。随后执行 `./model-login.sh`，分别完成 Codex 与 Hermes 的一次设备 OAuth；凭据只保存在 Docker volume。
+6. 执行 `sudo ./install-timers.sh`，再用 `systemctl list-timers 'fitcrew-*'` 确认证书和每日备份任务已启用。
+7. 执行 `./bootstrap-owner.sh`。私有目录会生成短期的一次性 `owner-pairing.png`、身份记录和仅用于安全重试的高熵幂等键；二维码只含 HTTPS 地址、配对码与过期时间，App 扫描后再交换凭据。若记录的 Owner 邀请已过期，安全重跑会轮换该私有幂等键并原子替换 Owner 配对工件；不会打印 bearer 凭据或修改运行时密钥。不会打印 token，也不进入 Git。
+
+### 自动回滚门禁
+
+`deploy.sh` 在写入新镜像标签前记录原有的完整不可变 SHA。仅当该旧镜像仍在本机时，脚本才启用自动回滚；首发没有可恢复版本时会明确停止，不会伪称已具备回滚能力。
+
+新服务启动后必须依次通过：PostgreSQL、API 与 Caddy 的 Docker 健康检查；Worker 与 Feishu gateway 的运行状态；API 容器内部 `/healthz`；以及 `https://<公网IP>/healthz` 的严格 TLS 校验。公网检查不会使用 `-k` 或忽略证书错误。
+
+任何镜像切换后的门禁失败都会把运行时镜像标签和部署前 Caddy 配置恢复为原状态，并对数据库、API、Worker、gateway 和 Caddy 执行一次无构建重启，然后以非零状态退出。手动 `rollback.sh` 也会在快照存在时恢复部署前 Caddy 配置；它要求现有受信任证书，并重复数据库/API/Caddy 健康、Worker/gateway 运行、API 回环和严格 HTTPS 门禁，绝不使用 `-k`。自动恢复命令也失败时，只记录通用失败结果；操作员应使用已记录 SHA 运行 `rollback.sh`，并按相同门禁复核。日志不得包含密钥、身份或健康内容。
+
+### 受控邀请第二位用户
+
+1. 先备份 `runtime/.env.runtime`，再用无回显输入读取受邀用户的飞书 `open_id`、设备公开标识和本地代号。把 `open_id` 幂等追加到 `FEISHU_ALLOWED_USERS`，并临时写入 `BODYOS_INVITEE_FEISHU_SUBJECT`、`BODYOS_INVITEE_DEVICE_PUBLIC_ID`、`BODYOS_INVITEE_SLUG`。运行文件必须继续保持 `0600`，`FEISHU_ALLOW_ALL_USERS=false` 与 `GATEWAY_ALLOW_ALL_USERS=false` 不得改变。
+2. 用 `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` 让 API 获取一次性邀请变量，并让 gateway 重新渲染关闭式白名单。不要使用 `docker compose config`，避免把环境值打印到终端。
+3. 执行 `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`。唯一成功输出应为 `Invited user pairing stored outside Git.`；配对 JSON、二维码和仅用于安全重试的高熵幂等键只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。二维码只含 HTTPS 地址、一次性配对码和 15 分钟过期时间；扫描后由 App 交换短期凭据，不能重复兑换。若记录的邀请已过期，安全重跑会只在该私有目录中原子替换配对工件并轮换高熵幂等键；不会重绑设备、改变 consent 或打印 bearer 凭据。
+4. 从运行文件删除三个 `BODYOS_INVITEE_*` 临时变量，保留双用户 `FEISHU_ALLOWED_USERS`，再次只重建 `api gateway`。分别验证两位用户私聊隔离、群聊固定低敏回复及 Chris 原有同步状态不变。
+5. 二维码只通过已核实收件人的私密渠道交付；未得到明确发送授权时不得发送，也不得粘贴到终端、飞书群、日志或 PR。
 
 ### 私人书籍
 
@@ -25,7 +42,7 @@
 
 - `./backup.sh` 使用 `pg_dump` 后经 AES-256/PBKDF2 加密，保留 7 天；应用健康字段本身仍是 AES-GCM 密文。
 - `./restore-test.sh <绝对备份路径>` 只还原到固定临时库 `bodyos_restore_test`，验证表数量后删除临时库。
-- 发布前记录完整 commit SHA。回滚执行 `ROLLBACK_SHA=<40位SHA> ./rollback.sh`；脚本先备份，再切回本机已有的不可变镜像，并通过 `/healthz` 才算成功。数据库迁移不自动降级；若变更不向后兼容，先停写并按已验证备份恢复。
+- 发布前记录完整 commit SHA。部署脚本会执行自动回滚门禁；手动回滚执行 `ROLLBACK_SHA=<40位SHA> ./rollback.sh`。该脚本先备份，再切回本机已有的不可变镜像，并通过 `/healthz` 才算成功。数据库迁移不自动降级；若变更不向后兼容，先停写并按已验证备份恢复。
 - 日志不得出现请求 URI、Header、消息正文、身份、健康值、书摘或 token。排障只记录版本、计数、策略结果与错误码。
 
 ## English
@@ -40,10 +57,27 @@ Only ports 80/443 are public; the database, API, and model proxy have no host ma
 
 1. Install Git, Docker Engine, the Docker Compose plugin, OpenSSL, and Python 3 on the server.
 2. Keep the repository in a fixed private directory at the exact tested PR SHA; do not build an untested moving `main`.
-3. Run `./deploy.sh` in `infra/tencent/`. On first run it collects the public IPv4, Feishu app credentials, owner `open_id`, test group, and DM `chat_id` without echo, then creates `runtime/.env.runtime` and a backup key with mode `0600`.
-4. Confirm `https://<public-IP>/healthz`, then run `./model-login.sh` and complete one device OAuth flow for Codex and Hermes. Credentials remain in Docker volumes.
-5. Run `sudo ./install-timers.sh`, then confirm certificate and daily-backup timers with `systemctl list-timers 'fitcrew-*'`.
-6. Run `./bootstrap-owner.sh`. The private runtime directory receives a one-time `owner-pairing.png` and identity record; no token is printed or committed.
+3. Before the first deployment, have the account holder obtain and place a valid trusted certificate through a reviewed certificate process. `deploy.sh` does not automatically accept a new certificate agreement and does not build or switch services when the certificate is absent.
+4. Run `./deploy.sh` in `infra/tencent/`. On first run it collects the public IPv4, Feishu app credentials, owner `open_id`, test group, and DM `chat_id` without echo, then creates `runtime/.env.runtime` and a backup key with mode `0600`.
+5. Confirm `https://<public-IP>/healthz`, then run `./model-login.sh` and complete one device OAuth flow for Codex and Hermes. Credentials remain in Docker volumes.
+6. Run `sudo ./install-timers.sh`, then confirm certificate and daily-backup timers with `systemctl list-timers 'fitcrew-*'`.
+7. Run `./bootstrap-owner.sh`. The private runtime directory receives a short-lived one-time `owner-pairing.png`, identity record, and high-entropy idempotency key used only for a safe retry. The QR contains only an HTTPS address, pairing code, and expiry; the app exchanges it for credentials after scanning. If the recorded Owner invitation has expired, a safe rerun rotates that private idempotency key and atomically replaces the Owner pairing artifact; it never prints bearer credentials or changes runtime secrets. No token is printed or committed.
+
+### Automatic rollback gate
+
+Before writing a new image tag, `deploy.sh` records the previous full immutable SHA. Automatic rollback is armed only when that previous image is still present locally; a first deployment with no recoverable version stops explicitly instead of claiming rollback coverage.
+
+After startup, the new service set must pass, in order: Docker health checks for PostgreSQL, API, and Caddy; running-state checks for the worker and Feishu gateway; the API container's loopback `/healthz`; and strict TLS verification of `https://<public-IP>/healthz`. The public check never uses `-k` or ignores certificate errors.
+
+If any post-switch gate fails, the script restores the runtime image tag and pre-deployment Caddy configuration, requests a no-build restart of database, API, worker, gateway, and Caddy, then exits non-zero. When the snapshot exists, manual `rollback.sh` also restores that pre-deployment Caddy configuration; it requires an existing trusted certificate and repeats the DB/API/Caddy health, worker/gateway running, API loopback, and strict HTTPS gates without `-k`. If that restore command also fails, it records only a generic failure result; the operator must use the recorded SHA with `rollback.sh` and verify the same gates. Logs must not contain credentials, identities, or health content.
+
+### Controlled invitation of a second user
+
+1. Back up `runtime/.env.runtime`, then collect the invitee's Feishu `open_id`, public device identifier, and local slug with no-echo input. Idempotently append the `open_id` to `FEISHU_ALLOWED_USERS` and temporarily add `BODYOS_INVITEE_FEISHU_SUBJECT`, `BODYOS_INVITEE_DEVICE_PUBLIC_ID`, and `BODYOS_INVITEE_SLUG`. Keep the runtime file at `0600`; never change `FEISHU_ALLOW_ALL_USERS=false` or `GATEWAY_ALLOW_ALL_USERS=false`.
+2. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` so the API receives the one-time invitation variables and the gateway rerenders its closed allowlist. Do not run `docker compose config`, which can print environment values.
+3. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`. Its only success output is `Invited user pairing stored outside Git.` The pairing JSON, QR, and high-entropy idempotency key used only for a safe retry remain under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`. The QR contains only an HTTPS address, one-time pairing code, and 15-minute expiry; the app exchanges it for short-lived provisioning data exactly once. If the recorded invitation has expired, a safe rerun rotates the high-entropy key and atomically replaces only this private pairing artifact; it does not rebind a device, change consent, or print bearer credentials.
+4. Remove the three temporary `BODYOS_INVITEE_*` entries, keep both users in `FEISHU_ALLOWED_USERS`, and recreate only `api gateway` again. Verify isolated DMs for both users, the fixed low-sensitivity group reply, and Chris's unchanged sync status.
+5. Deliver the QR only through a verified private channel. Without explicit transmission authorization, do not send it or paste it into a terminal, Feishu group, logs, or a PR.
 
 ### Private books
 
@@ -53,5 +87,5 @@ Place the three owner-authorized private-analysis PDFs in `runtime/private-books
 
 - `./backup.sh` pipes `pg_dump` through AES-256/PBKDF2 encryption and retains seven days. Application health fields remain AES-GCM ciphertext inside the dump.
 - `./restore-test.sh <absolute-backup-path>` restores only into fixed temporary database `bodyos_restore_test`, checks schema cardinality, and removes it.
-- Record the full commit SHA before release. Run `ROLLBACK_SHA=<40-char-SHA> ./rollback.sh`; it backs up first, switches to an existing immutable local image, and succeeds only after `/healthz`. Database migrations are not automatically downgraded; for an incompatible change, stop writes and restore a verified backup.
+- Record the full commit SHA before release. The deployment script runs its automatic rollback gate; for a manual rollback, run `ROLLBACK_SHA=<40-char-SHA> ./rollback.sh`. It backs up first, switches to an existing immutable local image, and succeeds only after `/healthz`. Database migrations are not automatically downgraded; for an incompatible change, stop writes and restore a verified backup.
 - Logs must not contain request URI, headers, message text, identities, health values, excerpts, or tokens. Troubleshooting records only version, counts, policy results, and error codes.

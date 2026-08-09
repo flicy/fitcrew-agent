@@ -18,6 +18,7 @@ targets:
         CFBundleDisplayName: FitCrew Health Bridge
         CFBundleShortVersionString: 2.0.0
         CFBundleVersion: "1"
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.fitcrew.healthbridge.pairing
             CFBundleURLSchemes:
@@ -38,8 +39,9 @@ targets:
       - package: FitCrewHealthCore
     settings:
       base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.fitcrew.healthbridge
-        PRODUCT_NAME: FitCrew Health Bridge
+        PRODUCT_NAME: FitCrewHealthBridge
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"

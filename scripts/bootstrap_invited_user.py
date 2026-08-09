@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Create owner identity, consent, and a one-time private iOS pairing artifact."""
+"""Create one private invited-user pairing artifact inside the API container."""
 
 import json
 import os
+import re
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,8 @@ CATEGORIES = [
     "stand_hours",
     "activity_summary",
 ]
+LOOPBACK_API = "http://127.0.0.1:8000"
+SAFE_SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
 
 
 def required(name: str) -> str:
@@ -32,6 +35,17 @@ def required(name: str) -> str:
     if not value:
         raise SystemExit(f"required environment variable is missing: {name}")
     return value
+
+
+def post(path: str, payload: dict, owner_token: str) -> dict:
+    request = Request(
+        LOOPBACK_API + path,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "X-Owner-Token": owner_token},
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed loopback URL
+        return json.load(response)
 
 
 def read_or_create_idempotency_key(path: Path) -> str:
@@ -78,40 +92,10 @@ def pairing_expired(record: Path) -> bool:
         return False
 
 
-def post(payload: dict, owner_token: str) -> dict:
-    request = Request(
-        "http://127.0.0.1:8000/v1/owner/bootstrap",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "X-Owner-Token": owner_token},
-        method="POST",
-    )
-    with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed loopback URL
-        return json.load(response)
-
-
-def issue_owner_pairing_with_expiry_rotation(
-    *, output_dir: Path, owner_token: str, subject: str, idempotency_key: str
-) -> dict:
-    request_payload = {
-        "feishu_subject": subject,
-        "device_public_id": "owner-iphone-healthkit",
-        "categories": CATEGORIES,
-        "idempotency_key": idempotency_key,
-    }
-    try:
-        return post(request_payload, owner_token)
-    except HTTPError:
-        if not pairing_expired(output_dir / "owner-bootstrap.json"):
-            raise
-        rotated_key = rotate_idempotency_key(output_dir / "owner-pairing-idempotency-key")
-        request_payload["idempotency_key"] = rotated_key
-        return post(request_payload, owner_token)
-
-
-def write_owner_pairing_artifact(output_dir: Path, payload: dict) -> None:
-    record = output_dir / "owner-bootstrap.json"
+def write_pairing_artifact(output_dir: Path, payload: dict) -> None:
+    record = output_dir / "pairing.json"
     atomic_write_text(record, json.dumps(payload, ensure_ascii=False, indent=2))
-    qr_path = output_dir / "owner-pairing.png"
+    qr_path = output_dir / "pairing.png"
     temporary = qr_path.with_name(f".{qr_path.stem}.{secrets.token_hex(8)}.png")
     try:
         qrcode.make(payload["pairing_url"]).save(temporary)
@@ -122,24 +106,63 @@ def write_owner_pairing_artifact(output_dir: Path, payload: dict) -> None:
             temporary.unlink()
 
 
+def issue_pairing_with_expiry_rotation(
+    *,
+    output_dir: Path,
+    owner_token: str,
+    subject: str,
+    device_public_id: str,
+    idempotency_key: str,
+) -> dict:
+    request_payload = {
+        "feishu_subject": subject,
+        "device_public_id": device_public_id,
+        "categories": CATEGORIES,
+        "idempotency_key": idempotency_key,
+    }
+    try:
+        return post("/v1/owner/users/pair", request_payload, owner_token)
+    except HTTPError:
+        if not pairing_expired(output_dir / "pairing.json"):
+            raise
+        rotated_key = rotate_idempotency_key(output_dir / "pairing-idempotency-key")
+        request_payload["idempotency_key"] = rotated_key
+        return post("/v1/owner/users/pair", request_payload, owner_token)
+
+
 def main() -> None:
     os.umask(0o077)
     owner_token = required("BODYOS_OWNER_TOKEN")
-    subject = required("FEISHU_ALLOWED_USERS").split(",", maxsplit=1)[0]
-    output_dir = Path("/owner-runtime")
+    subject = required("BODYOS_INVITEE_FEISHU_SUBJECT")
+    device_public_id = required("BODYOS_INVITEE_DEVICE_PUBLIC_ID")
+    slug = required("BODYOS_INVITEE_SLUG")
+    if not SAFE_SLUG.fullmatch(slug):
+        raise SystemExit("BODYOS_INVITEE_SLUG must use lowercase letters, digits, _ or -")
+
+    output_dir = Path("/owner-runtime/invitees") / slug
     output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(output_dir, 0o700)
-    idempotency_key = read_or_create_idempotency_key(
-        output_dir / "owner-pairing-idempotency-key"
+    idempotency_key = read_or_create_idempotency_key(output_dir / "pairing-idempotency-key")
+
+    post(
+        "/v1/owner/users/invite",
+        {
+            "feishu_subject": subject,
+            "locale": "zh-CN",
+            "timezone": "Asia/Shanghai",
+        },
+        owner_token,
     )
-    payload = issue_owner_pairing_with_expiry_rotation(
+    payload = issue_pairing_with_expiry_rotation(
         output_dir=output_dir,
         owner_token=owner_token,
         subject=subject,
+        device_public_id=device_public_id,
         idempotency_key=idempotency_key,
     )
-    write_owner_pairing_artifact(output_dir, payload)
-    print("Owner bootstrap completed; private JSON and pairing QR stored outside Git.")
+
+    write_pairing_artifact(output_dir, payload)
+    print("Invited user pairing stored outside Git.")
 
 
 if __name__ == "__main__":

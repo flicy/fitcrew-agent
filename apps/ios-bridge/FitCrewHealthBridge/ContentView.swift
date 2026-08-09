@@ -27,6 +27,12 @@ struct ContentView: View {
                 Section("隐私边界") {
                     Text("原始数据只加密上传到你的 Owner-only 环境；群聊和模型都不能读取原始健康时间序列。")
                         .font(.footnote)
+                    Link(
+                        "隐私政策 / Privacy Policy",
+                        destination: URL(
+                            string: "https://github.com/flicy/fitcrew-agent/blob/main/docs/privacy/data-processing-and-retention.md"
+                        )!
+                    )
                 }
             }
             .navigationTitle("FitCrew Health Bridge")

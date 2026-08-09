@@ -12,7 +12,7 @@ struct FitCrewHealthBridgeApp: App {
                     BackgroundSyncScheduler.shared.schedule()
                 }
                 .onOpenURL { url in
-                    model.configure(from: url)
+                    Task { await model.configure(from: url) }
                 }
         }
     }

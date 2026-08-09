@@ -66,15 +66,15 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Generate and compile iOS project
+      - name: Generate and test iOS project in a simulator
         working-directory: apps/ios-bridge
         run: |
           brew install xcodegen
           xcodegen generate
           python3 ../../scripts/check_ios_generated_config.py
-          xcodebuild build \
+          xcodebuild test \
             -project FitCrewHealthBridge.xcodeproj \
             -scheme FitCrewHealthBridge \
             -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             CODE_SIGNING_ALLOWED=NO

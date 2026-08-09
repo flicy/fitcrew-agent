@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import FitCrewHealthCore
 
-@Test func pairingURLDecodesProvisioningSecretsLocally() throws {
+@Test func pairingURLDecodesOnlyAnExchangeInvitation() throws {
     let json = """
-    {"baseURL":"https://bodyos.example.test","consentIDs":{"blood_glucose":"33333333-3333-4333-8333-333333333333"},"deviceBindingID":"22222222-2222-4222-8222-222222222222","deviceToken":"one-time-token"}
+    {"baseURL":"https://bodyos.example.test","expiresAt":"2099-01-01T00:00:00+00:00","pairingCode":"high-entropy-opaque-pairing-code-1234567890"}
     """
     let encoded = Data(json.utf8).base64EncodedString()
         .replacingOccurrences(of: "+", with: "-")
@@ -12,11 +12,25 @@ import Testing
         .replacingOccurrences(of: "=", with: "")
     let url = URL(string: "fitcrew-health://configure?payload=\(encoded)")!
 
-    let pairing = try PairingDecoder.decode(url)
+    let invitation = try PairingDecoder.decode(url)
 
-    #expect(pairing.baseURL.absoluteString == "https://bodyos.example.test")
-    #expect(pairing.deviceToken == "one-time-token")
-    #expect(pairing.consentIDs["blood_glucose"] != nil)
+    #expect(invitation.baseURL.absoluteString == "https://bodyos.example.test")
+    #expect(invitation.pairingCode == "high-entropy-opaque-pairing-code-1234567890")
+    #expect(invitation.expiresAt > Date())
+}
+
+@Test func pairingRejectsDirectProvisioningSecrets() {
+    let json = """
+    {"baseURL":"https://bodyos.example.test","deviceToken":"secret","expiresAt":"2099-01-01T00:00:00+00:00","pairingCode":"high-entropy-opaque-pairing-code-1234567890"}
+    """
+    let encoded = Data(json.utf8).base64EncodedString()
+        .replacingOccurrences(of: "+", with: "-")
+        .replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "=", with: "")
+
+    #expect(throws: PairingError.invalidPayload) {
+        try PairingDecoder.decode(URL(string: "fitcrew-health://configure?payload=\(encoded)")!)
+    }
 }
 
 @Test func pairingRejectsUnexpectedSchemes() {
