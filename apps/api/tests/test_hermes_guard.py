@@ -1,6 +1,10 @@
+import asyncio
 import importlib.util
 import json
+import logging
+from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def load_guard_module():
@@ -100,3 +104,263 @@ def test_group_middleware_uses_only_the_prechecked_public_answer_sidecar(
     assert "我的血糖是 10.2" not in rendered
     assert "bodyos-group-answer.v1" in rendered
     assert envelope["reply"] in rendered
+
+
+class RecordingContext:
+    def __init__(self) -> None:
+        self.hooks: dict[str, object] = {}
+        self.middleware: list[tuple[str, object]] = []
+
+    def register_hook(self, name: str, callback) -> None:
+        self.hooks[name] = callback
+
+    def register_middleware(self, name: str, callback) -> None:
+        self.middleware.append((name, callback))
+
+
+class RecordingAdapter:
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def send(self, chat_id: str, content: str, reply_to: str | None = None, metadata=None):
+        self.sent.append(
+            {"chat_id": chat_id, "content": content, "reply_to": reply_to, "metadata": metadata}
+        )
+        return SimpleNamespace(success=True)
+
+
+class FakePlatform(Enum):
+    FEISHU = "feishu"
+    SLACK = "slack"
+
+
+def feishu_event(*, text: str, chat_type: str = "group"):
+    platform = FakePlatform.FEISHU
+    sender_id = SimpleNamespace(
+        open_id="ou_private_owner",
+        user_id="tenant_user_id_that_must_not_be_used",
+        union_id="on_union_identity",
+    )
+    source = SimpleNamespace(
+        platform=platform,
+        chat_id="oc_allowed_group" if chat_type == "group" else "ou_private_owner",
+        chat_type=chat_type,
+        user_id="tenant_user_id_that_must_not_be_used",
+    )
+    raw_message = SimpleNamespace(
+        event=SimpleNamespace(sender=SimpleNamespace(sender_id=sender_id))
+    )
+    return SimpleNamespace(
+        text=text,
+        source=source,
+        raw_message=raw_message,
+        message_id="om_message_1",
+    )
+
+
+def test_register_uses_supported_pre_gateway_dispatch_hook_instead_of_dead_middleware() -> None:
+    guard = load_guard_module()
+    context = RecordingContext()
+
+    guard.register(context)
+
+    assert set(context.hooks) == {"pre_gateway_dispatch"}
+    assert context.middleware == []
+
+
+def test_register_suppresses_upstream_info_logs_that_include_message_text_or_chat_ids() -> None:
+    guard = load_guard_module()
+    context = RecordingContext()
+    logger_names = ("hermes_plugins.platforms__feishu.adapter", "gateway.run")
+    previous = {name: logging.getLogger(name).level for name in logger_names}
+    try:
+        for name in logger_names:
+            logging.getLogger(name).setLevel(logging.NOTSET)
+
+        guard.register(context)
+
+        assert all(logging.getLogger(name).level >= logging.WARNING for name in logger_names)
+    finally:
+        for name, level in previous.items():
+            logging.getLogger(name).setLevel(level)
+
+
+def test_pre_dispatch_sends_only_the_checked_group_reply_and_skips_native_agent(
+    monkeypatch,
+) -> None:
+    guard = load_guard_module()
+    adapter = RecordingAdapter()
+    event = feishu_event(text="晚饭后散步为什么有助于控糖？")
+    raw_text = event.text
+
+    async def scenario() -> None:
+        async def fake_reply(payload: dict) -> dict:
+            assert payload == {
+                "provider": "feishu",
+                "subject": "ou_private_owner",
+                "channel": "group",
+                "text": raw_text,
+            }
+            return {
+                "mode": "group_public",
+                "reply": "饭后轻松活动有助于肌肉利用葡萄糖。",
+                "route": "codex",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+
+        decision = guard._pre_gateway_dispatch(event=event, gateway=gateway, session_store=None)
+
+        assert decision == {"action": "skip", "reason": "bodyos_sanitized_dispatch"}
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert adapter.sent == [
+        {
+            "chat_id": "oc_allowed_group",
+            "content": "饭后轻松活动有助于肌肉利用葡萄糖。",
+            "reply_to": "om_message_1",
+            "metadata": None,
+        }
+    ]
+    assert raw_text not in str(adapter.sent)
+
+
+def test_forum_chat_is_always_routed_as_public_group(monkeypatch) -> None:
+    guard = load_guard_module()
+    adapter = RecordingAdapter()
+    event = feishu_event(text="睡眠通常怎样影响恢复？", chat_type="forum")
+    event.source.chat_id = "oc_forum_group"
+
+    async def scenario() -> None:
+        async def fake_reply(payload: dict) -> dict:
+            assert payload["channel"] == "group"
+            return {
+                "mode": "group_public",
+                "reply": "睡眠有助于恢复。",
+                "route": "codex",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+        assert guard._pre_gateway_dispatch(event=event, gateway=gateway)["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert adapter.sent[0]["chat_id"] == "oc_forum_group"
+
+
+def test_unknown_feishu_chat_type_fails_closed_without_calling_api(monkeypatch) -> None:
+    guard = load_guard_module()
+    adapter = RecordingAdapter()
+    event = feishu_event(text="private context", chat_type="mystery")
+
+    async def scenario() -> None:
+        async def forbidden_call(_payload: dict) -> dict:
+            raise AssertionError("unknown chat type must not reach BodyOS API")
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", forbidden_call)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+        assert guard._pre_gateway_dispatch(event=event, gateway=gateway)["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert "暂时不可用" in adapter.sent[0]["content"]
+
+
+def test_pre_dispatch_routes_private_messages_to_the_same_sanitized_reply_boundary(
+    monkeypatch,
+) -> None:
+    guard = load_guard_module()
+    adapter = RecordingAdapter()
+    event = feishu_event(text="晚饭吃米饭后犯困，和血糖有关吗？", chat_type="dm")
+
+    async def scenario() -> None:
+        async def fake_reply(payload: dict) -> dict:
+            assert payload["channel"] == "dm"
+            assert payload["subject"] == "ou_private_owner"
+            assert "tenant_user_id" not in payload["subject"]
+            return {
+                "mode": "private",
+                "reply": "可以先记录餐食构成和身体感受。",
+                "route": "codex",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+        decision = guard._pre_gateway_dispatch(event=event, gateway=gateway, session_store=None)
+        assert decision["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert adapter.sent[0]["content"] == "可以先记录餐食构成和身体感受。"
+
+
+def test_pre_dispatch_fails_closed_without_exposing_provider_details(monkeypatch) -> None:
+    guard = load_guard_module()
+    adapter = RecordingAdapter()
+    event = feishu_event(text="为什么睡眠会影响恢复？")
+
+    async def scenario() -> None:
+        async def unavailable(_payload: dict) -> dict:
+            raise OSError("provider secret detail")
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", unavailable)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+        decision = guard._pre_gateway_dispatch(event=event, gateway=gateway, session_store=None)
+        assert decision["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    rendered = str(adapter.sent)
+    assert "provider secret detail" not in rendered
+    assert "暂时不可用" in rendered
+
+
+def test_checked_reply_rejects_provider_and_credential_details() -> None:
+    guard = load_guard_module()
+
+    for reply in (
+        "HTTP 403 provider request_id=req-secret",
+        "The model provider failed after retries.",
+        "Authorization: Bearer sk-private-token",
+        "Provider authentication failed. Check configured credentials.",
+        "Rate limited after 3 retries.",
+        "Non-retryable error: upstream rejected request.",
+        "The upstream service returned 429.",
+        "模型认证失败，请检查配置。",
+        "API call failed with status 401.",
+        "Error code: 403 from backend.",
+        "Quota exceeded; please try later.",
+        "Authentication failed for the model service.",
+        "Invalid credentials for upstream.",
+        "模型服务鉴权失败，请检查密钥。",
+        "401 Unauthorized",
+        "403 Forbidden",
+        "503 Service Unavailable",
+        "Bad Gateway",
+        "Gateway timeout",
+        "Connection reset by peer",
+    ):
+        try:
+            guard._checked_reply({"mode": "private", "reply": reply, "route": "codex"}, "dm")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"unsafe provider detail was accepted: {reply}")
+
+
+def test_pre_dispatch_does_not_intercept_non_feishu_events() -> None:
+    guard = load_guard_module()
+    event = feishu_event(text="hello")
+    event.source.platform = FakePlatform.SLACK
+
+    assert (
+        guard._pre_gateway_dispatch(
+            event=event,
+            gateway=SimpleNamespace(adapters={}),
+            session_store=None,
+        )
+        is None
+    )

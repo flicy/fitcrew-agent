@@ -193,6 +193,9 @@ def reply_as_bot(message_id: str, reply: str) -> bool:
 
 
 def main() -> None:
+    if os.environ.get("BODYOS_SYNCHRONOUS_DISPATCH") == "1":
+        print(json.dumps({"scanned": 0, "replied": 0, "failed": 0}))
+        return
     processed = load_state()
     scanned = replied = failed = 0
     for chat_id, _chat_name in load_groups():

@@ -1,12 +1,4 @@
 {
-  "_comment": "BodyOS 群聊巡检不调用 LLM；脚本经服务端确定性分类后只回复固定低敏行为令牌。BodyOS group mention polling does not invoke an LLM; the script uses server-side deterministic classification and replies only with fixed low-sensitivity behavior tokens.",
-  "jobs": [
-    {
-      "name": "BodyOS群聊安全巡检",
-      "schedule": "*/5 * * * *",
-      "deliver": "local",
-      "script": "feishu_group_watcher.py",
-      "no_agent": true
-    }
-  ]
+  "_comment": "BodyOS 已改为同步的 pre_gateway_dispatch 安全路由，旧轮询任务保持禁用以避免重复回复。BodyOS now uses synchronous pre_gateway_dispatch safety routing; the legacy polling job stays disabled to prevent duplicate replies.",
+  "jobs": []
 }

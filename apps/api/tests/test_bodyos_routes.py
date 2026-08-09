@@ -54,8 +54,10 @@ def seed_identity(
     user_id: str = USER_ID,
     subject: str = SUBJECT,
     binding_id: str = "binding-1",
+    verified: bool = True,
+    user_status: str = "active",
 ) -> None:
-    session.add(User(fitcrew_user_id=user_id))
+    session.add(User(fitcrew_user_id=user_id, status=user_status))
     subject_hash = hmac.new(
         b"identity-pepper", subject.encode(), hashlib.sha256
     ).hexdigest()
@@ -67,6 +69,7 @@ def seed_identity(
             provider="feishu",
             subject_hash=subject_hash,
             encrypted_subject=encrypted.nonce + encrypted.ciphertext,
+            verified_at=datetime.now(UTC) if verified else None,
         )
     )
     session.commit()
@@ -472,6 +475,164 @@ def test_proxy_rejects_raw_chat_even_with_valid_proxy_token(
         "/v1/chat/completions",
         headers={"Authorization": "Bearer model-proxy-secret"},
         json={"model": "bodyos-codex", "messages": [{"role": "user", "content": "血糖10.2"}]},
+    )
+
+    assert response.status_code == 403
+    assert gateway.envelopes == []
+
+
+def test_reply_endpoint_returns_a_checked_public_group_answer_without_private_context(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": SUBJECT,
+            "channel": "group",
+            "text": "晚饭后散步为什么有助于控糖？",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "group_public",
+        "reply": "安全建议",
+        "route": "codex",
+    }
+    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v1"
+    assert "features" not in gateway.envelopes[0]
+    assert "knowledge" not in gateway.envelopes[0]
+
+
+def test_reply_endpoint_fails_closed_for_third_person_health_context(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": SUBJECT,
+            "channel": "group",
+            "text": "小王最近晚饭后犯困，和血糖有关吗？",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "deterministic"
+    assert response.json()["route"] == "deterministic"
+    assert "私聊" in response.json()["reply"]
+    assert gateway.envelopes == []
+
+
+def test_reply_endpoint_returns_a_private_answer_without_identifiers_or_raw_values(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher)
+    gateway = RecordingGateway()
+    raw_text = "我的鱼跃血糖是 10.2，晚饭后困，怎么调整？"
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={"provider": "feishu", "subject": SUBJECT, "channel": "dm", "text": raw_text},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"mode": "private", "reply": "安全建议", "route": "codex"}
+    rendered = response.text
+    assert SUBJECT not in rendered
+    assert USER_ID not in rendered
+    assert raw_text not in rendered
+    assert "10.2" not in rendered
+    assert gateway.envelopes[0]["schema_version"] == "bodyos-model.v1"
+
+
+def test_reply_endpoint_keeps_sync_status_deterministic_and_user_isolated(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher)
+    synced_at = datetime(2026, 8, 3, 0, 43, 26, tzinfo=UTC)
+    seed_private_sync_status(
+        session,
+        user_id=USER_ID,
+        prefix="11111111",
+        kinds=["blood_glucose", "sleep_asleep"],
+        synced_at=synced_at,
+    )
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={"provider": "feishu", "subject": SUBJECT, "channel": "dm", "text": "同步状态"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "private",
+        "reply": (
+            "同步状态：已连接\n"
+            "最新同步时间：2026-08-03T00:43:26+00:00\n"
+            "数据类别覆盖：血糖、睡眠"
+        ),
+        "route": "deterministic",
+    }
+    assert gateway.envelopes == []
+
+
+def test_reply_endpoint_denies_an_unbound_private_identity_before_model_use(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": "ou_unknown_user",
+            "channel": "dm",
+            "text": "今天睡眠怎么样？",
+        },
+    )
+
+    assert response.status_code == 403
+    assert gateway.envelopes == []
+
+
+def test_reply_endpoint_denies_an_unverified_private_identity_before_model_use(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher, verified=False)
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={"provider": "feishu", "subject": SUBJECT, "channel": "dm", "text": "睡眠建议"},
+    )
+
+    assert response.status_code == 403
+    assert gateway.envelopes == []
+
+
+def test_reply_endpoint_denies_an_inactive_private_user_before_model_use(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_identity(session, field_cipher, user_status="revoked")
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={"provider": "feishu", "subject": SUBJECT, "channel": "dm", "text": "睡眠建议"},
     )
 
     assert response.status_code == 403
