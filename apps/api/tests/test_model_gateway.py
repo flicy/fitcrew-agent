@@ -40,6 +40,20 @@ def envelope() -> dict:
     }
 
 
+def public_group_envelope() -> dict:
+    return {
+        "schema_version": "bodyos-public.v1",
+        "intent": "glucose_coaching",
+        "channel": "group",
+        "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
+        "constraints": [
+            "general_knowledge_only",
+            "no_personal_health_data",
+            "not_medical_diagnosis",
+        ],
+    }
+
+
 def test_primary_codex_harness_is_used_without_fallback() -> None:
     primary = FakeHarness([HarnessResult(text="建议从进食顺序开始。", route="codex")])
     fallback = FakeHarness([HarnessResult(text="unused", route="hermes")])
@@ -87,6 +101,59 @@ def test_raw_or_identifying_fields_are_rejected_before_any_model_call() -> None:
     primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
     fallback = FakeHarness([HarnessResult(text="must not run", route="hermes")])
     unsafe = envelope() | {"open_id": "ou_secret", "raw_samples": [100, 110]}
+
+    with pytest.raises(ModelEnvelopeRejected):
+        RoutedModelGateway(primary, fallback).respond(unsafe)
+
+    assert primary.prompts == []
+    assert fallback.prompts == []
+
+
+def test_public_group_envelope_can_use_model_without_private_context() -> None:
+    primary = FakeHarness([HarnessResult(text="通用回答", route="codex")])
+    fallback = FakeHarness([HarnessResult(text="unused", route="hermes")])
+
+    result = RoutedModelGateway(primary, fallback).respond(public_group_envelope())
+
+    assert result.text == "通用回答"
+    prompt = primary.prompts[0]
+    assert "晚饭后散步为什么有助于控糖" in prompt
+    assert "general knowledge" in prompt
+    assert "features" not in prompt
+    assert '"knowledge":' not in prompt
+
+
+@pytest.mark.parametrize(
+    "unsafe_context",
+    [
+        "我的血糖是 10.2",
+        "电话 13800138000",
+        "联系 ou_private123",
+        "用户 11111111-1111-4111-8111-111111111111",
+    ],
+)
+def test_public_group_envelope_rejects_personal_or_identifying_context(
+    unsafe_context: str,
+) -> None:
+    primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
+    fallback = FakeHarness([HarnessResult(text="must not run", route="hermes")])
+    unsafe = public_group_envelope() | {
+        "public_context": {"sanitized_text": unsafe_context}
+    }
+
+    with pytest.raises(ModelEnvelopeRejected):
+        RoutedModelGateway(primary, fallback).respond(unsafe)
+
+    assert primary.prompts == []
+    assert fallback.prompts == []
+
+
+def test_private_request_context_rejects_manually_injected_identifiers() -> None:
+    primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
+    fallback = FakeHarness([HarnessResult(text="must not run", route="hermes")])
+    unsafe = envelope() | {
+        "request_context": {"sanitized_text": "晚饭后联系 me@example.com"}
+    }
 
     with pytest.raises(ModelEnvelopeRejected):
         RoutedModelGateway(primary, fallback).respond(unsafe)

@@ -182,6 +182,68 @@ def test_group_envelope_is_a_fixed_token_and_never_calls_gateway(
     assert gateway.envelopes == []
 
 
+def test_general_group_question_returns_a_checked_public_answer_envelope(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/bodyos/envelope",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json={
+            "provider": "feishu",
+            "subject": SUBJECT,
+            "channel": "group",
+            "text": "晚饭后散步为什么有助于控糖？",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "group_public",
+        "reply": "安全建议",
+        "envelope": {
+            "schema_version": "bodyos-group-answer.v1",
+            "channel": "group",
+            "reply": "安全建议",
+        },
+    }
+    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v1"
+    assert "features" not in gateway.envelopes[0]
+    assert "knowledge" not in gateway.envelopes[0]
+
+
+def test_proxy_returns_only_a_prechecked_public_group_answer(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+    import json
+
+    envelope = {
+        "schema_version": "bodyos-group-answer.v1",
+        "channel": "group",
+        "reply": "餐后舒适步行可以增加肌肉对葡萄糖的利用。",
+    }
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer model-proxy-secret"},
+        json={
+            "model": "bodyos-codex",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "BODYOS_SANITIZED_ENVELOPE=" + json.dumps(envelope),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == envelope["reply"]
+    assert response.json()["bodyos_route"] == "deterministic"
+    assert gateway.envelopes == []
+
+
 def test_group_contact_request_is_a_fixed_join_token_and_never_calls_gateway(
     session: Session, field_cipher: FieldCipher
 ) -> None:
