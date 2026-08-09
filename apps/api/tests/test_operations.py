@@ -661,6 +661,84 @@ def test_reconciliation_fails_closed_without_writing_for_an_unreadable_active_id
     assert not allowlist.exists()
 
 
+def test_reconciliation_does_not_reauthorize_a_revoked_subject_left_in_environment(
+    session, field_cipher
+) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_rebind")
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="old-owner-binding",
+        user_id="old-owner-user",
+        status="active",
+        subject="ou_old_owner",
+        revoked=True,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="current-owner-binding",
+        user_id="current-owner-user",
+        status="active",
+        subject="ou_current_owner",
+        revoked=False,
+    )
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="invited-binding",
+        user_id="invited-user",
+        status="invited",
+        subject="ou_invited",
+        revoked=False,
+    )
+
+    users = module.derive_allowed_users(
+        session,
+        field_cipher,
+        initial_allowed_users="ou_old_owner",
+    )
+
+    assert users == ("ou_current_owner", "ou_invited")
+
+
+def test_reconciliation_excludes_unverified_active_identity(session, field_cipher) -> None:
+    module = _load_reconciliation_module("reconcile_allowlist_unverified")
+    _add_feishu_identity(
+        session,
+        field_cipher,
+        binding_id="owner-binding",
+        user_id="owner-user",
+        status="active",
+        subject="ou_owner",
+        revoked=False,
+    )
+    unverified_user = User(fitcrew_user_id="unverified-user", status="invited")
+    session.add(unverified_user)
+    identity = IdentityBinding(
+        id="unverified-binding",
+        fitcrew_user_id=unverified_user.fitcrew_user_id,
+        provider="feishu",
+        subject_hash="unverified-hash",
+        encrypted_subject=b"",
+        verified_at=None,
+    )
+    session.add(identity)
+    encrypted = field_cipher.encrypt_json(
+        {"subject": "ou_unverified"}, aad=f"identity:{identity.id}"
+    )
+    identity.encrypted_subject = encrypted.nonce + encrypted.ciphertext
+    session.flush()
+
+    users = module.derive_allowed_users(
+        session,
+        field_cipher,
+        initial_allowed_users="ou_owner",
+    )
+
+    assert users == ("ou_owner",)
+
+
 def test_reconciliation_wrapper_runs_api_then_restarts_only_gateway(tmp_path: Path) -> None:
     source_path = ROOT / "infra/tencent/reconcile-feishu-allowlist.sh"
     assert source_path.stat().st_mode & 0o111

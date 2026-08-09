@@ -36,7 +36,7 @@
 
 ### 已有受邀用户的白名单迁移
 
-如果第二位用户是在私有 gateway allowlist 引入之前创建的，在完成本版本部署后、要求该用户测试前，在 `infra/tencent/` 运行 `./reconcile-feishu-allowlist.sh`。该迁移只在 API 容器内使用现有加密的、未撤销且状态为 `invited` 或 `active` 的飞书身份重建 `runtime/owner/feishu-allowed-users`，并在成功后只重启 gateway。它不会创建用户、重新配对设备、修改授权，也不会人工猜测姓名或 `open_id`。任何本应有效的身份无法解密或校验时，脚本会关闭式失败且不会写入新的 allowlist；请先排障，不要改为允许所有用户。
+如果第二位用户是在私有 gateway allowlist 引入之前创建的，在完成本版本部署后、要求该用户测试前，在 `infra/tencent/` 运行 `./reconcile-feishu-allowlist.sh`。该迁移只在 API 容器内使用现有加密、已验证、未撤销且用户状态为 `invited` 或 `active` 的飞书身份重建 `runtime/owner/feishu-allowed-users`，并在成功后只重启 gateway。`FEISHU_ALLOWED_USERS` 只用于检查运行环境格式，绝不是授权来源，因此旧的或被撤销 subject 不会因残留在环境变量中重新获得访问。它不会创建用户、重新配对设备、修改授权，也不会人工猜测姓名或 `open_id`。任何本应有效的身份无法解密或校验时，脚本会关闭式失败且不会写入新的 allowlist；请先排障，不要改为允许所有用户。
 
 ### 私人书籍
 
@@ -85,7 +85,7 @@ If any post-switch gate fails, the script restores the runtime image tag and pre
 
 ### Existing invitee allowlist migration
 
-If the second user was created before the private gateway allowlist was introduced, run `./reconcile-feishu-allowlist.sh` from `infra/tencent/` after deploying this version and before asking that existing invitee to test. The migration reconstructs `runtime/owner/feishu-allowed-users` only inside the API container from existing encrypted, non-revoked Feishu identities whose users are `invited` or `active`, then restarts only the gateway after success. It does not create a user, re-pair a device, change consent, or manually guess a name or `open_id`. If any expected active identity cannot be decrypted or validated, it fails closed and writes no new allowlist; investigate first and do not switch to allow-all access.
+If the second user was created before the private gateway allowlist was introduced, run `./reconcile-feishu-allowlist.sh` from `infra/tencent/` after deploying this version and before asking that existing invitee to test. The migration reconstructs `runtime/owner/feishu-allowed-users` only inside the API container from existing encrypted, verified, non-revoked Feishu identities whose users are `invited` or `active`, then restarts only the gateway after success. `FEISHU_ALLOWED_USERS` is checked only for runtime-environment format; it is never an authorization source, so an old or revoked subject cannot regain access merely by remaining in that environment variable. It does not create a user, re-pair a device, change consent, or manually guess a name or `open_id`. If any expected active identity cannot be decrypted or validated, it fails closed and writes no new allowlist; investigate first and do not switch to allow-all access.
 
 ### Private books
 

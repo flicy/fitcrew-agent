@@ -54,14 +54,19 @@ def decrypt_subject(identity: IdentityBinding, cipher: FieldCipher) -> str:
 def derive_allowed_users(
     session: Session, cipher: FieldCipher, *, initial_allowed_users: str
 ) -> tuple[str, ...]:
-    """Return the deterministic union of owner baseline and active Feishu identities."""
+    """Return eligible, verified database identities without trusting runtime values as grants."""
     try:
-        users = set(parse_allowed_users(initial_allowed_users))
+        # The environment is required for gateway startup, but only an encrypted,
+        # verified database binding is an authorization grant. This prevents a
+        # revoked pre-rebind subject lingering in the environment from returning.
+        parse_allowed_users(initial_allowed_users)
+        users: set[str] = set()
         active_identities = session.execute(
             select(IdentityBinding)
             .join(User, User.fitcrew_user_id == IdentityBinding.fitcrew_user_id)
             .where(
                 IdentityBinding.provider == "feishu",
+                IdentityBinding.verified_at.is_not(None),
                 IdentityBinding.revoked_at.is_(None),
                 User.status.in_(ACTIVE_USER_STATUSES),
             )
