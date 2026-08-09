@@ -14,6 +14,7 @@ FitCrew 是产品与社区品牌，BodyOS 是用户在飞书中接触的私人�
 - Python / policy、Swift Core 和 iOS Simulator CI 已通过。
 - 生产 TLS 已验证；公开健康检查端点 <https://124.156.218.104/healthz> 当前观测返回 `v2.0.0-alpha.1`。
 - TestFlight 提交流程已准备，但外部分发尚未完成；受邀测试者的真机验收也尚未完成。
+- 现实世界的 16 天研究尚未完成；本项目未对任何健康结果作出主张。
 
 这些证据说明工程路径、隔离边界和部署连接性已被验证，不构成任何个人健康结果、医疗诊断或远程 TestFlight 安装可用性的承诺。
 
@@ -52,6 +53,7 @@ Group chat permits only five fixed low-sensitivity outcomes: today's action comp
 - Python / policy, Swift Core, and iOS Simulator CI are green.
 - Production TLS is verified. The public health endpoint, <https://124.156.218.104/healthz>, currently reports `v2.0.0-alpha.1`.
 - The TestFlight submission flow is prepared, but external distribution is not complete, nor is an invited tester's physical-device acceptance.
+- The real-world 16-day study is not complete, and this project makes no claim about any health outcome.
 
 This evidence verifies the engineering path, isolation boundaries, and deployment connectivity. It is not a promise of an individual health outcome, medical diagnosis, or available remote TestFlight installation.
 
