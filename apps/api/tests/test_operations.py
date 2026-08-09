@@ -94,6 +94,9 @@ def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:
     source = script_path.read_text()
     assert "print(payload)" not in source
     assert "mode=0o700" in source
+    assert "pairing-idempotency-key" in source
+    assert "secrets.token_urlsafe(32)" in source
+    assert "idempotency_key" in source
     assert "os.chmod(record, 0o600)" in source
     assert "os.chmod(qr_path, 0o600)" in source
     assert 'print("Invited user pairing stored outside Git.")' in source

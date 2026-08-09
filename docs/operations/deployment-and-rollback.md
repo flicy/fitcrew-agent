@@ -21,7 +21,7 @@
 
 1. 先备份 `runtime/.env.runtime`，再用无回显输入读取受邀用户的飞书 `open_id`、设备公开标识和本地代号。把 `open_id` 幂等追加到 `FEISHU_ALLOWED_USERS`，并临时写入 `BODYOS_INVITEE_FEISHU_SUBJECT`、`BODYOS_INVITEE_DEVICE_PUBLIC_ID`、`BODYOS_INVITEE_SLUG`。运行文件必须继续保持 `0600`，`FEISHU_ALLOW_ALL_USERS=false` 与 `GATEWAY_ALLOW_ALL_USERS=false` 不得改变。
 2. 用 `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` 让 API 获取一次性邀请变量，并让 gateway 重新渲染关闭式白名单。不要使用 `docker compose config`，避免把环境值打印到终端。
-3. 执行 `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`。唯一成功输出应为 `Invited user pairing stored outside Git.`；配对 JSON 和二维码只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。
+3. 执行 `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`。唯一成功输出应为 `Invited user pairing stored outside Git.`；配对 JSON、二维码和仅用于安全重试的高熵幂等键只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。二维码只含 HTTPS 地址、一次性配对码和 15 分钟过期时间；扫描后由 App 交换短期凭据，不能重复兑换。
 4. 从运行文件删除三个 `BODYOS_INVITEE_*` 临时变量，保留双用户 `FEISHU_ALLOWED_USERS`，再次只重建 `api gateway`。分别验证两位用户私聊隔离、群聊固定低敏回复及 Chris 原有同步状态不变。
 5. 二维码只通过已核实收件人的私密渠道交付；未得到明确发送授权时不得发送，也不得粘贴到终端、飞书群、日志或 PR。
 
@@ -57,7 +57,7 @@ Only ports 80/443 are public; the database, API, and model proxy have no host ma
 
 1. Back up `runtime/.env.runtime`, then collect the invitee's Feishu `open_id`, public device identifier, and local slug with no-echo input. Idempotently append the `open_id` to `FEISHU_ALLOWED_USERS` and temporarily add `BODYOS_INVITEE_FEISHU_SUBJECT`, `BODYOS_INVITEE_DEVICE_PUBLIC_ID`, and `BODYOS_INVITEE_SLUG`. Keep the runtime file at `0600`; never change `FEISHU_ALLOW_ALL_USERS=false` or `GATEWAY_ALLOW_ALL_USERS=false`.
 2. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` so the API receives the one-time invitation variables and the gateway rerenders its closed allowlist. Do not run `docker compose config`, which can print environment values.
-3. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`. Its only success output is `Invited user pairing stored outside Git.` The pairing JSON and QR remain only under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`.
+3. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`. Its only success output is `Invited user pairing stored outside Git.` The pairing JSON, QR, and high-entropy idempotency key used only for a safe retry remain under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`. The QR contains only an HTTPS address, one-time pairing code, and 15-minute expiry; the app exchanges it for short-lived provisioning data exactly once.
 4. Remove the three temporary `BODYOS_INVITEE_*` entries, keep both users in `FEISHU_ALLOWED_USERS`, and recreate only `api gateway` again. Verify isolated DMs for both users, the fixed low-sensitivity group reply, and Chris's unchanged sync status.
 5. Deliver the QR only through a verified private channel. Without explicit transmission authorization, do not send it or paste it into a terminal, Feishu group, logs, or a PR.
 

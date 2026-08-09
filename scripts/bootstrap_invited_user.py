@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import secrets
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -45,6 +46,20 @@ def post(path: str, payload: dict, owner_token: str) -> dict:
         return json.load(response)
 
 
+def read_or_create_idempotency_key(path: Path) -> str:
+    if path.is_file():
+        return path.read_text(encoding="utf-8").strip()
+    key = secrets.token_urlsafe(32)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return path.read_text(encoding="utf-8").strip()
+    with os.fdopen(descriptor, "w", encoding="utf-8") as key_file:
+        key_file.write(key)
+    os.chmod(path, 0o600)
+    return key
+
+
 def main() -> None:
     os.umask(0o077)
     owner_token = required("BODYOS_OWNER_TOKEN")
@@ -53,6 +68,11 @@ def main() -> None:
     slug = required("BODYOS_INVITEE_SLUG")
     if not SAFE_SLUG.fullmatch(slug):
         raise SystemExit("BODYOS_INVITEE_SLUG must use lowercase letters, digits, _ or -")
+
+    output_dir = Path("/owner-runtime/invitees") / slug
+    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(output_dir, 0o700)
+    idempotency_key = read_or_create_idempotency_key(output_dir / "pairing-idempotency-key")
 
     post(
         "/v1/owner/users/invite",
@@ -69,13 +89,11 @@ def main() -> None:
             "feishu_subject": subject,
             "device_public_id": device_public_id,
             "categories": CATEGORIES,
+            "idempotency_key": idempotency_key,
         },
         owner_token,
     )
 
-    output_dir = Path("/owner-runtime/invitees") / slug
-    output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(output_dir, 0o700)
     record = output_dir / "pairing.json"
     record.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.chmod(record, 0o600)

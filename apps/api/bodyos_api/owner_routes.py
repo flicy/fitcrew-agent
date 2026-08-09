@@ -19,7 +19,8 @@ from bodyos_api.enrollment import (
     find_invited_user_id,
     hash_subject,
     invite_feishu_user,
-    pair_invited_user,
+    issue_pairing_exchange,
+    revoke_invited_user,
 )
 from bodyos_api.models import Consent, DeviceBinding, IdentityBinding, User
 from bodyos_api.runtime import get_field_cipher
@@ -57,6 +58,14 @@ class UserPairIn(BaseModel):
     feishu_subject: str = Field(min_length=3, max_length=200)
     device_public_id: str = Field(min_length=3, max_length=128)
     categories: set[HealthKind] = Field(min_length=1)
+    idempotency_key: str = Field(min_length=32, max_length=200)
+
+
+class UserRevokeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feishu_subject: str = Field(min_length=3, max_length=200)
+    device_public_id: str | None = Field(default=None, min_length=3, max_length=128)
 
 
 @router.post("/bootstrap", status_code=status.HTTP_201_CREATED)
@@ -182,23 +191,45 @@ def pair_user(
             subject=request.feishu_subject,
             pepper=settings.identity_pepper.get_secret_value(),
         )
-        result = pair_invited_user(
+        result = issue_pairing_exchange(
             session,
             fitcrew_user_id=user_id,
             device_public_id=request.device_public_id,
             categories=request.categories,
             public_base_url=settings.public_base_url,
+            idempotency_key=request.idempotency_key,
         )
     except EnrollmentNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except EnrollmentConflict as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
-    return {
-        "device_binding_id": result.device_binding_id,
-        "consent_ids": result.consent_ids,
-        "device_token": result.device_token,
-        "pairing_url": result.pairing_url,
-    }
+    return JSONResponse(
+        status_code=201 if result.created else 200,
+        content={"pairing_url": result.pairing_url, "expires_at": result.expires_at.isoformat()},
+    )
+
+
+@router.post("/users/revoke")
+def revoke_user(
+    request: UserRevokeIn,
+    _: Annotated[None, Depends(require_owner)],
+    session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    try:
+        user_id = find_invited_user_id(
+            session,
+            subject=request.feishu_subject,
+            pepper=settings.identity_pepper.get_secret_value(),
+        )
+        revoke_invited_user(
+            session,
+            fitcrew_user_id=user_id,
+            device_public_id=request.device_public_id,
+        )
+    except EnrollmentNotFound as error:
+        raise HTTPException(status_code=404, detail="invited user not found") from error
+    return {"revoked": True}
 
 
 @router.post("/identity/rebind")

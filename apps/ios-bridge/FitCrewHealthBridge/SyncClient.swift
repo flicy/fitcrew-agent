@@ -23,6 +23,31 @@ struct SyncClient {
             throw URLError(.badServerResponse)
         }
     }
+
+    fileprivate func exchange(_ invitation: PairingInvitation) async throws -> PairingProvisioning {
+        var request = URLRequest(url: invitation.baseURL.appending(path: "/v1/pairing/exchange"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(invitation.pairingCode)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(PairingProvisioning.self, from: data)
+    }
+}
+
+private struct PairingProvisioning: Decodable {
+    let baseURL: URL
+    let deviceBindingID: UUID
+    let consentIDs: [String: UUID]
+    let deviceToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case baseURL = "base_url"
+        case deviceBindingID = "device_binding_id"
+        case consentIDs = "consent_ids"
+        case deviceToken = "device_token"
+    }
 }
 
 @MainActor
@@ -48,9 +73,13 @@ final class BridgeViewModel: ObservableObject {
         return lastSync.formatted(date: .abbreviated, time: .shortened)
     }
 
-    func configure(from url: URL) {
+    func configure(from url: URL) async {
         do {
-            let pairing = try PairingDecoder.decode(url)
+            let invitation = try PairingDecoder.decode(url)
+            let pairing = try await syncClient.exchange(invitation)
+            guard pairing.baseURL.scheme == "https", pairing.baseURL.host != nil else {
+                throw PairingError.invalidPayload
+            }
             try KeychainStore.saveDeviceToken(pairing.deviceToken)
             consentStore.replaceConfiguration(BridgeConfiguration(
                 baseURL: pairing.baseURL,

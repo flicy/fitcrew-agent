@@ -15,8 +15,9 @@ def test_owner_alpha_schema_contains_required_tables() -> None:
         "knowledge_reviews",
         "knowledge_sources",
         "memories",
-        "outbox_events",
-        "sync_batches",
+            "outbox_events",
+            "pairing_exchange_sessions",
+            "sync_batches",
         "users",
     }
 
