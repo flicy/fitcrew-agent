@@ -42,6 +42,18 @@ def classify_intent(text: str) -> str:
 
 def classify_group_token(text: str) -> BehaviorToken:
     lowered = text.casefold()
+    if any(
+        term in lowered
+        for term in (
+            "联系方式",
+            "怎么加入",
+            "加入bodyos",
+            "联系bodyos",
+            "contact bodyos",
+            "join bodyos",
+        )
+    ):
+        return BehaviorToken.CONTACT_BODYOS
     if any(term in lowered for term in ("需要搭子", "找搭子", "need_buddy")):
         return BehaviorToken.NEED_BUDDY
     if any(term in lowered for term in ("行动小一点", "降低难度", "smaller_action")):

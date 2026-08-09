@@ -44,3 +44,40 @@ def test_renderer_builds_a_complete_fail_closed_bodyos_profile(tmp_path: Path) -
     assert config["platforms"]["feishu"]["extra"]["group_rules"] == {
         "oc_bodyos_group": {"policy": "open", "require_mention": True}
     }
+
+
+def test_rendered_rules_allow_only_bound_controlled_identities_in_private_coaching(
+    tmp_path: Path,
+) -> None:
+    profile = tmp_path / "bodyos-profile"
+    environment = {
+        **os.environ,
+        "BODYOS_MODEL_BASE_URL": "https://bodyos.example.test/v1",
+    }
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/render_hermes_profile.py"),
+            "--app-root",
+            str(ROOT),
+            "--profile-dir",
+            str(profile),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    hermes_rules = (profile / "HERMES.md").read_text(encoding="utf-8")
+    soul = (profile / "SOUL.md").read_text(encoding="utf-8")
+    assert "explicitly bound, controlled-allowlisted BodyOS identities" in hermes_rules
+    assert "Unknown and uninvited users remain denied" in hermes_rules
+    assert "FEISHU_ALLOW_ALL_USERS=false" in hermes_rules
+    assert "fail closed" in hermes_rules
+    assert "only the owner in `FEISHU_ALLOWED_USERS` may use DMs" not in hermes_rules
+    assert "only in DMs from explicitly bound, controlled-allowlisted BodyOS identities" in soul
+    assert "fixed low-sensitivity behavior tokens" in hermes_rules
+    assert "never health data or private content" in hermes_rules

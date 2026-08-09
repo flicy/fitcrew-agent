@@ -28,11 +28,11 @@
 
 ### 受控邀请第二位用户
 
-1. 先备份 `runtime/.env.runtime`，再用无回显输入读取受邀用户的飞书 `open_id`、设备公开标识和本地代号。把 `open_id` 幂等追加到 `FEISHU_ALLOWED_USERS`，并临时写入 `BODYOS_INVITEE_FEISHU_SUBJECT`、`BODYOS_INVITEE_DEVICE_PUBLIC_ID`、`BODYOS_INVITEE_SLUG`。运行文件必须继续保持 `0600`，`FEISHU_ALLOW_ALL_USERS=false` 与 `GATEWAY_ALLOW_ALL_USERS=false` 不得改变。
-2. 用 `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` 让 API 获取一次性邀请变量，并让 gateway 重新渲染关闭式白名单。不要使用 `docker compose config`，避免把环境值打印到终端。
-3. 执行 `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`。唯一成功输出应为 `Invited user pairing stored outside Git.`；配对 JSON、二维码和仅用于安全重试的高熵幂等键只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。二维码只含 HTTPS 地址、一次性配对码和 15 分钟过期时间；扫描后由 App 交换短期凭据，不能重复兑换。若记录的邀请已过期，安全重跑会只在该私有目录中原子替换配对工件并轮换高熵幂等键；不会重绑设备、改变 consent 或打印 bearer 凭据。
-4. 从运行文件删除三个 `BODYOS_INVITEE_*` 临时变量，保留双用户 `FEISHU_ALLOWED_USERS`，再次只重建 `api gateway`。分别验证两位用户私聊隔离、群聊固定低敏回复及 Chris 原有同步状态不变。
-5. 二维码只通过已核实收件人的私密渠道交付；未得到明确发送授权时不得发送，也不得粘贴到终端、飞书群、日志或 PR。
+1. 飞书 subject 必须来自已核验的飞书开发者控制台或受信任事件来源；不得根据姓名猜测，也不要把 subject 记录到聊天、日志或 Git。准备同样从受信任来源获得的设备公开标识，以及仅含小写字母、数字、`_` 或 `-` 的本地代号。
+2. 在 `infra/tencent/` 运行 `./bootstrap-invited-user.sh`。脚本在交互终端中无回显读取 subject 和设备公开标识，只把三项一次性变量传给 API 容器的本次 `docker compose exec -e`，不会写入 `runtime/.env.runtime`，也不会运行 `docker compose config`。
+3. API 在邀请成功后、签发配对前，把 Owner 和受邀用户 subject 原子写入 `runtime/owner/feishu-allowed-users`。目录为 `0700`、文件为 `0600`；gateway 仅以只读方式加载该私有列表，并只重启 gateway 使关闭式白名单生效。`FEISHU_ALLOW_ALL_USERS=false` 与 `GATEWAY_ALLOW_ALL_USERS=false` 必须保持不变。
+4. 配对 JSON、二维码和仅用于安全重试的高熵幂等键只保存在 `runtime/owner/invitees/<slug>/`，目录 `0700`、文件 `0600`。二维码只含 HTTPS 地址、一次性配对码和 15 分钟过期时间；扫描后由 App 交换短期凭据，不能重复兑换。若记录的邀请已过期，安全重跑会只在该私有目录中原子替换配对工件并轮换高熵幂等键；不会重绑设备、改变 consent 或打印 bearer 凭据。
+5. 分别验证两位用户私聊隔离、群聊固定低敏回复及 Owner 原有同步状态不变。二维码只通过已核实收件人的私密渠道交付；未得到明确发送授权时不得发送，也不得粘贴到终端、飞书群、日志或 PR。
 
 ### 私人书籍
 
@@ -73,11 +73,11 @@ If any post-switch gate fails, the script restores the runtime image tag and pre
 
 ### Controlled invitation of a second user
 
-1. Back up `runtime/.env.runtime`, then collect the invitee's Feishu `open_id`, public device identifier, and local slug with no-echo input. Idempotently append the `open_id` to `FEISHU_ALLOWED_USERS` and temporarily add `BODYOS_INVITEE_FEISHU_SUBJECT`, `BODYOS_INVITEE_DEVICE_PUBLIC_ID`, and `BODYOS_INVITEE_SLUG`. Keep the runtime file at `0600`; never change `FEISHU_ALLOW_ALL_USERS=false` or `GATEWAY_ALLOW_ALL_USERS=false`.
-2. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml up -d --force-recreate api gateway` so the API receives the one-time invitation variables and the gateway rerenders its closed allowlist. Do not run `docker compose config`, which can print environment values.
-3. Run `docker compose --env-file runtime/.env.runtime -f compose.yaml exec -T api python /app/scripts/bootstrap_invited_user.py`. Its only success output is `Invited user pairing stored outside Git.` The pairing JSON, QR, and high-entropy idempotency key used only for a safe retry remain under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`. The QR contains only an HTTPS address, one-time pairing code, and 15-minute expiry; the app exchanges it for short-lived provisioning data exactly once. If the recorded invitation has expired, a safe rerun rotates the high-entropy key and atomically replaces only this private pairing artifact; it does not rebind a device, change consent, or print bearer credentials.
-4. Remove the three temporary `BODYOS_INVITEE_*` entries, keep both users in `FEISHU_ALLOWED_USERS`, and recreate only `api gateway` again. Verify isolated DMs for both users, the fixed low-sensitivity group reply, and Chris's unchanged sync status.
-5. Deliver the QR only through a verified private channel. Without explicit transmission authorization, do not send it or paste it into a terminal, Feishu group, logs, or a PR.
+1. The Feishu subject must come from a verified Feishu developer-console or trusted event source; it must never be guessed from a person’s name or copied to chat, logs, or Git. Prepare a public device identifier from the same trusted source and a local slug containing only lowercase letters, digits, `_`, or `-`.
+2. Run `./bootstrap-invited-user.sh` from `infra/tencent/`. In an interactive terminal it reads the subject and public device identifier without echo, passes all three one-time values only to that API container’s `docker compose exec -e`, never writes them to `runtime/.env.runtime`, and never runs `docker compose config`.
+3. After the API invitation succeeds and before pairing issuance, it atomically stores the Owner and invitee subjects in `runtime/owner/feishu-allowed-users`. The directory is `0700` and file `0600`; the gateway loads that private list read-only and only gateway restarts so its closed allowlist takes effect. `FEISHU_ALLOW_ALL_USERS=false` and `GATEWAY_ALLOW_ALL_USERS=false` must remain unchanged.
+4. The pairing JSON, QR, and high-entropy idempotency key used only for a safe retry remain under `runtime/owner/invitees/<slug>/`, with directory mode `0700` and file mode `0600`. The QR contains only an HTTPS address, one-time pairing code, and 15-minute expiry; the app exchanges it for short-lived provisioning data exactly once. If the recorded invitation has expired, a safe rerun rotates the high-entropy key and atomically replaces only this private pairing artifact; it does not rebind a device, change consent, or print bearer credentials.
+5. Verify isolated DMs for both users, the fixed low-sensitivity group reply, and the Owner's unchanged sync status. Deliver the QR only through a verified private channel. Without explicit transmission authorization, do not send it or paste it into a terminal, Feishu group, logs, or a PR.
 
 ### Private books
 

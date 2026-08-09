@@ -95,6 +95,7 @@ services:
       HOME: /home/bodyos
     volumes:
       - hermes_home:/home/bodyos/.hermes
+      - ./runtime/owner:/owner-runtime:ro
     tmpfs:
       - /tmp:size=64m,mode=1777
       - /home/bodyos/.local:size=16m,uid=10001,gid=10001,mode=0700
