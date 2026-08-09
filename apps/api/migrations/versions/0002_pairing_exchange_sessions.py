@@ -4,9 +4,8 @@ Revision ID: 0002_pairing_exchange_sessions
 Revises: 0001_owner_alpha
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0002_pairing_exchange_sessions"
 down_revision = "0001_owner_alpha"
@@ -31,8 +30,18 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("invalidated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["fitcrew_user_id"], ["users.fitcrew_user_id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key_hash"),
@@ -52,5 +61,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_pairing_exchange_sessions_expires_at", table_name="pairing_exchange_sessions")
-    op.drop_index("ix_pairing_exchange_sessions_fitcrew_user_id", table_name="pairing_exchange_sessions")
+    op.drop_index(
+        "ix_pairing_exchange_sessions_fitcrew_user_id",
+        table_name="pairing_exchange_sessions",
+    )
     op.drop_table("pairing_exchange_sessions")

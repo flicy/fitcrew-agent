@@ -19,6 +19,32 @@ def test_tencent_compose_has_owner_alpha_hardening() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     assert "--wait --wait-timeout 120 db api caddy" in workflow
     assert "curl --fail --silent --show-error http://127.0.0.1/healthz" in workflow
+    assert "xcodebuild test" in workflow
+    assert "platform=iOS Simulator,name=iPhone 16 Pro" in workflow
+
+
+def test_deploy_rolls_back_the_full_service_set_when_a_post_deploy_gate_fails() -> None:
+    deploy = (ROOT / "infra/tencent/deploy.sh").read_text()
+
+    assert "PREVIOUS_IMAGE_TAG=" in deploy
+    assert "rollback_on_failure" in deploy
+    assert "trap 'rollback_on_failure $? '" not in deploy
+    assert "trap 'rollback_on_failure $?" in deploy
+    assert (
+        "FITCREW_IMAGE_TAG=\"$PREVIOUS_IMAGE_TAG\" "
+        "$COMPOSE up -d --no-build db api worker gateway caddy"
+    ) in deploy
+    assert "wait_for_service db health" in deploy
+    assert "wait_for_service api health" in deploy
+    assert "wait_for_service worker running" in deploy
+    assert "wait_for_service gateway running" in deploy
+    assert "wait_for_service caddy health" in deploy
+    assert "https://${PUBLIC_HOST}/healthz" in deploy
+    assert "--proto '=https'" in deploy
+    assert "-k" not in deploy
+    assert "--agree-tos" not in deploy
+    assert "PREVIOUS_CADDYFILE=" in deploy
+    assert 'install -m 0644 "$PREVIOUS_CADDYFILE" "$RUNTIME/Caddyfile"' in deploy
 
 
 def test_operations_bundle_has_tls_backup_restore_and_sha_rollback() -> None:
@@ -38,6 +64,15 @@ def test_operations_bundle_has_tls_backup_restore_and_sha_rollback() -> None:
     rollback = (ROOT / "infra/tencent/rollback.sh").read_text()
     assert "ROLLBACK_SHA" in rollback
     assert "git checkout" not in rollback
+
+
+def test_operations_document_rolls_back_failed_deployments_without_accepting_new_terms() -> None:
+    document = (ROOT / "docs/operations/deployment-and-rollback.md").read_text()
+
+    assert "自动回滚门禁" in document
+    assert "automatic rollback gate" in document
+    assert "不自动同意新的证书法律条款" in document
+    assert "does not automatically accept a new certificate agreement" in document
 
 
 def test_tls_sync_uses_host_files_without_a_privileged_export_mount() -> None:
