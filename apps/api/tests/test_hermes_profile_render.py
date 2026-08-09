@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -44,6 +45,10 @@ def test_renderer_builds_a_complete_fail_closed_bodyos_profile(tmp_path: Path) -
     assert config["platforms"]["feishu"]["extra"]["group_rules"] == {
         "oc_bodyos_group": {"policy": "open", "require_mention": True}
     }
+    assert (profile / ".bodyos-synchronous-dispatch").is_file()
+
+    seed = json.loads((ROOT / "cron/jobs.seed.json").read_text(encoding="utf-8"))
+    assert seed["jobs"] == []
 
 
 def test_rendered_rules_allow_only_bound_controlled_identities_in_private_coaching(

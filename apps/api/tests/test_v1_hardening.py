@@ -48,8 +48,9 @@ def test_group_watcher_has_idempotency_and_never_emits_message_preview() -> None
     assert "content_preview" not in watcher
 
 
-def test_universal_group_watcher_runs_without_an_llm() -> None:
+def test_legacy_group_watcher_is_disabled_after_synchronous_safe_dispatch() -> None:
     jobs = json.loads((ROOT / "cron/jobs.seed.json").read_text())["jobs"]
+    compose = yaml.safe_load((ROOT / "infra/tencent/compose.yaml").read_text())
 
-    assert jobs
-    assert all(job.get("no_agent") is True for job in jobs)
+    assert jobs == []
+    assert compose["services"]["gateway"]["environment"]["BODYOS_SYNCHRONOUS_DISPATCH"] == "1"

@@ -65,6 +65,8 @@ def main() -> None:
     )
     os.chmod(profile / "config.yaml", 0o600)
     os.chmod(profile / ".bodyos-sanitized", 0o700)
+    (profile / ".bodyos-synchronous-dispatch").write_text("enabled\n", encoding="utf-8")
+    os.chmod(profile / ".bodyos-synchronous-dispatch", 0o600)
     print("BodyOS Hermes profile rendered (secrets omitted)")
 
 

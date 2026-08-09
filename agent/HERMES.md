@@ -2,7 +2,7 @@
 
 ## 中文
 
-Hermes 在 V2 中是飞书通道壳与 Codex Harness 的备用能力，不是原始健康数据访问者。`gateway_hook` 先把事件交给 BodyOS API；`bodyos_guard` 再用经校验的去标识化 envelope 完整替换模型消息。任一步失败都拒绝请求，保持安全关闭（fail closed），不把原消息回退给模型。
+Hermes 在 V2 中是飞书通道壳与 Codex Harness 的备用能力，不是原始健康数据访问者。`bodyos_guard` 使用 Hermes 已支持的 `pre_gateway_dispatch` 钩子，把飞书事件交给 BodyOS 安全 API；API 只用去标识化 envelope 调用模型，并返回已检查的最终答复。插件发回答复后终止原生代理流程。任一步失败都保持安全关闭（fail closed），不把原消息回退给模型。
 
 - 保持 `FEISHU_ALLOW_ALL_USERS=false`；只有同时位于 `FEISHU_ALLOWED_USERS` 且已明确绑定的受控 BodyOS 身份可以进入私聊与私人教练。未知或未受邀身份继续拒绝。
 - 未列入 `group_rules` 的群默认拒绝；白名单群仍须 @。打卡与加入流程走固定低敏 token；饮食、训练、睡眠与控糖的通用问题只能使用 `bodyos-public.v1`，且不得带入身份、个人特征、私人知识、健康数值或聊天历史。API 审核后的 `bodyos-group-answer.v1` 才能发回群聊。
@@ -15,7 +15,7 @@ Hermes 在 V2 中是飞书通道壳与 Codex Harness 的备用能力，不是原
 
 ## English
 
-In V2, Hermes is the Feishu channel shell and the fallback capability for Codex Harness; it is not a raw-health-data reader. `gateway_hook` sends the event to the BodyOS API first, then `bodyos_guard` replaces the entire model request with a validated de-identified envelope. Any failure denies the request and fails closed; the original message is never used as fallback model input.
+In V2, Hermes is the Feishu channel shell and the fallback capability for Codex Harness; it is not a raw-health-data reader. `bodyos_guard` uses Hermes's supported `pre_gateway_dispatch` hook to send Feishu events to the BodyOS safety API. The API invokes a model only with a de-identified envelope and returns a checked final answer. The plugin sends that answer and stops the native agent path. Any failure remains fail closed; the original message is never used as fallback model input.
 
 - Keep `FEISHU_ALLOW_ALL_USERS=false`; only explicitly bound, controlled-allowlisted BodyOS identities may use DMs and private coaching. Unknown and uninvited users remain denied.
 - Groups absent from `group_rules` are denied, and allowlisted groups still require a mention. Check-ins and joining use fixed low-sensitivity behavior tokens. Group paths contain only fixed/public material—never health data or private content. General food, training, sleep, and glucose-management questions may use only `bodyos-public.v1`, without identity, personal features, private knowledge, entered values, or chat history. Only an API-checked `bodyos-group-answer.v1` may return to the group.

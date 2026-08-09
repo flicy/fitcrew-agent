@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from bodyos_api.auth import require_internal, require_model_proxy
 from bodyos_api.bodyos import (
     BodyOSService,
+    ConversationRequest,
     build_public_group_envelope,
     classify_explicit_group_token,
 )
@@ -23,7 +24,7 @@ from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
 from bodyos_api.dlp import SensitiveOutput, assert_public_group_answer
 from bodyos_api.model_gateway import HarnessFailure, validate_model_envelope
-from bodyos_api.models import IdentityBinding
+from bodyos_api.models import IdentityBinding, User
 from bodyos_api.policy import BehaviorToken
 from bodyos_api.runtime import get_field_cipher, get_model_gateway
 
@@ -60,10 +61,14 @@ def _identity_user(session: Session, request: EnvelopeRequest, settings: Setting
         raise HTTPException(status_code=503, detail="identity mapping unavailable")
     subject_hash = hmac.new(pepper.encode(), request.subject.encode(), hashlib.sha256).hexdigest()
     identity = session.scalar(
-        select(IdentityBinding).where(
+        select(IdentityBinding)
+        .join(User, User.fitcrew_user_id == IdentityBinding.fitcrew_user_id)
+        .where(
             IdentityBinding.provider == request.provider,
             IdentityBinding.subject_hash == subject_hash,
+            IdentityBinding.verified_at.is_not(None),
             IdentityBinding.revoked_at.is_(None),
+            User.status.in_(("invited", "active")),
         )
     )
     if identity is None:
@@ -115,6 +120,27 @@ def create_bodyos_envelope(
     return {"mode": "model", "envelope": envelope}
 
 
+@router.post("/v1/bodyos/reply")
+def create_bodyos_reply(
+    request: EnvelopeRequest,
+    _: Annotated[None, Depends(require_internal)],
+    session: Annotated[Session, Depends(get_session)],
+    cipher: Annotated[FieldCipher, Depends(get_field_cipher)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    gateway: Annotated[Any, Depends(get_model_gateway)],
+) -> dict:
+    service = BodyOSService(session, cipher, gateway)
+    if request.channel == "group":
+        result = service.handle("", ConversationRequest(channel="group", text=request.text))
+        mode = "deterministic" if result.route == "deterministic" else "group_public"
+        return {"mode": mode, "reply": result.text, "route": result.route}
+
+    user_id = _identity_user(session, request, settings)
+    envelope = service.build_envelope(user_id, request.text)
+    text, route = _resolve_bodyos_envelope(envelope, gateway)
+    return {"mode": "private", "reply": text, "route": route}
+
+
 def _extract_envelope(request: ChatCompletionRequest) -> dict:
     prefix = "BODYOS_SANITIZED_ENVELOPE="
     content = request.messages[-1].content
@@ -129,8 +155,7 @@ def _extract_envelope(request: ChatCompletionRequest) -> dict:
     return envelope
 
 
-def _bodyos_reply(request: ChatCompletionRequest, gateway: Any) -> tuple[str, str]:
-    envelope = _extract_envelope(request)
+def _resolve_bodyos_envelope(envelope: dict, gateway: Any) -> tuple[str, str]:
     if envelope.get("schema_version") == "bodyos-group-answer.v1":
         if (
             set(envelope) != {"schema_version", "channel", "reply"}
@@ -166,6 +191,10 @@ def _bodyos_reply(request: ChatCompletionRequest, gateway: Any) -> tuple[str, st
         text = result.text
         route = result.route
     return text, route
+
+
+def _bodyos_reply(request: ChatCompletionRequest, gateway: Any) -> tuple[str, str]:
+    return _resolve_bodyos_envelope(_extract_envelope(request), gateway)
 
 
 def _sync_status_reply(envelope: dict) -> str:

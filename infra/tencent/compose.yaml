@@ -92,6 +92,7 @@ services:
       BODYOS_MODEL_BASE_URL: http://api:8000/v1
       OPENAI_BASE_URL: http://api:8000/v1
       OPENAI_API_KEY: ${BODYOS_MODEL_PROXY_TOKEN}
+      BODYOS_SYNCHRONOUS_DISPATCH: "1"
       HOME: /home/bodyos
     volumes:
       - hermes_home:/home/bodyos/.hermes

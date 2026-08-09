@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,21 @@ def load_watcher():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_synchronous_dispatch_disables_the_legacy_polling_watcher(monkeypatch, capsys) -> None:
+    watcher = load_watcher()
+    monkeypatch.setenv("BODYOS_SYNCHRONOUS_DISPATCH", "1")
+    monkeypatch.setattr(watcher, "load_groups", lambda: [("oc_bodyos", "BodyOS")])
+    monkeypatch.setattr(
+        watcher,
+        "run_lark",
+        lambda _args: (_ for _ in ()).throw(AssertionError("legacy watcher must stay disabled")),
+    )
+
+    watcher.main()
+
+    assert json.loads(capsys.readouterr().out) == {"scanned": 0, "replied": 0, "failed": 0}
 
 
 def test_watcher_accepts_a_structurally_checked_public_group_answer() -> None:
