@@ -4,7 +4,9 @@
 import json
 import os
 import secrets
+from datetime import UTC, datetime
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import qrcode
@@ -46,6 +48,80 @@ def read_or_create_idempotency_key(path: Path) -> str:
     return key
 
 
+def atomic_write_text(path: Path, value: str) -> None:
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(value)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def rotate_idempotency_key(path: Path) -> str:
+    key = secrets.token_urlsafe(32)
+    atomic_write_text(path, key)
+    return key
+
+
+def pairing_expired(record: Path) -> bool:
+    try:
+        value = json.loads(record.read_text(encoding="utf-8"))["expires_at"]
+        expires_at = datetime.fromisoformat(value)
+        if expires_at.tzinfo is None:
+            return False
+        return expires_at <= datetime.now(UTC)
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
+        return False
+
+
+def post(payload: dict, owner_token: str) -> dict:
+    request = Request(
+        "http://127.0.0.1:8000/v1/owner/bootstrap",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "X-Owner-Token": owner_token},
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed loopback URL
+        return json.load(response)
+
+
+def issue_owner_pairing_with_expiry_rotation(
+    *, output_dir: Path, owner_token: str, subject: str, idempotency_key: str
+) -> dict:
+    request_payload = {
+        "feishu_subject": subject,
+        "device_public_id": "owner-iphone-healthkit",
+        "categories": CATEGORIES,
+        "idempotency_key": idempotency_key,
+    }
+    try:
+        return post(request_payload, owner_token)
+    except HTTPError:
+        if not pairing_expired(output_dir / "owner-bootstrap.json"):
+            raise
+        rotated_key = rotate_idempotency_key(output_dir / "owner-pairing-idempotency-key")
+        request_payload["idempotency_key"] = rotated_key
+        return post(request_payload, owner_token)
+
+
+def write_owner_pairing_artifact(output_dir: Path, payload: dict) -> None:
+    record = output_dir / "owner-bootstrap.json"
+    atomic_write_text(record, json.dumps(payload, ensure_ascii=False, indent=2))
+    qr_path = output_dir / "owner-pairing.png"
+    temporary = qr_path.with_name(f".{qr_path.stem}.{secrets.token_hex(8)}.png")
+    try:
+        qrcode.make(payload["pairing_url"]).save(temporary)
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, qr_path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
 def main() -> None:
     os.umask(0o077)
     owner_token = required("BODYOS_OWNER_TOKEN")
@@ -56,28 +132,13 @@ def main() -> None:
     idempotency_key = read_or_create_idempotency_key(
         output_dir / "owner-pairing-idempotency-key"
     )
-    request = Request(
-        "http://127.0.0.1:8000/v1/owner/bootstrap",
-        data=json.dumps(
-            {
-                "feishu_subject": subject,
-                "device_public_id": "owner-iphone-healthkit",
-                "categories": CATEGORIES,
-                "idempotency_key": idempotency_key,
-            }
-        ).encode(),
-        headers={"Content-Type": "application/json", "X-Owner-Token": owner_token},
-        method="POST",
+    payload = issue_owner_pairing_with_expiry_rotation(
+        output_dir=output_dir,
+        owner_token=owner_token,
+        subject=subject,
+        idempotency_key=idempotency_key,
     )
-    with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed loopback URL
-        payload = json.load(response)
-    record = output_dir / "owner-bootstrap.json"
-    record.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.chmod(record, 0o600)
-    pairing = qrcode.make(payload["pairing_url"])
-    qr_path = output_dir / "owner-pairing.png"
-    pairing.save(qr_path)
-    os.chmod(qr_path, 0o600)
+    write_owner_pairing_artifact(output_dir, payload)
     print("Owner bootstrap completed; private JSON and pairing QR stored outside Git.")
 
 

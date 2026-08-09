@@ -163,7 +163,52 @@ def test_owner_bootstrap_uses_private_idempotency_key_and_no_direct_secrets() ->
     assert "owner-pairing-idempotency-key" in source
     assert "secrets.token_urlsafe(32)" in source
     assert '"idempotency_key": idempotency_key' in source
+    assert "issue_owner_pairing_with_expiry_rotation" in source
+    assert "rotate_idempotency_key" in source
+    assert "pairing_expired" in source
+    assert "os.replace" in source
     assert "print(payload)" not in source
+
+
+def test_expired_owner_pairing_retries_once_with_a_rotated_private_key(
+    tmp_path: Path, monkeypatch
+) -> None:
+    script_path = ROOT / "scripts/bootstrap_owner.py"
+    spec = importlib.util.spec_from_file_location("bootstrap_owner_retry", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    record = tmp_path / "owner-bootstrap.json"
+    record.write_text(
+        json.dumps({"expires_at": (datetime.now(UTC) - timedelta(seconds=1)).isoformat()}),
+        encoding="utf-8",
+    )
+    key_path = tmp_path / "owner-pairing-idempotency-key"
+    key_path.write_text("old-key", encoding="utf-8")
+    calls: list[dict] = []
+
+    def fake_post(payload: dict, owner_token: str) -> dict:
+        del owner_token
+        calls.append(payload.copy())
+        if len(calls) == 1:
+            raise HTTPError("http://127.0.0.1:8000", 409, "expired", {}, None)
+        return {"pairing_url": "fitcrew-health://configure?payload=opaque", "expires_at": "future"}
+
+    monkeypatch.setattr(module, "post", fake_post)
+
+    result = module.issue_owner_pairing_with_expiry_rotation(
+        output_dir=tmp_path,
+        owner_token="owner-token",
+        subject="ou_owner",
+        idempotency_key="old-key",
+    )
+
+    assert result["pairing_url"].startswith("fitcrew-health://")
+    assert len(calls) == 2
+    assert calls[0]["idempotency_key"] == "old-key"
+    assert calls[1]["idempotency_key"] != "old-key"
+    assert key_path.read_text(encoding="utf-8") == calls[1]["idempotency_key"]
+    assert key_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_expired_invited_pairing_rotates_its_private_idempotency_key_atomically(

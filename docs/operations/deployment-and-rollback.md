@@ -16,7 +16,7 @@
 4. 在 `infra/tencent/` 执行 `./deploy.sh`。脚本首次运行会无回显收集公网 IPv4、飞书应用凭据、Owner `open_id`、测试群与私聊 `chat_id`，生成 `runtime/.env.runtime` 和备份密钥，权限为 `0600`。
 5. 确认 `https://<公网IP>/healthz` 返回版本。随后执行 `./model-login.sh`，分别完成 Codex 与 Hermes 的一次设备 OAuth；凭据只保存在 Docker volume。
 6. 执行 `sudo ./install-timers.sh`，再用 `systemctl list-timers 'fitcrew-*'` 确认证书和每日备份任务已启用。
-7. 执行 `./bootstrap-owner.sh`。私有目录会生成短期的一次性 `owner-pairing.png`、身份记录和仅用于安全重试的高熵幂等键；二维码只含 HTTPS 地址、配对码与过期时间，App 扫描后再交换凭据。不会打印 token，也不进入 Git。
+7. 执行 `./bootstrap-owner.sh`。私有目录会生成短期的一次性 `owner-pairing.png`、身份记录和仅用于安全重试的高熵幂等键；二维码只含 HTTPS 地址、配对码与过期时间，App 扫描后再交换凭据。若记录的 Owner 邀请已过期，安全重跑会轮换该私有幂等键并原子替换 Owner 配对工件；不会打印 bearer 凭据或修改运行时密钥。不会打印 token，也不进入 Git。
 
 ### 自动回滚门禁
 
@@ -61,7 +61,7 @@ Only ports 80/443 are public; the database, API, and model proxy have no host ma
 4. Run `./deploy.sh` in `infra/tencent/`. On first run it collects the public IPv4, Feishu app credentials, owner `open_id`, test group, and DM `chat_id` without echo, then creates `runtime/.env.runtime` and a backup key with mode `0600`.
 5. Confirm `https://<public-IP>/healthz`, then run `./model-login.sh` and complete one device OAuth flow for Codex and Hermes. Credentials remain in Docker volumes.
 6. Run `sudo ./install-timers.sh`, then confirm certificate and daily-backup timers with `systemctl list-timers 'fitcrew-*'`.
-7. Run `./bootstrap-owner.sh`. The private runtime directory receives a short-lived one-time `owner-pairing.png`, identity record, and high-entropy idempotency key used only for a safe retry. The QR contains only an HTTPS address, pairing code, and expiry; the app exchanges it for credentials after scanning. No token is printed or committed.
+7. Run `./bootstrap-owner.sh`. The private runtime directory receives a short-lived one-time `owner-pairing.png`, identity record, and high-entropy idempotency key used only for a safe retry. The QR contains only an HTTPS address, pairing code, and expiry; the app exchanges it for credentials after scanning. If the recorded Owner invitation has expired, a safe rerun rotates that private idempotency key and atomically replaces the Owner pairing artifact; it never prints bearer credentials or changes runtime secrets. No token is printed or committed.
 
 ### Automatic rollback gate
 
