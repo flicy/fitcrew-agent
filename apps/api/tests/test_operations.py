@@ -349,6 +349,108 @@ def test_invited_bootstrap_rejects_newline_subject_before_writing_allowlist(tmp_
     assert not allowlist.exists()
 
 
+def test_invited_bootstrap_preflights_invalid_subject_before_any_api_call_or_write(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load_invited_bootstrap_module("bootstrap_invited_user_preflight_subject")
+    api_calls: list[tuple[str, dict]] = []
+    writes: list[Path] = []
+    monkeypatch.setattr(module, "OWNER_RUNTIME_DIR", tmp_path)
+    monkeypatch.setattr(
+        module,
+        "post",
+        lambda path, payload, owner_token: api_calls.append((path, payload)) or {},
+    )
+    monkeypatch.setattr(
+        module,
+        "atomic_write_text",
+        lambda path, value: writes.append(path),
+    )
+    monkeypatch.setenv("BODYOS_OWNER_TOKEN", "owner-token")
+    monkeypatch.setenv("BODYOS_INVITEE_FEISHU_SUBJECT", "ou_invalid\nnext")
+    monkeypatch.setenv("BODYOS_INVITEE_DEVICE_PUBLIC_ID", "device-public-id")
+    monkeypatch.setenv("BODYOS_INVITEE_SLUG", "second_user")
+    monkeypatch.setenv("FEISHU_ALLOWED_USERS", "ou_owner")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="newline"):
+        module.main()
+
+    assert api_calls == []
+    assert writes == []
+    assert not (tmp_path / "invitees").exists()
+
+
+def test_invited_bootstrap_preflights_bad_initial_allowlist_before_any_api_call_or_write(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load_invited_bootstrap_module("bootstrap_invited_user_preflight_allowlist")
+    api_calls: list[tuple[str, dict]] = []
+    writes: list[Path] = []
+    monkeypatch.setattr(module, "OWNER_RUNTIME_DIR", tmp_path)
+    monkeypatch.setattr(
+        module,
+        "post",
+        lambda path, payload, owner_token: api_calls.append((path, payload)) or {},
+    )
+    monkeypatch.setattr(
+        module,
+        "atomic_write_text",
+        lambda path, value: writes.append(path),
+    )
+    monkeypatch.setenv("BODYOS_OWNER_TOKEN", "owner-token")
+    monkeypatch.setenv("BODYOS_INVITEE_FEISHU_SUBJECT", "ou_invited")
+    monkeypatch.setenv("BODYOS_INVITEE_DEVICE_PUBLIC_ID", "device-public-id")
+    monkeypatch.setenv("BODYOS_INVITEE_SLUG", "second_user")
+    monkeypatch.setenv("FEISHU_ALLOWED_USERS", "ou_owner,bad user")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="whitespace"):
+        module.main()
+
+    assert api_calls == []
+    assert writes == []
+    assert not (tmp_path / "invitees").exists()
+
+
+def test_invited_bootstrap_preflights_bad_private_allowlist_before_any_api_call_or_write(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = _load_invited_bootstrap_module("bootstrap_invited_user_preflight_private_list")
+    api_calls: list[tuple[str, dict]] = []
+    writes: list[Path] = []
+    private_allowlist = tmp_path / "feishu-allowed-users"
+    private_allowlist.write_text("bad user\n", encoding="utf-8")
+    private_allowlist.chmod(0o600)
+    monkeypatch.setattr(module, "OWNER_RUNTIME_DIR", tmp_path)
+    monkeypatch.setattr(
+        module,
+        "post",
+        lambda path, payload, owner_token: api_calls.append((path, payload)) or {},
+    )
+    monkeypatch.setattr(
+        module,
+        "atomic_write_text",
+        lambda path, value: writes.append(path),
+    )
+    monkeypatch.setenv("BODYOS_OWNER_TOKEN", "owner-token")
+    monkeypatch.setenv("BODYOS_INVITEE_FEISHU_SUBJECT", "ou_invited")
+    monkeypatch.setenv("BODYOS_INVITEE_DEVICE_PUBLIC_ID", "device-public-id")
+    monkeypatch.setenv("BODYOS_INVITEE_SLUG", "second_user")
+    monkeypatch.setenv("FEISHU_ALLOWED_USERS", "ou_owner")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="whitespace"):
+        module.main()
+
+    assert api_calls == []
+    assert writes == []
+    assert not (tmp_path / "invitees").exists()
+
+
 def test_gateway_uses_private_read_only_allowlist_and_fails_closed_when_it_is_invalid() -> None:
     compose = (ROOT / "infra/tencent/compose.yaml").read_text()
     entrypoint = (ROOT / "infra/tencent/gateway-entrypoint.sh").read_text()
