@@ -36,8 +36,10 @@ def test_group_dlp_allows_only_canonical_behavior_messages(token: BehaviorToken)
     "question",
     [
         "晚饭后散步为什么有助于控糖？",
+        "饭后犯困可能和餐食结构有什么关系？",
         "力量训练通常怎样影响恢复？",
         "怎样建立更稳定的睡眠节律？",
+        "一般来说，睡眠不足为什么会影响食欲？",
         "一顿饭里蔬菜和蛋白质的进食顺序有什么意义？",
     ],
 )
@@ -104,6 +106,12 @@ def test_private_context_keeps_food_and_perception_but_removes_sensitive_values(
 def test_public_group_answer_gate_rejects_personal_or_sensitive_output(answer: str) -> None:
     with pytest.raises(SensitiveOutput):
         assert_public_group_answer(answer)
+
+
+def test_public_group_answer_allows_general_education_with_a_cautious_disclaimer() -> None:
+    answer = "一般而言，饭后轻松活动有助于肌肉利用葡萄糖；这不是个体诊断。"
+
+    assert assert_public_group_answer(answer) == answer
 
 
 @pytest.mark.parametrize("unsafe", [None, 42, ["晚饭后散步"]])

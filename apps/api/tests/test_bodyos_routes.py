@@ -7,6 +7,7 @@ from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
 from bodyos_api.knowledge import KnowledgeService
+from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import (
     Consent,
     DeviceBinding,
@@ -32,6 +33,12 @@ class RecordingGateway:
     def respond(self, envelope: dict):
         self.envelopes.append(envelope)
         return type("Reply", (), {"text": "安全建议", "route": "codex"})()
+
+
+class FailingGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        raise HarnessFailure("provider unavailable")
 
 
 def client_for(session: Session, cipher: FieldCipher, gateway: RecordingGateway) -> TestClient:
@@ -243,6 +250,36 @@ def test_general_group_question_returns_a_checked_public_answer_envelope(
             "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
         }
     ]
+
+
+def test_group_endpoints_return_public_fallback_when_model_is_unavailable(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    client = client_for(session, field_cipher, FailingGateway())
+    payload = {
+        "provider": "feishu",
+        "subject": SUBJECT,
+        "channel": "group",
+        "text": "晚饭后散步为什么有助于控糖？",
+    }
+
+    envelope_response = client.post(
+        "/v1/bodyos/envelope",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json=payload,
+    )
+    reply_response = client.post(
+        "/v1/bodyos/reply",
+        headers={"X-BodyOS-Token": "bodyos-internal-secret"},
+        json=payload,
+    )
+
+    assert envelope_response.status_code == 200
+    assert envelope_response.json()["mode"] == "group_public"
+    assert envelope_response.json()["reply"] != "个性化健康建议请私聊 BodyOS。"
+    assert envelope_response.json()["envelope"]["schema_version"] == "bodyos-group-answer.v1"
+    assert reply_response.json()["mode"] == "group_public"
+    assert reply_response.json()["route"] == "deterministic_public"
 
 
 def test_proxy_returns_only_a_prechecked_public_group_answer(

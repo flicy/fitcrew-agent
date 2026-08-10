@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from bodyos_api.bodyos import BodyOSService, ConversationRequest
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.knowledge import KnowledgeService
+from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample, User
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,25 @@ class RecordingGateway:
     def respond(self, envelope: dict):
         self.envelopes.append(envelope)
         return type("Reply", (), {"text": "从一顿饭的进食顺序开始。", "route": "codex"})()
+
+
+class FailingGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        raise HarnessFailure("provider unavailable")
+
+
+class DisclaimerGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        return type(
+            "Reply",
+            (),
+            {
+                "text": "一般而言，饭后轻松活动有助于肌肉利用葡萄糖；这不是个体诊断。",
+                "route": "codex",
+            },
+        )()
 
 
 def seed_feature(session: Session, cipher: FieldCipher) -> None:
@@ -137,6 +157,31 @@ def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(
     assert gateway.envelopes == []
     assert "10.2" not in result.text
     assert raw_group_text not in result.text
+
+
+def test_general_group_question_uses_a_public_fallback_when_model_fails(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    result = BodyOSService(session, field_cipher, FailingGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "deterministic_public"
+    assert result.text.startswith("一般而言")
+    assert result.text != "个性化健康建议请私聊 BodyOS。"
+
+
+def test_general_group_answer_is_not_discarded_for_a_cautious_disclaimer(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    result = BodyOSService(session, field_cipher, DisclaimerGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "codex"
+    assert "不是个体诊断" in result.text
 
 
 def test_dm_sends_only_deterministic_features_not_raw_question_or_identity(

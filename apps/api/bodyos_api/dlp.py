@@ -32,7 +32,7 @@ _THIRD_PERSON_RE = re.compile(
 )
 _NAMED_SCENARIO_RE = re.compile(
     r"(?i)^(?!(?:力量训练|睡眠|晚饭|餐后|血糖|控糖|运动|训练|食物|饮食|进食|"
-    r"蔬菜|蛋白质|碳水|跑步|散步|恢复))"
+    r"饭后|餐食|蔬菜|蛋白质|碳水|跑步|散步|恢复))"
     r"(?:(?:小|老)?[\u4e00-\u9fff]{1,4})"
     r"(?:最近|今天|昨晚|这几天|晚饭|餐后|睡眠|睡觉|失眠|感觉|觉得|血糖|身体|"
     r"吃了|喝了|训练后|运动后|恢复|犯困|不适)|"
@@ -44,12 +44,17 @@ _MEDICAL_RE = re.compile(
     r"(?i)(?:诊断|确诊|疾病|病症|治疗|处方|药物|用药|剂量|二甲双胍|胰岛素|急诊|昏迷|"
     r"胸痛|呼吸困难|doctor|diagnos|disease|treatment|medication|dosage|emergency)"
 )
+_UNSAFE_MEDICAL_ANSWER_RE = re.compile(
+    r"(?i)(?:确诊|处方|剂量|二甲双胍|胰岛素|急诊|昏迷|胸痛|呼吸困难|"
+    r"你(?:患有|得了|应该(?:服用|使用|停用))|建议你(?:服用|使用|停用)|"
+    r"diagnosed|prescription|dosage|you should (?:take|stop)|emergency)"
+)
 _PROMPT_INJECTION_RE = re.compile(
     r"(?i)(?:忽略(?:之前|以上|所有)?(?:的)?(?:指令|规则)|绕过(?:规则|限制)|"
     r"system\s+prompt|developer\s+message|reveal\s+(?:the\s+)?prompt|jailbreak)"
 )
 _PUBLIC_TOPIC_RE = re.compile(
-    r"(?i)(?:饮食|食物|吃|早餐|午餐|晚餐|晚饭|餐后|进食|蔬菜|蛋白质|碳水|"
+    r"(?i)(?:饮食|餐食|食物|吃|早餐|午餐|晚餐|晚饭|饭后|餐后|犯困|进食|蔬菜|蛋白质|碳水|"
     r"训练|运动|健身|散步|跑步|力量|睡眠|睡觉|入睡|恢复|血糖|葡萄糖|控糖|"
     r"food|diet|meal|training|workout|exercise|sleep|glucose)"
 )
@@ -159,7 +164,7 @@ def assert_public_group_answer(text: str) -> str:
     if (
         _contains_identifier(normalized)
         or _PERSONALIZED_ANSWER_RE.search(normalized)
-        or _MEDICAL_RE.search(normalized)
+        or _UNSAFE_MEDICAL_ANSWER_RE.search(normalized)
         or any(ord(character) < 32 for character in normalized)
     ):
         raise SensitiveOutput("public group answer contains private or medical content")

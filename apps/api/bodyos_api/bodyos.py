@@ -126,6 +126,35 @@ _CATEGORY_GROUPS = (
     ),
 )
 
+_PUBLIC_FALLBACKS = {
+    "glucose_coaching": (
+        "一般而言，均衡餐食、合理进食顺序和饭后舒适活动有助于管理餐后波动。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "sleep_coaching": (
+        "规律作息、稳定起床时间和合适的白天活动通常有助于睡眠与恢复。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "activity_coaching": (
+        "训练量、恢复时间和睡眠需要共同安排；可以从能稳定坚持的小行动开始。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "knowledge_coaching": (
+        "健康知识需要结合适用范围理解；可以先选择一个今天能稳定完成的小行动。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "general_health_coaching": (
+        "可以先选择一个今天能够稳定完成的小行动，再观察长期变化。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+}
+
+
+def public_group_fallback(intent: str) -> str:
+    return assert_public_group_answer(
+        _PUBLIC_FALLBACKS.get(intent, _PUBLIC_FALLBACKS["general_health_coaching"])
+    )
+
 
 class BodyOSService:
     def __init__(self, session: Session, cipher: FieldCipher, model_gateway):
@@ -149,8 +178,8 @@ class BodyOSService:
                 safe_reply = assert_public_group_answer(reply.text)
             except (HarnessFailure, SensitiveOutput):
                 return ConversationReply(
-                    text=BehaviorToken.PRIVATE_COACHING.message,
-                    route="deterministic",
+                    text=public_group_fallback(envelope["intent"]),
+                    route="deterministic_public",
                 )
             return ConversationReply(text=safe_reply, route=reply.route)
         if request.channel != "dm":

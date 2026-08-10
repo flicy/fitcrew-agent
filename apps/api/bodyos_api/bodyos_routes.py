@@ -86,26 +86,18 @@ def create_bodyos_envelope(
 ) -> dict:
     service = BodyOSService(session, cipher, gateway)
     if request.channel == "group":
-        token = classify_explicit_group_token(request.text)
-        public_envelope = service.build_public_group_envelope(request.text)
-        if token is None and public_envelope is not None:
-            try:
-                result = gateway.respond(public_envelope)
-                reply = assert_public_group_answer(result.text)
-            except (HarnessFailure, SensitiveOutput):
-                token = BehaviorToken.PRIVATE_COACHING
-            else:
-                return {
-                    "mode": "group_public",
-                    "reply": reply,
-                    "envelope": {
-                        "schema_version": "bodyos-group-answer.v1",
-                        "channel": "group",
-                        "reply": reply,
-                    },
-                }
-        if token is None:
-            token = BehaviorToken.PRIVATE_COACHING
+        result = service.handle("", ConversationRequest(channel="group", text=request.text))
+        if result.route != "deterministic":
+            return {
+                "mode": "group_public",
+                "reply": result.text,
+                "envelope": {
+                    "schema_version": "bodyos-group-answer.v1",
+                    "channel": "group",
+                    "reply": result.text,
+                },
+            }
+        token = classify_explicit_group_token(request.text) or BehaviorToken.PRIVATE_COACHING
         return {
             "mode": "deterministic",
             "reply": token.message,
