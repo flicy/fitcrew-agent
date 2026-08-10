@@ -338,12 +338,19 @@ _REVIEWED_EN_QUESTION_PATTERNS = tuple(
 _PUBLIC_QUESTION_PUNCTUATION_RE = re.compile(r"[，。！？；：、,.!?;:'\"()（）《》\-]+")
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict:
+    keys = [key for key, _ in pairs]
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate JSON key")
+    return dict(pairs)
+
+
 def _unwrapped_text(text: str) -> str:
     normalized = text.strip()
     if normalized.startswith("{"):
         try:
-            payload = json.loads(normalized)
-        except (json.JSONDecodeError, TypeError):
+            payload = json.loads(normalized, object_pairs_hook=_reject_duplicate_json_keys)
+        except (ValueError, TypeError):
             pass
         else:
             if (
