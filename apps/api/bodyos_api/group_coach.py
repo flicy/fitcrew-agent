@@ -35,6 +35,7 @@ _WEEKLY_FALLBACKS = {
     "sleep_rhythm": "本周一起讨论：怎样用稳定作息支持睡眠与恢复？",
 }
 _ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
+_DELIVERY_GRACE = timedelta(minutes=5)
 
 
 class FeishuDeliveryError(RuntimeError):
@@ -117,6 +118,17 @@ def _inside_quiet_hours(current: time, start: time, end: time) -> bool:
     return current >= start or current < end
 
 
+def _within_delivery_window(current: datetime, scheduled: time) -> bool:
+    scheduled_at = current.replace(
+        hour=scheduled.hour,
+        minute=scheduled.minute,
+        second=0,
+        microsecond=0,
+    )
+    elapsed = current - scheduled_at
+    return timedelta(0) <= elapsed < _DELIVERY_GRACE
+
+
 class GroupCoachScheduler:
     def __init__(self, session: Session, settings: Settings):
         self._session = session
@@ -147,11 +159,13 @@ class GroupCoachScheduler:
             return 0
 
         due: list[tuple[str, dict[str, str]]] = []
-        if minute == morning:
+        if _within_delivery_window(local, morning):
             due.append(("morning_action", {"template_id": "morning_action"}))
-        if minute == evening:
+        if _within_delivery_window(local, evening):
             due.append(("evening_checkin", {"template_id": "evening_checkin"}))
-        if local.weekday() == self._settings.group_weekly_weekday and minute == weekly:
+        if local.weekday() == self._settings.group_weekly_weekday and _within_delivery_window(
+            local, weekly
+        ):
             topic = _WEEKLY_TOPICS[local.isocalendar().week % len(_WEEKLY_TOPICS)]
             due.append(("weekly_expert", {"topic_id": topic}))
 

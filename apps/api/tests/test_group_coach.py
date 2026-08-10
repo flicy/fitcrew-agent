@@ -47,6 +47,22 @@ def test_scheduler_creates_each_due_shanghai_event_once(session: Session) -> Non
     assert json.loads(event.payload_json) == {"template_id": "morning_action"}
 
 
+def test_scheduler_has_a_bounded_grace_window_for_worker_clock_drift(
+    session: Session,
+) -> None:
+    settings = enabled_settings()
+
+    inside_grace = GroupCoachScheduler(session, settings).enqueue_due(
+        datetime(2026, 8, 12, 1, 4, tzinfo=UTC)
+    )
+    outside_grace = GroupCoachScheduler(session, settings).enqueue_due(
+        datetime(2026, 8, 13, 1, 5, tzinfo=UTC)
+    )
+
+    assert inside_grace == 1
+    assert outside_grace == 0
+
+
 def test_scheduler_creates_evening_and_weekly_events_at_their_own_times(
     session: Session,
 ) -> None:
