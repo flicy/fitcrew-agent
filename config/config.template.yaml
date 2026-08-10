@@ -15,6 +15,8 @@ terminal:
 
 platforms:
   feishu:
+    # BodyOS owns user-facing availability wording; never expose Hermes restart diagnostics.
+    gateway_restart_notification: false
     extra:
       default_group_policy: allowlist
       # 每加入一个群，install/add-group 会在这里追加一条规则；也可由 Moticlaw 正常流程写入。
