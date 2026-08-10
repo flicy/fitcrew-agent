@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 
 _PENDING_TASKS: set[asyncio.Task] = set()
+_CHAT_DISPATCH_LOCKS: dict[tuple[str, str], asyncio.Lock] = {}
 _UNAVAILABLE_REPLY = "BodyOS 暂时不可用，请稍后再试。"
 _DELIVERY_RETRY_DELAY_SECONDS = 0.25
 _LOGGER = logging.getLogger("bodyos_guard")
@@ -212,6 +213,22 @@ async def _dispatch_feishu_event(event, gateway) -> None:
     )
 
 
+async def _dispatch_feishu_event_serially(event, gateway) -> None:
+    """Keep outbound BodyOS replies ordered within one Feishu chat.
+
+    Hermes releases its inbound per-chat lock as soon as this hook returns.
+    The BodyOS task therefore needs its own chat lock so two adjacent @mentions
+    cannot send concurrently through the same adapter.
+    """
+    source = getattr(event, "source", None)
+    platform = _enum_text(getattr(source, "platform", ""))
+    chat_id = str(getattr(source, "chat_id", "") or "")
+    key = (platform, chat_id)
+    lock = _CHAT_DISPATCH_LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        await _dispatch_feishu_event(event, gateway)
+
+
 def _consume_task(task: asyncio.Task) -> None:
     _PENDING_TASKS.discard(task)
     with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -230,7 +247,9 @@ def _pre_gateway_dispatch(*, event, gateway, session_store=None, **_kwargs):
     if platform != "feishu":
         return None
     try:
-        task = asyncio.get_running_loop().create_task(_dispatch_feishu_event(event, gateway))
+        task = asyncio.get_running_loop().create_task(
+            _dispatch_feishu_event_serially(event, gateway)
+        )
     except RuntimeError:
         return {"action": "skip", "reason": "bodyos_sanitized_dispatch"}
     _PENDING_TASKS.add(task)

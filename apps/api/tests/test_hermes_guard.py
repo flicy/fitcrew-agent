@@ -263,6 +263,56 @@ def test_pre_dispatch_retries_a_rejected_reactive_reply_as_a_top_level_message(
     assert [attempt["reply_to"] for attempt in adapter.sent] == ["om_message_1", None]
 
 
+def test_pre_dispatch_serializes_reactive_replies_for_the_same_chat(monkeypatch) -> None:
+    guard = load_guard_module()
+    active_sends = 0
+    max_active_sends = 0
+
+    class SlowAdapter:
+        def __init__(self) -> None:
+            self.sent: list[dict] = []
+
+        async def send(
+            self,
+            chat_id: str,
+            content: str,
+            reply_to: str | None = None,
+            metadata=None,
+        ):
+            nonlocal active_sends, max_active_sends
+            active_sends += 1
+            max_active_sends = max(max_active_sends, active_sends)
+            await asyncio.sleep(0.01)
+            self.sent.append({"chat_id": chat_id, "content": content, "reply_to": reply_to})
+            active_sends -= 1
+            return SimpleNamespace(success=True)
+
+    first = feishu_event(text="第一个群聊问题")
+    second = feishu_event(text="第二个群聊问题")
+    second.message_id = "om_message_2"
+    adapter = SlowAdapter()
+
+    async def scenario() -> None:
+        async def fake_reply(payload: dict) -> dict:
+            return {
+                "mode": "group_public",
+                "reply": f"已处理：{payload['text']}",
+                "route": "deterministic_public_knowledge",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        gateway = SimpleNamespace(adapters={first.source.platform: adapter})
+
+        assert guard._pre_gateway_dispatch(event=first, gateway=gateway)["action"] == "skip"
+        assert guard._pre_gateway_dispatch(event=second, gateway=gateway)["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+
+    assert max_active_sends == 1
+    assert [item["reply_to"] for item in adapter.sent] == ["om_message_1", "om_message_2"]
+
+
 def test_pre_dispatch_logs_only_a_content_free_status_after_delivery_exhaustion(
     monkeypatch, caplog
 ) -> None:

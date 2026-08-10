@@ -42,6 +42,7 @@ def test_renderer_builds_a_complete_fail_closed_bodyos_profile(tmp_path: Path) -
     assert config["plugins"]["enabled"] == ["bodyos_guard"]
     assert config["hooks_auto_accept"] is True
     assert config["group_sessions_per_user"] is True
+    assert config["platforms"]["feishu"]["gateway_restart_notification"] is False
     assert config["platforms"]["feishu"]["extra"]["group_rules"] == {
         "oc_bodyos_group": {"policy": "open", "require_mention": True}
     }
