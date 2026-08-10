@@ -129,6 +129,16 @@ class RecordingAdapter:
         return SimpleNamespace(success=True)
 
 
+class SequencedAdapter(RecordingAdapter):
+    def __init__(self, outcomes: list[bool]) -> None:
+        super().__init__()
+        self._outcomes = iter(outcomes)
+
+    async def send(self, chat_id: str, content: str, reply_to: str | None = None, metadata=None):
+        await super().send(chat_id, content, reply_to=reply_to, metadata=metadata)
+        return SimpleNamespace(success=next(self._outcomes))
+
+
 class FakePlatform(Enum):
     FEISHU = "feishu"
     SLACK = "slack"
@@ -225,6 +235,64 @@ def test_pre_dispatch_sends_only_the_checked_group_reply_and_skips_native_agent(
         }
     ]
     assert raw_text not in str(adapter.sent)
+
+
+def test_pre_dispatch_retries_a_rejected_reactive_reply_as_a_top_level_message(
+    monkeypatch,
+) -> None:
+    guard = load_guard_module()
+    adapter = SequencedAdapter([False, True])
+    event = feishu_event(text="训练计划中为什么可持续的小行动比短期冲刺更重要？")
+
+    async def scenario() -> None:
+        async def fake_reply(_payload: dict) -> dict:
+            return {
+                "mode": "group_public",
+                "reply": "可持续的小行动有助于形成稳定训练习惯。",
+                "route": "deterministic_public_knowledge",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        monkeypatch.setattr(guard, "_DELIVERY_RETRY_DELAY_SECONDS", 0, raising=False)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+
+        assert guard._pre_gateway_dispatch(event=event, gateway=gateway)["action"] == "skip"
+        await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert [attempt["reply_to"] for attempt in adapter.sent] == ["om_message_1", None]
+
+
+def test_pre_dispatch_logs_only_a_content_free_status_after_delivery_exhaustion(
+    monkeypatch, caplog
+) -> None:
+    guard = load_guard_module()
+    adapter = SequencedAdapter([False, False])
+    raw_text = "训练计划中为什么可持续的小行动比短期冲刺更重要？"
+    event = feishu_event(text=raw_text)
+
+    async def scenario() -> None:
+        async def fake_reply(_payload: dict) -> dict:
+            return {
+                "mode": "group_public",
+                "reply": "可持续的小行动有助于形成稳定训练习惯。",
+                "route": "deterministic_public_knowledge",
+            }
+
+        monkeypatch.setattr(guard, "_request_bodyos_reply", fake_reply)
+        monkeypatch.setattr(guard, "_DELIVERY_RETRY_DELAY_SECONDS", 0, raising=False)
+        gateway = SimpleNamespace(adapters={event.source.platform: adapter})
+
+        with caplog.at_level(logging.WARNING):
+            assert guard._pre_gateway_dispatch(event=event, gateway=gateway)["action"] == "skip"
+            await guard._drain_pending_tasks()
+
+    asyncio.run(scenario())
+    assert len(adapter.sent) == 2
+    assert "reactive delivery failed" in caplog.text
+    assert raw_text not in caplog.text
+    assert event.source.chat_id not in caplog.text
+    assert event.message_id not in caplog.text
 
 
 def test_forum_chat_is_always_routed_as_public_group(monkeypatch) -> None:

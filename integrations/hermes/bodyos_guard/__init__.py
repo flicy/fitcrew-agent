@@ -15,6 +15,8 @@ from pathlib import Path
 
 _PENDING_TASKS: set[asyncio.Task] = set()
 _UNAVAILABLE_REPLY = "BodyOS 暂时不可用，请稍后再试。"
+_DELIVERY_RETRY_DELAY_SECONDS = 0.25
+_LOGGER = logging.getLogger("bodyos_guard")
 _FEISHU_OPEN_ID_RE = re.compile(r"ou_[A-Za-z0-9_-]{6,128}\Z")
 _PROVIDER_DETAIL_RE = re.compile(
     r"(?i)(?:"
@@ -108,6 +110,20 @@ async def _request_bodyos_reply(payload: dict) -> dict:
     return await asyncio.to_thread(_request_bodyos_reply_sync, payload)
 
 
+async def _send_reactive_reply(adapter, chat_id: str, reply: str, reply_to: str | None) -> bool:
+    for attempt_reply_to in (reply_to, None):
+        try:
+            result = await adapter.send(chat_id, reply, reply_to=attempt_reply_to)
+        except Exception:
+            result = None
+        if getattr(result, "success", False) is True:
+            return True
+        if attempt_reply_to is not None and _DELIVERY_RETRY_DELAY_SECONDS > 0:
+            await asyncio.sleep(_DELIVERY_RETRY_DELAY_SECONDS)
+    _LOGGER.warning("BodyOS reactive delivery failed after bounded fallback")
+    return False
+
+
 def _checked_reply(payload: dict, channel: str) -> str:
     if not isinstance(payload, dict) or set(payload) != {"mode", "reply", "route"}:
         raise ValueError("BodyOS reply shape is invalid")
@@ -188,14 +204,12 @@ async def _dispatch_feishu_event(event, gateway) -> None:
     chat_id = str(getattr(source, "chat_id", "") or "")
     if adapter is None or not chat_id:
         return
-    try:
-        await adapter.send(
-            chat_id,
-            reply,
-            reply_to=str(getattr(event, "message_id", "") or "") or None,
-        )
-    except Exception:
-        return
+    await _send_reactive_reply(
+        adapter,
+        chat_id,
+        reply,
+        str(getattr(event, "message_id", "") or "") or None,
+    )
 
 
 def _consume_task(task: asyncio.Task) -> None:
