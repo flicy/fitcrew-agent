@@ -34,7 +34,27 @@ def classify_intent(text: str) -> str:
         term in lowered for term in ("同步状态", "最新同步", "类别覆盖", "数据覆盖", "sync status")
     ):
         return "sync_status"
-    if any(term in lowered for term in ("血糖", "葡萄糖", "餐后", "控糖", "glucose")):
+    if any(
+        term in lowered
+        for term in (
+            "血糖",
+            "葡萄糖",
+            "餐后",
+            "饭后",
+            "控糖",
+            "饮食",
+            "食物",
+            "餐食",
+            "进食",
+            "蔬菜",
+            "蛋白质",
+            "碳水",
+            "glucose",
+            "food",
+            "diet",
+            "meal",
+        )
+    ):
         return "glucose_coaching"
     if any(term in lowered for term in ("睡眠", "睡觉", "失眠", "sleep")):
         return "sleep_coaching"
@@ -174,6 +194,8 @@ class BodyOSService:
                 )
             try:
                 envelope = self._with_public_knowledge(public_base)
+                if not envelope["knowledge"]:
+                    raise ValueError("public expert knowledge is unavailable")
                 reply = self._model_gateway.respond(envelope)
                 safe_reply = assert_public_knowledge_citations(reply.text, envelope["knowledge"])
             except Exception:
@@ -197,8 +219,11 @@ class BodyOSService:
 
     def _with_public_knowledge(self, envelope: dict) -> dict:
         safe_text = envelope["public_context"]["sanitized_text"]
-        query = f"{safe_text} {_KNOWLEDGE_QUERY[envelope['intent']]}"
-        hits = KnowledgeService(self._session, self._cipher).search_public(query, limit=3)
+        hits = KnowledgeService(self._session, self._cipher).search_public(safe_text, limit=3)
+        if not hits:
+            hits = KnowledgeService(self._session, self._cipher).search_public(
+                _KNOWLEDGE_QUERY[envelope["intent"]], limit=3
+            )
         envelope["knowledge"] = [
             {
                 "title": hit.title,

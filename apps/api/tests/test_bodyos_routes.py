@@ -172,6 +172,7 @@ def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
 
 
@@ -294,6 +295,7 @@ def test_proxy_returns_only_a_prechecked_public_group_answer(
     session: Session, field_cipher: FieldCipher
 ) -> None:
     gateway = RecordingGateway()
+    seed_shared_glucose_book(session, field_cipher)
     import json
 
     envelope = {
@@ -559,6 +561,7 @@ def test_reply_endpoint_returns_a_checked_public_group_answer_without_private_co
     session: Session, field_cipher: FieldCipher
 ) -> None:
     gateway = RecordingGateway()
+    seed_shared_glucose_book(session, field_cipher)
 
     response = client_for(session, field_cipher, gateway).post(
         "/v1/bodyos/reply",
@@ -574,12 +577,18 @@ def test_reply_endpoint_returns_a_checked_public_group_answer_without_private_co
     assert response.status_code == 200
     assert response.json() == {
         "mode": "group_public",
-        "reply": "安全建议",
+        "reply": "安全建议（《控糖革命》第12页）。",
         "route": "codex",
     }
     assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"
     assert "features" not in gateway.envelopes[0]
-    assert gateway.envelopes[0]["knowledge"] == []
+    assert gateway.envelopes[0]["knowledge"] == [
+        {
+            "title": "控糖革命",
+            "page": 12,
+            "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
+        }
+    ]
 
 
 def test_reply_endpoint_fails_closed_for_third_person_health_context(

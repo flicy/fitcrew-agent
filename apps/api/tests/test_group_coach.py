@@ -46,6 +46,7 @@ def test_scheduler_creates_each_due_shanghai_event_once(session: Session) -> Non
     assert event.idempotency_key == "feishu-group:morning_action:2026-08-12"
     assert event.status == "pending"
     assert event.attempt_count == 0
+    assert event.scheduled_for == datetime(2026, 8, 12, 1, 0)
     assert json.loads(event.payload_json) == {"template_id": "morning_action"}
 
 
@@ -63,6 +64,9 @@ def test_scheduler_has_a_bounded_grace_window_for_worker_clock_drift(
 
     assert inside_grace == 1
     assert outside_grace == 0
+    event = session.scalar(select(OutboxEvent))
+    assert event is not None
+    assert event.scheduled_for == datetime(2026, 8, 12, 1, 0)
 
 
 def test_scheduler_creates_evening_and_weekly_events_at_their_own_times(
@@ -297,3 +301,21 @@ def test_dispatcher_never_sends_a_stale_or_quiet_hour_event(session: Session) ->
     }
     assert statuses["feishu-group:morning_action:2026-08-12"] == "expired"
     assert statuses["quiet-event"] == "expired"
+
+
+def test_dispatch_window_is_measured_from_configured_schedule_not_worker_observation(
+    session: Session,
+) -> None:
+    settings = enabled_settings()
+    observed_late = datetime(2026, 8, 12, 1, 4, 59, tzinfo=UTC)
+    assert GroupCoachScheduler(session, settings).enqueue_due(observed_late) == 1
+    transport = FakeTransport()
+
+    counts = FeishuGroupDispatcher(session, settings, transport=transport).dispatch_due(
+        datetime(2026, 8, 12, 1, 5, tzinfo=UTC)
+    )
+
+    event = session.scalar(select(OutboxEvent))
+    assert counts["failed"] == 1
+    assert transport.calls == []
+    assert event is not None and event.status == "expired"

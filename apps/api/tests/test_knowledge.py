@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.knowledge import KnowledgeAccessDenied, KnowledgeService
 from bodyos_api.models import KnowledgeChunk, KnowledgeReview, KnowledgeSource, User
@@ -182,6 +183,7 @@ def test_private_source_can_be_published_for_shared_retrieval(
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
 
     assert published.visibility == "public"
@@ -216,6 +218,7 @@ def test_user_search_combines_published_and_owned_private_sources(
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
     service.import_pages(
         fitcrew_user_id=OWNER,
@@ -313,6 +316,7 @@ def test_publishing_a_new_reviewed_edition_supersedes_the_old_shared_version(
         reviewer_role="owner_editor",
         rationale="approved internal expert use",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
     second = service.import_pages(
         fitcrew_user_id=OWNER,
@@ -329,6 +333,7 @@ def test_publishing_a_new_reviewed_edition_supersedes_the_old_shared_version(
         reviewer_role="owner_editor",
         rationale="approved updated internal expert use",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
 
     assert first.review_status == "superseded"
@@ -357,6 +362,7 @@ def test_publication_script_prefers_the_owners_new_private_edition_over_existing
         reviewer_role="owner_editor",
         rationale="approved internal expert use",
         applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
     )
     owner_update = service.import_pages(
         fitcrew_user_id=OWNER,
@@ -382,3 +388,82 @@ def test_publication_script_prefers_the_owners_new_private_edition_over_existing
     assert action == "publish"
     assert candidate is not None
     assert candidate.id == owner_update.id
+
+
+def test_unverified_private_book_requires_an_audited_rights_confirmation(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    source = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="b" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "进餐顺序。"},
+    )
+
+    with pytest.raises(ValueError, match="rights confirmation"):
+        service.publish_private_source(
+            source.id,
+            expected_owner_id=OWNER,
+            reviewer_role="owner_editor",
+            rationale="approved internal expert use",
+            applicability="general lifestyle education",
+        )
+
+    published = service.publish_private_source(
+        source.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved internal expert use",
+        applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
+    )
+    decisions = session.scalars(
+        select(KnowledgeReview.decision).where(KnowledgeReview.source_id == source.id)
+    ).all()
+
+    assert published.rights_status == "user_provided_internal_expert_use"
+    assert decisions == ["rights_confirmed", "approved"]
+
+
+def test_reimporting_the_same_hash_after_publication_is_idempotent(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    source = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="c" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "进餐顺序。"},
+    )
+    published = service.publish_private_source(
+        source.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved internal expert use",
+        applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
+    )
+
+    repeated = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="c" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "进餐顺序。"},
+    )
+    rows = session.scalars(
+        select(KnowledgeSource).where(KnowledgeSource.title == "控糖革命")
+    ).all()
+
+    assert repeated.id == published.id
+    assert len(rows) == 1
+    assert rows[0].version == 1
+    assert rows[0].review_status == "published"

@@ -159,19 +159,43 @@ class GroupCoachScheduler:
         if _inside_quiet_hours(minute, quiet_start, quiet_end):
             return 0
 
-        due: list[tuple[str, dict[str, str]]] = []
+        due: list[tuple[str, dict[str, str], datetime]] = []
         if _within_delivery_window(local, morning):
-            due.append(("morning_action", {"template_id": "morning_action"}))
+            due.append(
+                (
+                    "morning_action",
+                    {"template_id": "morning_action"},
+                    local.replace(
+                        hour=morning.hour, minute=morning.minute, second=0, microsecond=0
+                    ),
+                )
+            )
         if _within_delivery_window(local, evening):
-            due.append(("evening_checkin", {"template_id": "evening_checkin"}))
+            due.append(
+                (
+                    "evening_checkin",
+                    {"template_id": "evening_checkin"},
+                    local.replace(
+                        hour=evening.hour, minute=evening.minute, second=0, microsecond=0
+                    ),
+                )
+            )
         if local.weekday() == self._settings.group_weekly_weekday and _within_delivery_window(
             local, weekly
         ):
             topic = _WEEKLY_TOPICS[local.isocalendar().week % len(_WEEKLY_TOPICS)]
-            due.append(("weekly_expert", {"topic_id": topic}))
+            due.append(
+                (
+                    "weekly_expert",
+                    {"topic_id": topic},
+                    local.replace(
+                        hour=weekly.hour, minute=weekly.minute, second=0, microsecond=0
+                    ),
+                )
+            )
 
         created = 0
-        for event_type, payload in due:
+        for event_type, payload, scheduled_local in due:
             key = f"feishu-group:{event_type}:{local.date().isoformat()}"
             existing = self._session.scalar(
                 select(OutboxEvent.id).where(OutboxEvent.idempotency_key == key)
@@ -187,7 +211,7 @@ class GroupCoachScheduler:
                     status="pending",
                     attempt_count=0,
                     idempotency_key=key,
-                    scheduled_for=now.astimezone(UTC),
+                    scheduled_for=scheduled_local.astimezone(UTC),
                     next_attempt_at=now.astimezone(UTC),
                 )
             )

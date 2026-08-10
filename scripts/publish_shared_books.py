@@ -12,6 +12,7 @@ from bodyos_api.config import get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import make_engine
 from bodyos_api.knowledge import (
+    CONFIRMABLE_PRIVATE_RIGHTS,
     INTERNAL_EXPERT_RIGHTS,
     PUBLISHABLE_PRIVATE_RIGHTS,
     SHARED_EXPERT_TITLES,
@@ -53,7 +54,9 @@ def select_title_candidate(
             KnowledgeSource.visibility == "private",
             KnowledgeSource.review_status == "approved_private",
             KnowledgeSource.fitcrew_user_id == owner_id,
-            KnowledgeSource.rights_status.in_(PUBLISHABLE_PRIVATE_RIGHTS),
+            KnowledgeSource.rights_status.in_(
+                PUBLISHABLE_PRIVATE_RIGHTS | CONFIRMABLE_PRIVATE_RIGHTS
+            ),
         )
         .order_by(KnowledgeSource.updated_at.desc(), KnowledgeSource.version.desc())
         .limit(1)
@@ -105,6 +108,10 @@ def main() -> None:
                 reviewer_role="owner_editor",
                 rationale="approved for internal BodyOS expert summaries",
                 applicability="general food, training, sleep, and glucose education",
+                rights_confirmation=(
+                    "Owner/operator explicitly confirmed authorization for closed BodyOS "
+                    "shared expert-knowledge use"
+                ),
             )
             published_count += 1
 

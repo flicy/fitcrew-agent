@@ -20,9 +20,8 @@ SHARED_EXPERT_TITLES = frozenset(
     }
 )
 INTERNAL_EXPERT_RIGHTS = "user_provided_internal_expert_use"
-PUBLISHABLE_PRIVATE_RIGHTS = frozenset(
-    {"user_provided_private_use_unverified", INTERNAL_EXPERT_RIGHTS}
-)
+PUBLISHABLE_PRIVATE_RIGHTS = frozenset({INTERNAL_EXPERT_RIGHTS})
+CONFIRMABLE_PRIVATE_RIGHTS = frozenset({"user_provided_private_use_unverified"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +77,21 @@ class KnowledgeService:
             raise ValueError("private knowledge requires an owner")
         if visibility == "public" and fitcrew_user_id is not None:
             raise ValueError("public knowledge must not retain a private owner")
+        if visibility == "private" and title in SHARED_EXPERT_TITLES:
+            existing_public = self._session.scalar(
+                select(KnowledgeSource)
+                .where(
+                    KnowledgeSource.title == title,
+                    KnowledgeSource.content_hash == content_hash,
+                    KnowledgeSource.visibility == "public",
+                    KnowledgeSource.review_status == "published",
+                    KnowledgeSource.rights_status == INTERNAL_EXPERT_RIGHTS,
+                )
+                .order_by(KnowledgeSource.version.desc())
+                .limit(1)
+            )
+            if existing_public is not None:
+                return existing_public
         owner_filter = (
             KnowledgeSource.fitcrew_user_id == fitcrew_user_id
             if fitcrew_user_id is not None
@@ -190,6 +204,7 @@ class KnowledgeService:
         reviewer_role: str,
         rationale: str,
         applicability: str,
+        rights_confirmation: str | None = None,
     ) -> KnowledgeSource:
         source = self._session.get(KnowledgeSource, source_id)
         if (
@@ -198,7 +213,8 @@ class KnowledgeService:
             or source.review_status != "approved_private"
             or source.fitcrew_user_id != expected_owner_id
             or source.title not in SHARED_EXPERT_TITLES
-            or source.rights_status not in PUBLISHABLE_PRIVATE_RIGHTS
+            or source.rights_status
+            not in (PUBLISHABLE_PRIVATE_RIGHTS | CONFIRMABLE_PRIVATE_RIGHTS)
         ):
             raise ValueError("approved private knowledge source not found")
         if (
@@ -208,6 +224,19 @@ class KnowledgeService:
             or not applicability.strip()
         ):
             raise ValueError("publication review fields are required")
+        if source.rights_status in CONFIRMABLE_PRIVATE_RIGHTS:
+            if rights_confirmation is None or not rights_confirmation.strip():
+                raise ValueError("explicit internal-use rights confirmation is required")
+            self._session.add(
+                KnowledgeReview(
+                    source_id=source.id,
+                    reviewer_role=reviewer_role,
+                    decision="rights_confirmed",
+                    rationale=rights_confirmation.strip(),
+                    applicability="closed BodyOS shared expert knowledge",
+                )
+            )
+            source.rights_status = INTERNAL_EXPERT_RIGHTS
         published_sources = self._session.scalars(
             select(KnowledgeSource).where(
                 KnowledgeSource.id != source.id,

@@ -42,12 +42,19 @@ _NAMED_SCENARIO_RE = re.compile(
 )
 _MEDICAL_RE = re.compile(
     r"(?i)(?:诊断|确诊|疾病|病症|治疗|处方|药物|用药|剂量|二甲双胍|胰岛素|急诊|昏迷|"
-    r"胸痛|呼吸困难|doctor|diagnos|disease|treatment|medication|dosage|emergency)"
+    r"褪黑素|安眠药|降糖药|药片|服药|吃药|胸痛|呼吸困难|"
+    r"doctor|diagnos|disease|treatment|medication|dosage|melatonin|metformin|emergency)"
 )
 _UNSAFE_MEDICAL_ANSWER_RE = re.compile(
-    r"(?i)(?:确诊|处方|剂量|二甲双胍|胰岛素|急诊|昏迷|胸痛|呼吸困难|"
-    r"你(?:患有|得了|应该(?:服用|使用|停用))|建议你(?:服用|使用|停用)|"
-    r"diagnosed|prescription|dosage|you should (?:take|stop)|emergency)"
+    r"(?i)(?:确诊|处方|剂量|二甲双胍|胰岛素|褪黑素|安眠药|急诊|昏迷|胸痛|呼吸困难|"
+    r"降糖(?:药|片)|口服|服药|吃药|"
+    r"你(?:很)?(?:可能|也许|或许)?(?:有|患有|患上(?:了)?|得了|是)"
+    r"[^，。；;]{0,12}(?:糖尿病|疾病|病症|患者)|"
+    r"(?:建议|应该|应当|可|可以|需要|最好)?[^，。；;]{0,8}"
+    r"(?:服用|使用|停用|吃|加量|减量)[^，。；;]{0,12}"
+    r"(?:药|药物|药品|药片|胰岛素|二甲双胍)|"
+    r"diagnosed|prescription|dosage|metformin|"
+    r"you (?:should|may|might|probably|likely) (?:take|stop|have|be|suffer)|emergency)"
 )
 _SAFE_MEDICAL_DISCLAIMER_RE = re.compile(
     r"(?i)(?:这|本回答)?不(?:是|构成)(?:个体|医疗|医学)?诊断|"
@@ -61,6 +68,7 @@ _PROVIDER_DETAIL_RE = re.compile(
     r"connection)\b|"
     r"(?<!\d)[45]\d{2}(?!\d)|api[_ -]?key|too\s+many\s+requests|"
     r"模型(?:服务|提供商|供应商|认证|鉴权|调用)|鉴权|密钥|配额|上游服务|后端服务|"
+    r"内部服务器|服务器异常|服务异常|数据库|连接失败|网络异常|稍后再试|"
     r"错误代码|状态码|调用失败|认证失败|认证错误|配置错误|请重试|限流)"
 )
 _CITATION_RE = re.compile(r"《([^》]{1,300})》[，,\s]*第\s*(\d{1,5})\s*页")
@@ -86,9 +94,11 @@ _TITLECASE_IDENTITY_RE = re.compile(r"\b[A-Z][a-z]{1,30}\b")
 _ENGLISH_NAMED_HEALTH_CONTEXT_RE = re.compile(
     r"(?i)(?:"
     r"(?:why|how|what)\s+(?:does|can|is|should)\s+([a-z][a-z'-]{1,30})\s+"
-    r"(?=(?:feel|feels|felt|has|had|gets|sleeps|ate|eats|is|was)\b)|"
-    r"\b([a-z][a-z'-]{1,30})\b\s*(?=(?:晚饭|餐后|睡眠|睡觉|失眠|血糖|葡萄糖|"
-    r"恢复|犯困|训练|运动|身体|不适|感觉)))"
+    r"(?=.{0,48}(?:feel|felt|has|had|gets?|sleeps?|ate|eats?|dinner|meal|"
+    r"sleep|recovery|glucose|training|exercise)\b)|"
+    r"\b([a-z][a-z'-]{1,30})\b(?=.{0,32}(?:晚饭|饭后|餐后|睡眠|睡觉|失眠|血糖|葡萄糖|"
+    r"恢复|犯困|训练|运动|身体|不适|感觉|dinner|meal|sleep|recovery|glucose|"
+    r"training|exercise)))"
 )
 _CHINESE_SURNAMES = (
     "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻"
@@ -113,6 +123,11 @@ _CHINESE_NAMED_HEALTH_CONTEXT_RE = re.compile(
 _PERSONALIZED_ANSWER_RE = re.compile(
     r"(?i)(?:根据你(?:的|目前)|你的(?:血糖|睡眠|心率|身体|数据)|你已确诊|你应该服用|"
     r"your (?:glucose|sleep|heart rate|health data)|you (?:have|are diagnosed))"
+)
+_SPELLED_HEALTH_VALUE_RE = re.compile(
+    r"(?i)(?:血糖|葡萄糖|心率|HRV|体重|睡眠).{0,12}"
+    r"[零〇一二两三四五六七八九十百]+(?:点[零〇一二两三四五六七八九]+)?"
+    r"(?:毫摩尔每升|毫摩尔|mg/dl|mmol/l|次每分|小时|公斤)?"
 )
 _EXPLICIT_NAME_RE = re.compile(
     r"(?i)(?:我叫|我的名字是|姓名(?:是|为)?|name\s+is)\s*[^，,。；;!?！？\n]{1,80}[，,。；;]?"
@@ -212,6 +227,7 @@ def assert_public_group_answer(text: str) -> str:
         _contains_identifier(normalized)
         or _contains_named_health_context(normalized)
         or _PERSONALIZED_ANSWER_RE.search(normalized)
+        or _SPELLED_HEALTH_VALUE_RE.search(normalized)
         or _UNSAFE_MEDICAL_ANSWER_RE.search(normalized)
         or _MEDICAL_RE.search(medical_check)
         or _NUMBER_RE.search(number_check)
@@ -234,10 +250,8 @@ def assert_public_knowledge_citations(text: str, knowledge: list[dict]) -> str:
         and not isinstance(hit.get("page"), bool)
     }
     citations = {(title, int(page)) for title, page in _CITATION_RE.findall(normalized)}
-    if citations - allowed or (allowed and not citations):
+    if not allowed or citations - allowed or not citations:
         raise SensitiveOutput("public knowledge citation is missing or unverified")
-    if not allowed and citations:
-        raise SensitiveOutput("public knowledge citation was not retrieved")
     return normalized
 
 

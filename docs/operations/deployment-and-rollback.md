@@ -42,7 +42,7 @@
 
 把三份本人有权用于私人分析的 PDF 以以下名称放入 `runtime/private-books/`：`glucose-revolution.pdf`、`sleep-guide.pdf`、`longevity-handbook.pdf`。目录权限保持 `0700`，文件不提交、不公开、不进入 CI。执行 `./import-private-books.sh` 后，正文按页分段并以 AES-GCM 加密；相同哈希重复导入幂等，内容变化产生新版本，检索保留书名与页码。权利状态默认是 `user_provided_private_use_unverified`，不能自动发布到公共知识库。
 
-只有 Owner/编辑者确认这三本书可用于封闭的 BodyOS 共享专家知识后，才在 `infra/tencent/` 执行 `./publish-shared-books.sh`。脚本只认《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》三个已审核标题；缺少任一本就关闭式失败，重复运行幂等，输出只有发布数量。这里的 `public` 表示 BodyOS 用户可检索的共享知识范围，不代表公开 PDF、下载链接、全文网页或 Git 内容。原始文件仍留在私有运行目录，群聊只取得最多三段保留书名与页码的摘录，并继续经过公共回答 DLP。
+只有 Owner/编辑者确认这三本书可用于封闭的 BodyOS 共享专家知识后，才在 `infra/tencent/` 执行 `./publish-shared-books.sh`。脚本会把这次显式确认单独写入审核记录，再改变知识范围；未经确认的私人权利状态不能直接发布。脚本只认《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》三个已审核标题；缺少任一本就关闭式失败，重复运行幂等，输出只有发布数量。这里的 `public` 表示 BodyOS 用户可检索的共享知识范围，不代表公开 PDF、下载链接、全文网页或 Git 内容。原始文件仍留在私有运行目录，群聊只取得最多三段保留书名与页码的摘录，并继续经过公共回答 DLP。
 
 ### 群聊共享知识与主动教练
 
@@ -101,7 +101,7 @@ If the second user was created before the private gateway allowlist was introduc
 
 Place the three owner-authorized private-analysis PDFs in `runtime/private-books/` as `glucose-revolution.pdf`, `sleep-guide.pdf`, and `longevity-handbook.pdf`. Keep the directory at `0700`; never commit, publish, or send the files to CI. `./import-private-books.sh` chunks by page and AES-GCM encrypts the text. The same hash is idempotent; changed content creates a new version; retrieval retains title/page citations. The default rights state is `user_provided_private_use_unverified`, so a source cannot be auto-published to public knowledge.
 
-Only after the Owner/editor confirms that the three books may be used within the closed BodyOS shared expert-knowledge scope should an operator run `./publish-shared-books.sh` from `infra/tencent/`. The script recognizes only the three reviewed titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. It fails closed if any title is missing, is idempotent on rerun, and prints counts only. Here, `public` means the shared retrieval scope available to BodyOS users; it does not mean a public PDF, download link, full-text webpage, or Git content. Source files remain in the private runtime directory. A group receives at most three title/page-cited excerpts, and the result still passes public-answer DLP.
+Only after the Owner/editor confirms that the three books may be used within the closed BodyOS shared expert-knowledge scope should an operator run `./publish-shared-books.sh` from `infra/tencent/`. The script records that explicit confirmation as a separate review before changing knowledge scope; an unconfirmed private-rights state cannot be published directly. The script recognizes only the three reviewed titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. It fails closed if any title is missing, is idempotent on rerun, and prints counts only. Here, `public` means the shared retrieval scope available to BodyOS users; it does not mean a public PDF, download link, full-text webpage, or Git content. Source files remain in the private runtime directory. A group receives at most three title/page-cited excerpts, and the result still passes public-answer DLP.
 
 ### Group shared knowledge and proactive coaching
 
