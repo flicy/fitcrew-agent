@@ -75,21 +75,24 @@ def classify_group_token(text: str) -> BehaviorToken:
     return classify_explicit_group_token(text) or BehaviorToken.PRIVATE_COACHING
 
 
-def build_public_group_envelope(text: str) -> dict | None:
+def build_public_group_envelope(text: str, *, knowledge: list[dict] | None = None) -> dict | None:
     if classify_explicit_group_token(text) is not None:
         return None
     safe_text = sanitize_public_group_question(text)
     if safe_text is None:
         return None
     return {
-        "schema_version": "bodyos-public.v1",
+        "schema_version": "bodyos-public.v2",
         "intent": classify_intent(safe_text),
         "channel": "group",
         "public_context": {"sanitized_text": safe_text},
+        "knowledge": knowledge or [],
         "constraints": [
             "general_knowledge_only",
+            "published_knowledge_only",
             "no_personal_health_data",
             "not_medical_diagnosis",
+            "cite_pages",
         ],
     }
 
@@ -135,7 +138,7 @@ class BodyOSService:
             explicit_token = classify_explicit_group_token(request.text)
             if explicit_token is not None:
                 return ConversationReply(text=explicit_token.message, route="deterministic")
-            envelope = build_public_group_envelope(request.text)
+            envelope = self.build_public_group_envelope(request.text)
             if envelope is None:
                 return ConversationReply(
                     text=BehaviorToken.PRIVATE_COACHING.message,
@@ -156,6 +159,22 @@ class BodyOSService:
         envelope = self.build_envelope(fitcrew_user_id, request.text)
         reply = self._model_gateway.respond(envelope)
         return ConversationReply(text=reply.text, route=reply.route)
+
+    def build_public_group_envelope(self, text: str) -> dict | None:
+        envelope = build_public_group_envelope(text)
+        if envelope is None:
+            return None
+        query = _KNOWLEDGE_QUERY[envelope["intent"]]
+        hits = KnowledgeService(self._session, self._cipher).search_public(query, limit=3)
+        envelope["knowledge"] = [
+            {
+                "title": hit.title,
+                "page": hit.page_number,
+                "excerpt": hit.excerpt,
+            }
+            for hit in hits
+        ]
+        return envelope
 
     def build_envelope(self, fitcrew_user_id: str, text: str) -> dict:
         intent = classify_intent(text)
@@ -232,7 +251,7 @@ class BodyOSService:
         }
 
     def _knowledge(self, fitcrew_user_id: str, intent: str) -> list[dict]:
-        hits = KnowledgeService(self._session, self._cipher).search_private(
+        hits = KnowledgeService(self._session, self._cipher).search_for_user(
             fitcrew_user_id, _KNOWLEDGE_QUERY[intent], limit=3
         )
         return [

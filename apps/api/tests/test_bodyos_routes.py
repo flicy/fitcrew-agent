@@ -6,6 +6,7 @@ from bodyos_api.app import create_app
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
+from bodyos_api.knowledge import KnowledgeService
 from bodyos_api.models import (
     Consent,
     DeviceBinding,
@@ -138,6 +139,27 @@ def seed_private_sync_status(
     session.commit()
 
 
+def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
+    if session.get(User, USER_ID) is None:
+        session.add(User(fitcrew_user_id=USER_ID))
+        session.commit()
+    service = KnowledgeService(session, cipher)
+    source = service.import_pages(
+        fitcrew_user_id=USER_ID,
+        title="控糖革命",
+        author="Jessie Inchauspé",
+        content_hash="8" * 64,
+        rights_status="user_provided_internal_expert_use",
+        pages={12: "进餐顺序可能影响餐后葡萄糖曲线。"},
+    )
+    service.publish_private_source(
+        source.id,
+        reviewer_role="owner_editor",
+        rationale="approved for internal expert summaries",
+        applicability="general lifestyle education",
+    )
+
+
 def test_envelope_endpoint_maps_feishu_identity_but_returns_no_identifier_or_raw_text(
     session: Session, field_cipher: FieldCipher
 ) -> None:
@@ -188,6 +210,7 @@ def test_group_envelope_is_a_fixed_token_and_never_calls_gateway(
 def test_general_group_question_returns_a_checked_public_answer_envelope(
     session: Session, field_cipher: FieldCipher
 ) -> None:
+    seed_shared_glucose_book(session, field_cipher)
     gateway = RecordingGateway()
 
     response = client_for(session, field_cipher, gateway).post(
@@ -211,9 +234,15 @@ def test_general_group_question_returns_a_checked_public_answer_envelope(
             "reply": "安全建议",
         },
     }
-    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v1"
+    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"
     assert "features" not in gateway.envelopes[0]
-    assert "knowledge" not in gateway.envelopes[0]
+    assert gateway.envelopes[0]["knowledge"] == [
+        {
+            "title": "控糖革命",
+            "page": 12,
+            "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
+        }
+    ]
 
 
 def test_proxy_returns_only_a_prechecked_public_group_answer(
@@ -503,9 +532,9 @@ def test_reply_endpoint_returns_a_checked_public_group_answer_without_private_co
         "reply": "安全建议",
         "route": "codex",
     }
-    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v1"
+    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"
     assert "features" not in gateway.envelopes[0]
-    assert "knowledge" not in gateway.envelopes[0]
+    assert gateway.envelopes[0]["knowledge"] == []
 
 
 def test_reply_endpoint_fails_closed_for_third_person_health_context(

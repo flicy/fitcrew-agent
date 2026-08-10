@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from bodyos_api.bodyos import BodyOSService, ConversationRequest
 from bodyos_api.crypto import FieldCipher
+from bodyos_api.knowledge import KnowledgeService
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample, User
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,27 @@ def seed_feature(session: Session, cipher: FieldCipher) -> None:
     session.commit()
 
 
+def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
+    if session.get(User, USER_ID) is None:
+        session.add(User(fitcrew_user_id=USER_ID))
+        session.commit()
+    service = KnowledgeService(session, cipher)
+    source = service.import_pages(
+        fitcrew_user_id=USER_ID,
+        title="控糖革命",
+        author="Jessie Inchauspé",
+        content_hash="8" * 64,
+        rights_status="user_provided_internal_expert_use",
+        pages={12: "进餐顺序可能影响餐后葡萄糖曲线。"},
+    )
+    service.publish_private_source(
+        source.id,
+        reviewer_role="owner_editor",
+        rationale="approved for internal expert summaries",
+        applicability="general lifestyle education",
+    )
+
+
 def test_personal_group_question_never_calls_model_and_returns_private_coaching_token(
     session: Session, field_cipher: FieldCipher
 ) -> None:
@@ -60,6 +82,7 @@ def test_personal_group_question_never_calls_model_and_returns_private_coaching_
 def test_general_group_question_uses_only_a_public_model_envelope(
     session: Session, field_cipher: FieldCipher
 ) -> None:
+    seed_shared_glucose_book(session, field_cipher)
     gateway = RecordingGateway()
     service = BodyOSService(session, field_cipher, gateway)
 
@@ -72,21 +95,30 @@ def test_general_group_question_uses_only_a_public_model_envelope(
     assert result.text == "从一顿饭的进食顺序开始。"
     assert gateway.envelopes == [
         {
-            "schema_version": "bodyos-public.v1",
+            "schema_version": "bodyos-public.v2",
             "intent": "glucose_coaching",
             "channel": "group",
             "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
+            "knowledge": [
+                {
+                    "title": "控糖革命",
+                    "page": 12,
+                    "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
+                }
+            ],
             "constraints": [
                 "general_knowledge_only",
+                "published_knowledge_only",
                 "no_personal_health_data",
                 "not_medical_diagnosis",
+                "cite_pages",
             ],
         }
     ]
     rendered = str(gateway.envelopes[0])
     assert USER_ID not in rendered
     assert "features" not in rendered
-    assert "knowledge" not in gateway.envelopes[0]
+    assert set(gateway.envelopes[0]["knowledge"][0]) == {"title", "page", "excerpt"}
 
 
 def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(

@@ -16,7 +16,6 @@ from bodyos_api.auth import require_internal, require_model_proxy
 from bodyos_api.bodyos import (
     BodyOSService,
     ConversationRequest,
-    build_public_group_envelope,
     classify_explicit_group_token,
 )
 from bodyos_api.config import Settings, get_settings
@@ -85,9 +84,10 @@ def create_bodyos_envelope(
     settings: Annotated[Settings, Depends(get_settings)],
     gateway: Annotated[Any, Depends(get_model_gateway)],
 ) -> dict:
+    service = BodyOSService(session, cipher, gateway)
     if request.channel == "group":
         token = classify_explicit_group_token(request.text)
-        public_envelope = build_public_group_envelope(request.text)
+        public_envelope = service.build_public_group_envelope(request.text)
         if token is None and public_envelope is not None:
             try:
                 result = gateway.respond(public_envelope)
@@ -116,7 +116,7 @@ def create_bodyos_envelope(
             },
         }
     user_id = _identity_user(session, request, settings)
-    envelope = BodyOSService(session, cipher, gateway).build_envelope(user_id, request.text)
+    envelope = service.build_envelope(user_id, request.text)
     return {"mode": "model", "envelope": envelope}
 
 
