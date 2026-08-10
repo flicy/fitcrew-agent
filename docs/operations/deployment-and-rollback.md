@@ -38,9 +38,19 @@
 
 如果第二位用户是在私有 gateway allowlist 引入之前创建的，在完成本版本部署后、要求该用户测试前，在 `infra/tencent/` 运行 `./reconcile-feishu-allowlist.sh`。该迁移只在 API 容器内使用现有加密、已验证、未撤销且用户状态为 `invited` 或 `active` 的飞书身份重建 `runtime/owner/feishu-allowed-users`，并在成功后只重启 gateway。`FEISHU_ALLOWED_USERS` 只用于检查运行环境格式，绝不是授权来源，因此旧的或被撤销 subject 不会因残留在环境变量中重新获得访问。它不会创建用户、重新配对设备、修改授权，也不会人工猜测姓名或 `open_id`。任何本应有效的身份无法解密或校验时，脚本会关闭式失败且不会写入新的 allowlist；请先排障，不要改为允许所有用户。
 
-### 私人书籍
+### 私人导入与共享专家知识发布
 
 把三份本人有权用于私人分析的 PDF 以以下名称放入 `runtime/private-books/`：`glucose-revolution.pdf`、`sleep-guide.pdf`、`longevity-handbook.pdf`。目录权限保持 `0700`，文件不提交、不公开、不进入 CI。执行 `./import-private-books.sh` 后，正文按页分段并以 AES-GCM 加密；相同哈希重复导入幂等，内容变化产生新版本，检索保留书名与页码。权利状态默认是 `user_provided_private_use_unverified`，不能自动发布到公共知识库。
+
+只有 Owner/编辑者确认这三本书可用于封闭的 BodyOS 共享专家知识后，才在 `infra/tencent/` 执行 `./publish-shared-books.sh`。脚本只认《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》三个已审核标题；缺少任一本就关闭式失败，重复运行幂等，输出只有发布数量。这里的 `public` 表示 BodyOS 用户可检索的共享知识范围，不代表公开 PDF、下载链接、全文网页或 Git 内容。原始文件仍留在私有运行目录，群聊只取得最多三段保留书名与页码的摘录，并继续经过公共回答 DLP。
+
+### 群聊共享知识与主动教练
+
+部署会向已有 `runtime/.env.runtime` 原子补齐缺失的非密钥默认值，但不会覆盖已经设置的值：北京时间每天 09:00 晨间行动、20:30 晚间打卡、周三 12:15 每周专家互动，22:00–08:00 静默。`BODYOS_PROACTIVE_GROUP_ENABLED=false` 可暂停所有主动消息；恢复为 `true` 后，从下一个计划时点继续，不补发静默期或错过的消息。
+
+Worker 每 60 秒检查计划，并保留五分钟的有限时钟漂移窗口；超过窗口不会追补。它用唯一事件键和[飞书消息创建接口](https://open.feishu.cn/document/server-docs/im-v1/message/create?lang=zh-CN)的 `uuid` 做幂等投递；失败最多重试三次，日志只含计数与错误码。晨间和晚间使用固定公共模板；每周互动只使用 `bodyos-public.v2` 与已发布的共享专家知识，模型不可用时退回固定公共问题。群聊的响应式问答仍需 @ 黑客松助手；个人情境、健康数值、诊断、治疗和用药继续引导到 BodyOS 私聊或专业人员。
+
+安全验收只发送不含个人信息的通用问题，例如“先吃蔬菜再吃主食有什么依据？”，并确认回答不含姓名、身份、私聊内容、健康数值或私人书摘。不要为验收生成或上传健康数据，也不要在生产环境手动伪造 Outbox 事件。
 
 ### 备份、恢复与回滚
 
@@ -87,9 +97,19 @@ If any post-switch gate fails, the script restores the runtime image tag and pre
 
 If the second user was created before the private gateway allowlist was introduced, run `./reconcile-feishu-allowlist.sh` from `infra/tencent/` after deploying this version and before asking that existing invitee to test. The migration reconstructs `runtime/owner/feishu-allowed-users` only inside the API container from existing encrypted, verified, non-revoked Feishu identities whose users are `invited` or `active`, then restarts only the gateway after success. `FEISHU_ALLOWED_USERS` is checked only for runtime-environment format; it is never an authorization source, so an old or revoked subject cannot regain access merely by remaining in that environment variable. It does not create a user, re-pair a device, change consent, or manually guess a name or `open_id`. If any expected active identity cannot be decrypted or validated, it fails closed and writes no new allowlist; investigate first and do not switch to allow-all access.
 
-### Private books
+### Private import and shared expert-knowledge publication
 
 Place the three owner-authorized private-analysis PDFs in `runtime/private-books/` as `glucose-revolution.pdf`, `sleep-guide.pdf`, and `longevity-handbook.pdf`. Keep the directory at `0700`; never commit, publish, or send the files to CI. `./import-private-books.sh` chunks by page and AES-GCM encrypts the text. The same hash is idempotent; changed content creates a new version; retrieval retains title/page citations. The default rights state is `user_provided_private_use_unverified`, so a source cannot be auto-published to public knowledge.
+
+Only after the Owner/editor confirms that the three books may be used within the closed BodyOS shared expert-knowledge scope should an operator run `./publish-shared-books.sh` from `infra/tencent/`. The script recognizes only the three reviewed titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. It fails closed if any title is missing, is idempotent on rerun, and prints counts only. Here, `public` means the shared retrieval scope available to BodyOS users; it does not mean a public PDF, download link, full-text webpage, or Git content. Source files remain in the private runtime directory. A group receives at most three title/page-cited excerpts, and the result still passes public-answer DLP.
+
+### Group shared knowledge and proactive coaching
+
+Deployment atomically appends missing non-secret defaults to an existing `runtime/.env.runtime` without overwriting configured values: morning action at 09:00, evening check-in at 20:30, weekly expert interaction on Wednesday at 12:15, and quiet hours from 22:00 to 08:00, all in Asia/Shanghai time. Set `BODYOS_PROACTIVE_GROUP_ENABLED=false` to pause every proactive message. After it returns to `true`, the worker resumes at the next scheduled slot and does not backfill a quiet-hour or missed message.
+
+The worker checks the schedule every 60 seconds with a bounded five-minute clock-drift window; it never backfills after that window. It combines a unique event key with the [Feishu create-message API](https://open.feishu.cn/document/server-docs/im-v1/message/create?lang=zh-CN) `uuid` for idempotent delivery. A failure is retried at most three times; logs contain only counts and error codes. Morning/evening messages use fixed public templates. The weekly interaction uses only `bodyos-public.v2` and published shared expert knowledge, then falls back to a fixed public question if the model is unavailable. Reactive group Q&A still requires mentioning the bot. Personal context, health values, diagnosis, treatment, and medication remain routed to a BodyOS DM or qualified care.
+
+A safe canary asks only a non-personal general question, for example, “Why might eating vegetables before staple carbohydrates help?” Confirm that the response contains no name, identity, DM content, health value, or private excerpt. Do not generate or upload health data for acceptance, and do not manually forge Outbox events in production.
 
 ### Backup, restore, and rollback
 
