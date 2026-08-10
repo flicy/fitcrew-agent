@@ -169,6 +169,23 @@ def test_examples_do_not_contain_committable_secrets() -> None:
     assert "BODYOS_ENCRYPTION_KEY=" not in example
 
 
+def test_shared_book_publication_command_is_content_free_and_private_to_the_api() -> None:
+    python_script = ROOT / "scripts/publish_shared_books.py"
+    wrapper = ROOT / "infra/tencent/publish-shared-books.sh"
+
+    assert python_script.is_file()
+    assert wrapper.is_file()
+    assert wrapper.stat().st_mode & 0o111
+    script_source = python_script.read_text()
+    wrapper_source = wrapper.read_text()
+    assert "published_count" in script_source
+    assert "already_published_count" in script_source
+    assert "excerpt" not in script_source
+    assert "content_ciphertext" not in script_source
+    assert "exec -T api python scripts/publish_shared_books.py" in wrapper_source
+    assert "bootstrap" not in wrapper_source
+
+
 def test_alembic_uses_the_production_database_environment() -> None:
     migration_environment = (ROOT / "apps/api/migrations/env.py").read_text()
     assert 'os.environ.get("BODYOS_DATABASE_URL")' in migration_environment

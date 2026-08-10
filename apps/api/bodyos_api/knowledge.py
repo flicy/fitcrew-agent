@@ -156,6 +156,49 @@ class KnowledgeService:
             ),
         )
 
+    def search_for_user(
+        self, fitcrew_user_id: str, query: str, *, limit: int = 5
+    ) -> list[SearchHit]:
+        hits = self.search_private(fitcrew_user_id, query, limit=limit) + self.search_public(
+            query, limit=limit
+        )
+        return sorted(
+            hits,
+            key=lambda hit: (-hit.score, hit.title, hit.page_number, hit.source_id),
+        )[:limit]
+
+    def publish_private_source(
+        self,
+        source_id: str,
+        *,
+        reviewer_role: str,
+        rationale: str,
+        applicability: str,
+    ) -> KnowledgeSource:
+        source = self._session.get(KnowledgeSource, source_id)
+        if (
+            source is None
+            or source.visibility != "private"
+            or source.review_status != "approved_private"
+        ):
+            raise ValueError("approved private knowledge source not found")
+        if not reviewer_role.strip() or not rationale.strip() or not applicability.strip():
+            raise ValueError("publication review fields are required")
+        source.fitcrew_user_id = None
+        source.visibility = "public"
+        source.review_status = "published"
+        self._session.add(
+            KnowledgeReview(
+                source_id=source.id,
+                reviewer_role=reviewer_role,
+                decision="approved",
+                rationale=rationale,
+                applicability=applicability,
+            )
+        )
+        self._session.commit()
+        return source
+
     def _search(self, query: str, *, limit: int, source_filters: tuple) -> list[SearchHit]:
         rows = self._session.execute(
             select(KnowledgeSource, KnowledgeChunk)

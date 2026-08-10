@@ -1,6 +1,6 @@
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.knowledge import KnowledgeAccessDenied, KnowledgeService
-from bodyos_api.models import KnowledgeChunk, KnowledgeSource, User
+from bodyos_api.models import KnowledgeChunk, KnowledgeReview, KnowledgeSource, User
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -147,3 +147,103 @@ def test_private_import_is_idempotent_and_versions_changed_content(
     assert len(session.scalars(select(KnowledgeSource)).all()) == 2
     hits = service.search_private(OWNER, "可持续")
     assert {hit.source_id for hit in hits} == {changed.id}
+
+
+def test_private_source_can_be_published_for_shared_retrieval(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    source = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author="Jessie Inchauspé",
+        content_hash="1" * 64,
+        rights_status="user_provided_internal_expert_use",
+        pages={12: "进餐顺序可能影响餐后葡萄糖曲线。"},
+    )
+
+    published = service.publish_private_source(
+        source.id,
+        reviewer_role="owner_editor",
+        rationale="approved for internal expert summaries",
+        applicability="general lifestyle education",
+    )
+
+    assert published.visibility == "public"
+    assert published.fitcrew_user_id is None
+    assert published.review_status == "published"
+    assert service.search_private(OWNER, "餐后葡萄糖") == []
+    hit = service.search_public("餐后葡萄糖")[0]
+    assert hit.source_id == source.id
+    review = session.scalar(
+        select(KnowledgeReview).where(KnowledgeReview.source_id == source.id)
+    )
+    assert review is not None
+    assert review.decision == "approved"
+
+
+def test_user_search_combines_published_and_owned_private_sources(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    shared = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="睡眠优化完全指南：科学与实践",
+        author=None,
+        content_hash="2" * 64,
+        rights_status="user_provided_internal_expert_use",
+        pages={21: "稳定节律有助于睡眠恢复。"},
+    )
+    service.publish_private_source(
+        shared.id,
+        reviewer_role="owner_editor",
+        rationale="approved for internal expert summaries",
+        applicability="general lifestyle education",
+    )
+    service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="Owner 私人笔记",
+        author=None,
+        content_hash="3" * 64,
+        rights_status="private_note",
+        pages={1: "睡眠恢复需要减少晚间干扰。"},
+    )
+
+    owner_hits = service.search_for_user(OWNER, "睡眠恢复", limit=3)
+    other_hits = service.search_for_user(OTHER, "睡眠恢复", limit=3)
+
+    assert {hit.title for hit in owner_hits} == {
+        "睡眠优化完全指南：科学与实践",
+        "Owner 私人笔记",
+    }
+    assert {hit.title for hit in other_hits} == {"睡眠优化完全指南：科学与实践"}
+
+
+def test_publishing_requires_an_approved_private_source(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    public_draft = service.import_pages(
+        fitcrew_user_id=None,
+        title="候选知识",
+        author=None,
+        content_hash="4" * 64,
+        rights_status="licensed_summary",
+        pages={1: "一般健康知识。"},
+        visibility="public",
+    )
+
+    try:
+        service.publish_private_source(
+            public_draft.id,
+            reviewer_role="owner_editor",
+            rationale="invalid source",
+            applicability="general",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a public draft was republished through the private-source path")
