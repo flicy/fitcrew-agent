@@ -77,6 +77,8 @@ class KnowledgeService:
             raise ValueError("private knowledge requires an owner")
         if visibility == "public" and fitcrew_user_id is not None:
             raise ValueError("public knowledge must not retain a private owner")
+        if visibility == "public" and title in SHARED_EXPERT_TITLES:
+            raise ValueError("shared expert titles require the controlled private publication path")
         if visibility == "private" and title in SHARED_EXPERT_TITLES:
             existing_public = self._session.scalar(
                 select(KnowledgeSource)
@@ -84,7 +86,7 @@ class KnowledgeService:
                     KnowledgeSource.title == title,
                     KnowledgeSource.content_hash == content_hash,
                     KnowledgeSource.visibility == "public",
-                    KnowledgeSource.review_status == "published",
+                    KnowledgeSource.review_status.in_({"published", "superseded"}),
                     KnowledgeSource.rights_status == INTERNAL_EXPERT_RIGHTS,
                 )
                 .order_by(KnowledgeSource.version.desc())
@@ -92,6 +94,22 @@ class KnowledgeService:
             )
             if existing_public is not None:
                 return existing_public
+        exact_private = self._session.scalar(
+            select(KnowledgeSource)
+            .where(
+                KnowledgeSource.visibility == visibility,
+                KnowledgeSource.title == title,
+                KnowledgeSource.content_hash == content_hash,
+                KnowledgeSource.review_status != "withdrawn",
+                KnowledgeSource.fitcrew_user_id == fitcrew_user_id
+                if fitcrew_user_id is not None
+                else KnowledgeSource.fitcrew_user_id.is_(None),
+            )
+            .order_by(KnowledgeSource.version.desc())
+            .limit(1)
+        )
+        if exact_private is not None:
+            return exact_private
         owner_filter = (
             KnowledgeSource.fitcrew_user_id == fitcrew_user_id
             if fitcrew_user_id is not None
@@ -313,6 +331,8 @@ class KnowledgeService:
         source = self._session.get(KnowledgeSource, source_id)
         if source is None or source.visibility != "public":
             raise ValueError("public knowledge source not found")
+        if source.title in SHARED_EXPERT_TITLES:
+            raise ValueError("shared expert titles require the controlled private publication path")
         if decision not in {"approved", "rejected"}:
             raise ValueError("review decision must be approved or rejected")
         self._session.add(

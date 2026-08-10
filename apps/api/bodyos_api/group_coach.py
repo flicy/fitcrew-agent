@@ -232,25 +232,17 @@ class FeishuGroupDispatcher:
         *,
         transport: FeishuTextTransport | None = None,
         weekly_answer: Callable[[str], str] | None = None,
+        clock: Callable[[], datetime] | None = None,
     ):
         self._session = session
         self._settings = settings
         self._transport = transport or HttpxFeishuTransport()
         self._weekly_answer = weekly_answer
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     def dispatch_due(self, now: datetime) -> dict[str, int]:
         if now.tzinfo is None:
             raise ValueError("group dispatch requires timezone-aware time")
-        try:
-            local = now.astimezone(ZoneInfo(self._settings.group_timezone))
-        except ZoneInfoNotFoundError as error:
-            raise ValueError("invalid group schedule timezone") from error
-        quiet_start = _parse_time(self._settings.group_quiet_start)
-        quiet_end = _parse_time(self._settings.group_quiet_end)
-        quiet = _inside_quiet_hours(
-            local.time().replace(second=0, microsecond=0), quiet_start, quiet_end
-        )
-        now_utc = now.astimezone(UTC)
         counts = {"delivered": 0, "retried": 0, "failed": 0}
         events = self._session.scalars(
             select(OutboxEvent)
@@ -263,34 +255,22 @@ class FeishuGroupDispatcher:
             .with_for_update(skip_locked=True)
         ).all()
         for event in events:
-            if not self._settings.proactive_group_enabled:
-                event.status = "cancelled"
-                event.last_error_code = "proactive_disabled"
+            rejection = self._delivery_rejection(event, now)
+            if rejection is not None:
+                event.status, event.last_error_code = rejection
                 event.next_attempt_at = None
                 counts["failed"] += 1
                 continue
-            if not self._settings.feishu_allowed_group_id.strip():
-                event.status = "cancelled"
-                event.last_error_code = "configuration_missing"
-                event.next_attempt_at = None
-                counts["failed"] += 1
-                continue
-            scheduled_for = event.scheduled_for
-            if scheduled_for is not None and scheduled_for.tzinfo is None:
-                scheduled_for = scheduled_for.replace(tzinfo=UTC)
-            if (
-                quiet
-                or scheduled_for is None
-                or scheduled_for > now_utc
-                or now_utc - scheduled_for >= _DELIVERY_GRACE
-            ):
-                event.status = "expired"
-                event.last_error_code = "delivery_window_closed"
-                event.next_attempt_at = None
-                counts["failed"] += 1
-                continue
+            send_now = now
             try:
                 text = self._render(event)
+                send_now = self._clock()
+                rejection = self._delivery_rejection(event, send_now)
+                if rejection is not None:
+                    event.status, event.last_error_code = rejection
+                    event.next_attempt_at = None
+                    counts["failed"] += 1
+                    continue
                 self._transport.send_text(
                     app_id=self._settings.feishu_app_id,
                     app_secret=self._settings.feishu_app_secret.get_secret_value(),
@@ -306,7 +286,7 @@ class FeishuGroupDispatcher:
                     event.next_attempt_at = None
                     counts["failed"] += 1
                 else:
-                    event.next_attempt_at = now + timedelta(minutes=event.attempt_count)
+                    event.next_attempt_at = send_now + timedelta(minutes=event.attempt_count)
                     counts["retried"] += 1
             else:
                 event.attempt_count += 1
@@ -316,6 +296,37 @@ class FeishuGroupDispatcher:
                 counts["delivered"] += 1
         self._session.commit()
         return counts
+
+    def _delivery_rejection(
+        self, event: OutboxEvent, at: datetime
+    ) -> tuple[str, str] | None:
+        if at.tzinfo is None:
+            raise ValueError("group dispatch clock must be timezone-aware")
+        if not self._settings.proactive_group_enabled:
+            return ("cancelled", "proactive_disabled")
+        if not self._settings.feishu_allowed_group_id.strip():
+            return ("cancelled", "configuration_missing")
+        try:
+            local = at.astimezone(ZoneInfo(self._settings.group_timezone))
+        except ZoneInfoNotFoundError as error:
+            raise ValueError("invalid group schedule timezone") from error
+        quiet = _inside_quiet_hours(
+            local.time().replace(second=0, microsecond=0),
+            _parse_time(self._settings.group_quiet_start),
+            _parse_time(self._settings.group_quiet_end),
+        )
+        scheduled_for = event.scheduled_for
+        if scheduled_for is not None and scheduled_for.tzinfo is None:
+            scheduled_for = scheduled_for.replace(tzinfo=UTC)
+        at_utc = at.astimezone(UTC)
+        if (
+            quiet
+            or scheduled_for is None
+            or scheduled_for > at_utc
+            or at_utc - scheduled_for >= _DELIVERY_GRACE
+        ):
+            return ("expired", "delivery_window_closed")
+        return None
 
     def _render(self, event: OutboxEvent) -> str:
         try:

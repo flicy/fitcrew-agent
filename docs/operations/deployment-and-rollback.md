@@ -56,7 +56,7 @@ Worker 每 60 秒检查计划，并保留五分钟的有限时钟漂移窗口；
 
 - `./backup.sh` 使用 `pg_dump` 后经 AES-256/PBKDF2 加密，保留 7 天；应用健康字段本身仍是 AES-GCM 密文。
 - `./restore-test.sh <绝对备份路径>` 只还原到固定临时库 `bodyos_restore_test`，验证表数量后删除临时库。
-- 发布前记录完整 commit SHA。部署脚本会执行自动回滚门禁；手动回滚执行 `ROLLBACK_SHA=<40位SHA> ./rollback.sh`。该脚本先备份，再切回本机已有的不可变镜像，并通过 `/healthz` 才算成功。数据库迁移不自动降级；若变更不向后兼容，先停写并按已验证备份恢复。
+- 发布前记录完整 commit SHA。有旧镜像可回滚时，部署脚本会先备份数据库，再执行自动回滚门禁；手动回滚执行 `ROLLBACK_SHA=<40位SHA> ./rollback.sh`。回滚会停写，使用当前新镜像把数据库降到旧镜像支持的 revision，然后才切回本机已有的不可变镜像，并通过 `/healthz` 才算成功。本版本降级会删除尚未投递的群聊主动事件；兼容降级失败时不会强行启动旧镜像，需使用已验证备份恢复。
 - 日志不得出现请求 URI、Header、消息正文、身份、健康值、书摘或 token。排障只记录版本、计数、策略结果与错误码。
 
 ## English
@@ -115,5 +115,5 @@ A safe canary asks only a non-personal general question, for example, “Why mig
 
 - `./backup.sh` pipes `pg_dump` through AES-256/PBKDF2 encryption and retains seven days. Application health fields remain AES-GCM ciphertext inside the dump.
 - `./restore-test.sh <absolute-backup-path>` restores only into fixed temporary database `bodyos_restore_test`, checks schema cardinality, and removes it.
-- Record the full commit SHA before release. The deployment script runs its automatic rollback gate; for a manual rollback, run `ROLLBACK_SHA=<40-char-SHA> ./rollback.sh`. It backs up first, switches to an existing immutable local image, and succeeds only after `/healthz`. Database migrations are not automatically downgraded; for an incompatible change, stop writes and restore a verified backup.
+- Record the full commit SHA before release. When an old image is available as a rollback target, deployment backs up the database before arming the automatic rollback gate. For a manual rollback, run `ROLLBACK_SHA=<40-char-SHA> ./rollback.sh`. Rollback stops writes, uses the current new image to downgrade the database to the revision supported by the old image, then switches to that existing immutable local image and succeeds only after `/healthz`. This release's downgrade removes undelivered proactive-group events. If the compatibility downgrade fails, the script does not force-start the old image; restore a verified backup instead.
 - Logs must not contain request URI, headers, message text, identities, health values, excerpts, or tokens. Troubleshooting records only version, counts, policy results, and error codes.

@@ -42,12 +42,13 @@ _NAMED_SCENARIO_RE = re.compile(
 )
 _MEDICAL_RE = re.compile(
     r"(?i)(?:诊断|确诊|疾病|病症|治疗|处方|药物|用药|剂量|二甲双胍|胰岛素|急诊|昏迷|"
-    r"褪黑素|安眠药|降糖药|药片|服药|吃药|胸痛|呼吸困难|"
+    r"药|(?:安神|助眠|降糖)片|褪黑素|镇静剂|注射|打针|口服|服药|吃药|"
+    r"糖尿病|患者|胸痛|呼吸困难|"
     r"doctor|diagnos|disease|treatment|medication|dosage|melatonin|metformin|emergency)"
 )
 _UNSAFE_MEDICAL_ANSWER_RE = re.compile(
-    r"(?i)(?:确诊|处方|剂量|二甲双胍|胰岛素|褪黑素|安眠药|急诊|昏迷|胸痛|呼吸困难|"
-    r"降糖(?:药|片)|口服|服药|吃药|"
+    r"(?i)(?:确诊|处方|剂量|二甲双胍|胰岛素|药|褪黑素|镇静剂|注射|打针|"
+    r"口服|服药|吃药|急诊|昏迷|胸痛|呼吸困难|"
     r"你(?:很)?(?:可能|也许|或许)?(?:有|患有|患上(?:了)?|得了|是)"
     r"[^，。；;]{0,12}(?:糖尿病|疾病|病症|患者)|"
     r"(?:建议|应该|应当|可|可以|需要|最好)?[^，。；;]{0,8}"
@@ -67,8 +68,10 @@ _PROVIDER_DETAIL_RE = re.compile(
     r"request[_ -]?id|bearer|unauthorized|forbidden|unavailable|gateway|timeout|"
     r"connection)\b|"
     r"(?<!\d)[45]\d{2}(?!\d)|api[_ -]?key|too\s+many\s+requests|"
-    r"模型(?:服务|提供商|供应商|认证|鉴权|调用)|鉴权|密钥|配额|上游服务|后端服务|"
-    r"内部服务器|服务器异常|服务异常|数据库|连接失败|网络异常|稍后再试|"
+    r"模型(?:服务|提供商|供应商|认证|鉴权|调用|出了?问题|有问题)|"
+    r"鉴权|密钥|配额|上游服务|后端服务|"
+    r"内部(?:服务器|错误|异常)|服务器异常|服务异常|系统(?:错误|异常|故障)|数据库|"
+    r"连接失败|网络异常|请?稍候|稍后再试|"
     r"错误代码|状态码|调用失败|认证失败|认证错误|配置错误|请重试|限流)"
 )
 _CITATION_RE = re.compile(r"《([^》]{1,300})》[，,\s]*第\s*(\d{1,5})\s*页")
@@ -114,11 +117,16 @@ _CHINESE_SURNAMES = (
     "红游竺权盖益桓公"
 )
 _CHINESE_NAMED_HEALTH_CONTEXT_RE = re.compile(
-    rf"(?:^|[，,。；;、\s]|帮助|关于)(?!(?:通常|一般|怎样|怎么|如何|为什么|"
-    rf"有什么|是否|能否|可以|会不会|哪些))[{_CHINESE_SURNAMES}]"
-    r"[\u4e00-\u9fff]{1,2}"
+    rf"(?:^|[，,。；;、\s]|帮助|关于|为什么|为何|怎么|如何)(?!(?:通常|一般|怎样|怎么|如何|为什么|"
+    rf"有什么|是否|能否|可以|会不会|哪些))"
+    rf"(?:(?:小|老)[\u4e00-\u9fff]{{1,2}}|[{_CHINESE_SURNAMES}][\u4e00-\u9fff]{{1,2}})"
     r"(?=.{0,16}(?:睡眠|睡觉|失眠|"
     r"血糖|葡萄糖|晚饭|餐后|恢复|犯困|训练|运动|身体|不适|感觉|吃|喝))"
+)
+_IDENTITY_TARGET_RE = re.compile(
+    rf"(?i)(?:(?:对|帮助|给|关于)\s*(?:"
+    rf"((?:小|老)[\u4e00-\u9fff]{{1,2}}|[{_CHINESE_SURNAMES}][\u4e00-\u9fff]{{1,2}})|"
+    rf"([a-z][a-z'-]{{1,30}}))|(?:for|help|about)\s+([a-z][a-z'-]{{1,30}}))"
 )
 _PERSONALIZED_ANSWER_RE = re.compile(
     r"(?i)(?:根据你(?:的|目前)|你的(?:血糖|睡眠|心率|身体|数据)|你已确诊|你应该服用|"
@@ -128,6 +136,13 @@ _SPELLED_HEALTH_VALUE_RE = re.compile(
     r"(?i)(?:血糖|葡萄糖|心率|HRV|体重|睡眠).{0,12}"
     r"[零〇一二两三四五六七八九十百]+(?:点[零〇一二两三四五六七八九]+)?"
     r"(?:毫摩尔每升|毫摩尔|mg/dl|mmol/l|次每分|小时|公斤)?"
+)
+_HEALTH_UNIT_RE = re.compile(
+    r"(?i)(?:毫摩尔(?:每升)?|mmol\s*/\s*l|mg\s*/\s*dl|bpm|"
+    r"[零〇一二两三四五六七八九十百千万]+(?:点[零〇一二两三四五六七八九]+)?"
+    r"(?:小时|分钟|公斤|千克|次每分)|"
+    r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten)\s+point\s+"
+    r"(?:zero|one|two|three|four|five|six|seven|eight|nine|ten)\b)"
 )
 _EXPLICIT_NAME_RE = re.compile(
     r"(?i)(?:我叫|我的名字是|姓名(?:是|为)?|name\s+is)\s*[^，,。；;!?！？\n]{1,80}[，,。；;]?"
@@ -181,6 +196,17 @@ def _contains_named_health_context(text: str) -> bool:
     return False
 
 
+def _contains_identity_target(text: str) -> bool:
+    for match in _IDENTITY_TARGET_RE.finditer(text):
+        chinese, latin, english = match.groups()
+        if chinese:
+            return True
+        candidate = latin or english or ""
+        if candidate.casefold() not in _GENERAL_ENGLISH_WORDS:
+            return True
+    return False
+
+
 def assert_group_safe(text: str) -> str:
     """Accept only canonical, pre-reviewed low-sensitivity group messages."""
     normalized = text.strip()
@@ -201,9 +227,12 @@ def sanitize_public_group_question(text: str) -> str | None:
         or _THIRD_PERSON_RE.search(normalized)
         or _NAMED_SCENARIO_RE.search(normalized)
         or _contains_named_health_context(normalized)
+        or _contains_identity_target(normalized)
         or _MEDICAL_RE.search(normalized)
         or _PROMPT_INJECTION_RE.search(normalized)
         or _NUMBER_RE.search(normalized)
+        or _SPELLED_HEALTH_VALUE_RE.search(normalized)
+        or _HEALTH_UNIT_RE.search(normalized)
         or not _PUBLIC_TOPIC_RE.search(normalized)
         or general_start is None
     ):
@@ -226,8 +255,11 @@ def assert_public_group_answer(text: str) -> str:
     if (
         _contains_identifier(normalized)
         or _contains_named_health_context(normalized)
+        or _contains_identity_target(normalized)
         or _PERSONALIZED_ANSWER_RE.search(normalized)
         or _SPELLED_HEALTH_VALUE_RE.search(normalized)
+        or _HEALTH_UNIT_RE.search(normalized)
+        or re.search(r"(?i)(?:你|you).{0,24}(?:糖尿病|疾病|病症|患者|diabetes|disease)", normalized)
         or _UNSAFE_MEDICAL_ANSWER_RE.search(normalized)
         or _MEDICAL_RE.search(medical_check)
         or _NUMBER_RE.search(number_check)

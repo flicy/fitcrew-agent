@@ -91,7 +91,6 @@ def test_group_public_search_rejects_published_sources_outside_the_three_book_bo
     )
 
     assert service.search_public("步行") == []
-
     service.review_source(
         draft.id,
         reviewer_role="editor",
@@ -99,9 +98,25 @@ def test_group_public_search_rejects_published_sources_outside_the_three_book_bo
         rationale="来源和适用边界已核验",
         applicability="一般成人的低强度活动建议",
     )
-
     assert service.search_public("步行") == []
 
+
+def test_shared_title_cannot_bypass_controlled_publication_with_a_public_import(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+
+    with pytest.raises(ValueError, match="controlled private publication"):
+        service.import_pages(
+            fitcrew_user_id=None,
+            title="控糖革命",
+            author=None,
+            content_hash="0" * 64,
+            rights_status="user_provided_internal_expert_use",
+            pages={1: "未经 Owner 确认的内容。"},
+            visibility="public",
+        )
 
 def test_withdrawn_source_is_removed_from_retrieval(
     session: Session, field_cipher: FieldCipher
@@ -467,3 +482,60 @@ def test_reimporting_the_same_hash_after_publication_is_idempotent(
     assert len(rows) == 1
     assert rows[0].version == 1
     assert rows[0].review_status == "published"
+
+
+def test_reimporting_an_older_published_hash_cannot_roll_back_the_current_edition(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    first = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="d" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "第一版。"},
+    )
+    service.publish_private_source(
+        first.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved first edition",
+        applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
+    )
+    second = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="e" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={2: "第二版。"},
+    )
+    current = service.publish_private_source(
+        second.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved second edition",
+        applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
+    )
+
+    repeated_old = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="d" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "第一版。"},
+    )
+    action, candidate = _publication_script().select_title_candidate(
+        session, OWNER, "控糖革命"
+    )
+
+    assert repeated_old.id == first.id
+    assert repeated_old.review_status == "superseded"
+    assert action == "already_published"
+    assert candidate is None
+    assert current.review_status == "published"

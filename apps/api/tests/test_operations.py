@@ -121,6 +121,8 @@ def test_operations_bundle_has_tls_backup_restore_and_sha_rollback() -> None:
     assert "wait_for_service caddy health" in rollback
     assert "wait_for_api_loopback" in rollback
     assert "wait_for_public_https" in rollback
+    assert 'alembic downgrade "$ROLLBACK_DB_REVISION"' in rollback
+    assert 'FITCREW_IMAGE_TAG="$CURRENT_IMAGE_TAG"' in rollback
     assert "--proto '=https'" in rollback
     assert "-k" not in rollback
     assert '"$RUNTIME/tls/fullchain.pem"' in rollback
@@ -234,6 +236,12 @@ def test_group_outbox_downgrade_removes_ownerless_events_before_restoring_not_nu
     delete_position = migration.index("DELETE FROM outbox_events WHERE fitcrew_user_id IS NULL")
     not_null_position = migration.index("nullable=False")
     assert delete_position < not_null_position
+    assert 'constraint.get("column_names")' in migration
+    assert 'constraint["name"]' in migration
+    deploy = (ROOT / "infra/tencent/deploy.sh").read_text()
+    assert 'alembic downgrade "$ROLLBACK_DB_REVISION"' in deploy
+    assert 'FITCREW_IMAGE_TAG="$DEPLOY_SHA"' in deploy
+    assert '"$HERE/backup.sh"' in deploy
 
 
 def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:

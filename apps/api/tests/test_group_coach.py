@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from bodyos_api import group_coach as group_coach_module
@@ -155,7 +155,9 @@ def test_dispatcher_sends_only_to_configured_group_and_marks_delivered(
     GroupCoachScheduler(session, settings).enqueue_due(now)
     transport = FakeTransport()
 
-    counts = FeishuGroupDispatcher(session, settings, transport=transport).dispatch_due(now)
+    counts = FeishuGroupDispatcher(
+        session, settings, transport=transport, clock=lambda: now
+    ).dispatch_due(now)
 
     assert counts == {"delivered": 1, "retried": 0, "failed": 0}
     event = session.scalar(select(OutboxEvent))
@@ -176,11 +178,16 @@ def test_dispatcher_retries_three_times_without_persisting_message_or_provider_d
     settings = enabled_settings()
     GroupCoachScheduler(session, settings).enqueue_due(now)
     transport = FakeTransport("network_unavailable")
-    dispatcher = FeishuGroupDispatcher(session, settings, transport=transport)
+    clock_now = [now]
+    dispatcher = FeishuGroupDispatcher(
+        session, settings, transport=transport, clock=lambda: clock_now[0]
+    )
 
     first = dispatcher.dispatch_due(now)
-    second = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 1, tzinfo=UTC))
-    third = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 3, tzinfo=UTC))
+    clock_now[0] = datetime(2026, 8, 12, 1, 1, tzinfo=UTC)
+    second = dispatcher.dispatch_due(clock_now[0])
+    clock_now[0] = datetime(2026, 8, 12, 1, 3, tzinfo=UTC)
+    third = dispatcher.dispatch_due(clock_now[0])
 
     event = session.scalar(select(OutboxEvent))
     assert first == {"delivered": 0, "retried": 1, "failed": 0}
@@ -212,6 +219,7 @@ def test_weekly_dispatch_uses_checked_expert_answer_and_fixed_fallback(
         settings,
         transport=transport,
         weekly_answer=expert_answer,
+        clock=lambda: now,
     ).dispatch_due(now)
 
     assert counts["delivered"] == 1
@@ -236,6 +244,7 @@ def test_weekly_dispatch_falls_back_without_exposing_model_error(
         settings,
         transport=transport,
         weekly_answer=failed_answer,
+        clock=lambda: now,
     ).dispatch_due(now)
 
     assert counts["delivered"] == 1
@@ -255,6 +264,7 @@ def test_dispatcher_cancels_pending_delivery_when_proactive_coaching_is_disabled
         session,
         enabled_settings(proactive_group_enabled=False),
         transport=transport,
+        clock=lambda: now,
     ).dispatch_due(now)
 
     event = session.scalar(select(OutboxEvent))
@@ -319,3 +329,31 @@ def test_dispatch_window_is_measured_from_configured_schedule_not_worker_observa
     assert counts["failed"] == 1
     assert transport.calls == []
     assert event is not None and event.status == "expired"
+
+
+def test_dispatcher_rechecks_window_and_disable_immediately_before_transport(
+    session: Session,
+) -> None:
+    scheduled = datetime(2026, 8, 12, 4, 15, tzinfo=UTC)
+    settings = enabled_settings()
+    assert GroupCoachScheduler(session, settings).enqueue_due(scheduled) == 1
+    transport = FakeTransport()
+
+    def delayed_answer(question: str) -> str:
+        del question
+        settings.proactive_group_enabled = False
+        return "蔬菜和主食的顺序可作为一般讨论（《控糖革命》第12页）。"
+
+    counts = FeishuGroupDispatcher(
+        session,
+        settings,
+        transport=transport,
+        weekly_answer=delayed_answer,
+        clock=lambda: scheduled + timedelta(minutes=5, milliseconds=1),
+    ).dispatch_due(scheduled + timedelta(minutes=4, seconds=59, milliseconds=500))
+
+    event = session.scalar(select(OutboxEvent))
+    assert counts["failed"] == 1
+    assert transport.calls == []
+    assert event is not None and event.status == "cancelled"
+    assert event.last_error_code == "proactive_disabled"

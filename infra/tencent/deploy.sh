@@ -8,6 +8,7 @@ ENV_FILE="$RUNTIME/.env.runtime"
 COMPOSE="docker compose --env-file $ENV_FILE -f $HERE/compose.yaml"
 ROLLBACK_ARMED=0
 ROLLBACK_ATTEMPTED=0
+ROLLBACK_DB_REVISION=0002_pairing_exchange_sessions
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "Runtime environment missing; collecting owner-only values without echoing secrets."
@@ -111,6 +112,14 @@ rollback_on_failure() {
 
     echo "Deployment gate failed; restoring the previous immutable image." >&2
     set +e
+    $COMPOSE stop api worker gateway >/dev/null 2>&1
+    FITCREW_IMAGE_TAG="$DEPLOY_SHA" $COMPOSE run --rm --no-deps api \
+        alembic downgrade "$ROLLBACK_DB_REVISION"
+    database_restored=$?
+    if [ "$database_restored" -ne 0 ]; then
+        echo "Database compatibility rollback failed; previous services were not started." >&2
+        exit "$exit_status"
+    fi
     if [ "$PREVIOUS_CADDYFILE_PRESENT" -eq 1 ]; then
         install -m 0644 "$PREVIOUS_CADDYFILE" "$RUNTIME/Caddyfile"
     fi
@@ -146,6 +155,10 @@ case "$PREVIOUS_IMAGE_TAG" in
         echo "No previous immutable image tag is available; first deployment has no automatic rollback target." >&2
         ;;
 esac
+
+if [ "$ROLLBACK_ARMED" -eq 1 ]; then
+    "$HERE/backup.sh"
+fi
 
 echo "Building immutable BodyOS image for ${DEPLOY_SHA}."
 FITCREW_IMAGE_TAG="$DEPLOY_SHA" $COMPOSE build api
