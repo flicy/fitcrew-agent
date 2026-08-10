@@ -381,6 +381,44 @@ def test_openai_compatible_proxy_routes_only_sanitized_dm_envelope(
     assert gateway.envelopes == [envelope]
 
 
+def test_openai_compatible_proxy_rejects_legacy_public_model_envelope(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+    envelope = {
+        "schema_version": "bodyos-public.v2",
+        "intent": "glucose_coaching",
+        "channel": "group",
+        "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
+        "knowledge": [],
+        "constraints": [
+            "general_knowledge_only",
+            "published_knowledge_only",
+            "no_personal_health_data",
+            "not_medical_diagnosis",
+            "cite_pages",
+        ],
+    }
+    import json
+
+    response = client_for(session, field_cipher, gateway).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer model-proxy-secret"},
+        json={
+            "model": "bodyos-codex",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "BODYOS_SANITIZED_ENVELOPE=" + json.dumps(envelope),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 503
+    assert gateway.envelopes == []
+
+
 def test_openai_compatible_proxy_streams_only_sanitized_dm_envelope(
     session: Session, field_cipher: FieldCipher
 ) -> None:

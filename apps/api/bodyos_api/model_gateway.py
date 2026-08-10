@@ -9,7 +9,6 @@ from typing import Protocol
 from bodyos_api.dlp import (
     SensitiveOutput,
     assert_private_request_context,
-    sanitize_public_group_question,
 )
 
 
@@ -39,14 +38,6 @@ _PRIVATE_TOP_LEVEL = {
     "knowledge",
     "constraints",
 }
-_PUBLIC_TOP_LEVEL = {
-    "schema_version",
-    "intent",
-    "channel",
-    "public_context",
-    "knowledge",
-    "constraints",
-}
 _FORBIDDEN_KEYS = {
     "fitcrew_user_id",
     "user_id",
@@ -63,46 +54,7 @@ _FORBIDDEN_KEYS = {
 
 def validate_model_envelope(envelope: dict) -> None:
     schema_version = envelope.get("schema_version")
-    if schema_version == "bodyos-public.v2":
-        if set(envelope) != _PUBLIC_TOP_LEVEL or envelope.get("channel") != "group":
-            raise ModelEnvelopeRejected("public model envelope keys are not allowlisted")
-        context = envelope.get("public_context")
-        if not isinstance(context, dict) or set(context) != {"sanitized_text"}:
-            raise ModelEnvelopeRejected("public context is invalid")
-        safe_text = context.get("sanitized_text")
-        if not isinstance(safe_text, str) or sanitize_public_group_question(safe_text) != safe_text:
-            raise ModelEnvelopeRejected("public context is not safely general")
-        knowledge = envelope.get("knowledge")
-        if not isinstance(knowledge, list) or len(knowledge) > 3:
-            raise ModelEnvelopeRejected("public knowledge is invalid")
-        for hit in knowledge:
-            if not isinstance(hit, dict) or set(hit) != {"title", "page", "excerpt"}:
-                raise ModelEnvelopeRejected("public knowledge item is invalid")
-            title = hit.get("title")
-            page = hit.get("page")
-            excerpt = hit.get("excerpt")
-            if (
-                not isinstance(title, str)
-                or not title.strip()
-                or len(title) > 300
-                or not isinstance(page, int)
-                or isinstance(page, bool)
-                or page < 1
-                or not isinstance(excerpt, str)
-                or not excerpt.strip()
-                or len(excerpt) > 400
-                or re.search(r"(?i)\b(?:ou|oc|on|om|cli|msg)_[a-z0-9_-]{6,}\b", excerpt)
-            ):
-                raise ModelEnvelopeRejected("public knowledge item is unsafe")
-        if envelope.get("constraints") != [
-            "general_knowledge_only",
-            "published_knowledge_only",
-            "no_personal_health_data",
-            "not_medical_diagnosis",
-            "cite_pages",
-        ]:
-            raise ModelEnvelopeRejected("public constraints are invalid")
-    elif schema_version == "bodyos-model.v1":
+    if schema_version == "bodyos-model.v1":
         allowed = _PRIVATE_TOP_LEVEL | {"request_context"}
         if not _PRIVATE_TOP_LEVEL.issubset(envelope) or not set(envelope).issubset(allowed):
             raise ModelEnvelopeRejected("private model envelope keys are not allowlisted")
@@ -137,15 +89,6 @@ def validate_model_envelope(envelope: dict) -> None:
 def render_model_prompt(envelope: dict) -> str:
     validate_model_envelope(envelope)
     context = json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    if envelope["schema_version"] == "bodyos-public.v2":
-        return (
-            "You are BodyOS in a public Feishu group. Answer only with concise general knowledge "
-            "about food, training, sleep, or glucose management. Never personalize, diagnose, "
-            "mention private data, request measurements, or use private knowledge/history. "
-            "When published knowledge is supplied, summarize it rather than quoting long passages "
-            "and preserve its Chinese book-title and page citation. Answer in Chinese.\n"
-            "BODYOS_PUBLIC_ENVELOPE=" + context
-        )
     return (
         "You are BodyOS, FitCrew's private health coach. Use only the supplied "
         "de-identified aggregate features and cited knowledge excerpts. Do not diagnose, "

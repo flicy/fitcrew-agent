@@ -114,20 +114,15 @@ def test_raw_or_identifying_fields_are_rejected_before_any_model_call() -> None:
     assert fallback.prompts == []
 
 
-def test_public_group_envelope_can_use_model_without_private_context() -> None:
-    primary = FakeHarness([HarnessResult(text="通用回答", route="codex")])
+def test_public_group_envelope_cannot_use_any_model_harness() -> None:
+    primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
     fallback = FakeHarness([HarnessResult(text="unused", route="hermes")])
 
-    result = RoutedModelGateway(primary, fallback).respond(public_group_envelope())
+    with pytest.raises(ModelEnvelopeRejected, match="unsupported model envelope"):
+        RoutedModelGateway(primary, fallback).respond(public_group_envelope())
 
-    assert result.text == "通用回答"
-    prompt = primary.prompts[0]
-    assert "晚饭后散步为什么有助于控糖" in prompt
-    assert "general knowledge" in prompt
-    assert "features" not in prompt
-    assert '"knowledge":' in prompt
-    assert "控糖革命" in prompt
-    assert '"page":12' in prompt
+    assert primary.prompts == []
+    assert fallback.prompts == []
 
 
 def test_public_group_envelope_rejects_unbounded_or_identifying_knowledge() -> None:

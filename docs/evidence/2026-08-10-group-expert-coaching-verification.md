@@ -8,7 +8,7 @@
 
 ### 本地门禁（2026-08-10）
 
-- `uv run pytest -q`：319 项通过；唯一警告来自既有 Starlette/httpx 测试兼容性弃用提示。
+- `uv run pytest -q`：320 项通过；唯一警告来自既有 Starlette/httpx 测试兼容性弃用提示。
 - `uv run ruff check .`：通过。
 - `uv run python scripts/check_bilingual_docs.py`：通过。
 - `sh -n infra/tencent/*.sh scripts/*.sh` 与 `git diff --check`：通过。
@@ -28,7 +28,7 @@ This record verifies code, policy, scheduling, and builds only. It contains no m
 
 ### Local gates (2026-08-10)
 
-- `uv run pytest -q`: 319 passed; the only warning is the existing Starlette/httpx test-compatibility deprecation.
+- `uv run pytest -q`: 320 passed; the only warning is the existing Starlette/httpx test-compatibility deprecation.
 - `uv run ruff check .`: passed.
 - `uv run python scripts/check_bilingual_docs.py`: passed.
 - `sh -n infra/tencent/*.sh scripts/*.sh` and `git diff --check`: passed.
