@@ -85,4 +85,44 @@ def test_rendered_rules_allow_only_bound_controlled_identities_in_private_coachi
     assert "only the owner in `FEISHU_ALLOWED_USERS` may use DMs" not in hermes_rules
     assert "only in DMs from explicitly bound, controlled-allowlisted BodyOS identities" in soul
     assert "fixed low-sensitivity behavior tokens" in hermes_rules
-    assert "never health data or private content" in hermes_rules
+    assert "no group model is invoked" in hermes_rules
+    assert "no identity, personal feature, private excerpt" in hermes_rules
+
+
+def test_rendered_rules_allow_only_published_shared_knowledge_in_group_coaching(
+    tmp_path: Path,
+) -> None:
+    profile = tmp_path / "bodyos-profile"
+    environment = {
+        **os.environ,
+        "BODYOS_MODEL_BASE_URL": "https://bodyos.example.test/v1",
+    }
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/render_hermes_profile.py"),
+            "--app-root",
+            str(ROOT),
+            "--profile-dir",
+            str(profile),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    agents = (profile / "AGENTS.md").read_text(encoding="utf-8")
+    hermes = (profile / "HERMES.md").read_text(encoding="utf-8")
+    soul = (profile / "SOUL.md").read_text(encoding="utf-8")
+    rendered_rules = "\n".join((agents, hermes, soul))
+
+    assert "published shared expert knowledge" in rendered_rules
+    assert "private excerpts" in rendered_rules
+    assert "proactive group coaching" in rendered_rules.lower()
+    assert "locally reviewed title/page-cited template" in rendered_rules
+    assert "no group model is invoked" in rendered_rules
+    assert "bodyos-public.v1" not in rendered_rules
+    assert "bodyos-public.v2" not in rendered_rules

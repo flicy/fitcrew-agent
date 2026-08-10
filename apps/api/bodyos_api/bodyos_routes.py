@@ -16,7 +16,6 @@ from bodyos_api.auth import require_internal, require_model_proxy
 from bodyos_api.bodyos import (
     BodyOSService,
     ConversationRequest,
-    build_public_group_envelope,
     classify_explicit_group_token,
 )
 from bodyos_api.config import Settings, get_settings
@@ -85,27 +84,20 @@ def create_bodyos_envelope(
     settings: Annotated[Settings, Depends(get_settings)],
     gateway: Annotated[Any, Depends(get_model_gateway)],
 ) -> dict:
+    service = BodyOSService(session, cipher, gateway)
     if request.channel == "group":
-        token = classify_explicit_group_token(request.text)
-        public_envelope = build_public_group_envelope(request.text)
-        if token is None and public_envelope is not None:
-            try:
-                result = gateway.respond(public_envelope)
-                reply = assert_public_group_answer(result.text)
-            except (HarnessFailure, SensitiveOutput):
-                token = BehaviorToken.PRIVATE_COACHING
-            else:
-                return {
-                    "mode": "group_public",
-                    "reply": reply,
-                    "envelope": {
-                        "schema_version": "bodyos-group-answer.v1",
-                        "channel": "group",
-                        "reply": reply,
-                    },
-                }
-        if token is None:
-            token = BehaviorToken.PRIVATE_COACHING
+        result = service.handle("", ConversationRequest(channel="group", text=request.text))
+        if result.route != "deterministic":
+            return {
+                "mode": "group_public",
+                "reply": result.text,
+                "envelope": {
+                    "schema_version": "bodyos-group-answer.v1",
+                    "channel": "group",
+                    "reply": result.text,
+                },
+            }
+        token = classify_explicit_group_token(request.text) or BehaviorToken.PRIVATE_COACHING
         return {
             "mode": "deterministic",
             "reply": token.message,
@@ -116,7 +108,7 @@ def create_bodyos_envelope(
             },
         }
     user_id = _identity_user(session, request, settings)
-    envelope = BodyOSService(session, cipher, gateway).build_envelope(user_id, request.text)
+    envelope = service.build_envelope(user_id, request.text)
     return {"mode": "model", "envelope": envelope}
 
 

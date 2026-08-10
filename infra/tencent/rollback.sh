@@ -7,6 +7,7 @@ ENV_FILE="$RUNTIME/.env.runtime"
 COMPOSE="docker compose --env-file $ENV_FILE -f $HERE/compose.yaml"
 ROLLBACK_SHA=${ROLLBACK_SHA:-${1:-}}
 PREVIOUS_CADDYFILE="$RUNTIME/Caddyfile.before-deploy"
+ROLLBACK_DB_REVISION=0002_pairing_exchange_sessions
 
 case "$ROLLBACK_SHA" in
     [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
@@ -27,6 +28,11 @@ if [ -z "$PUBLIC_HOST" ]; then
     echo "FITCREW_PUBLIC_HOST is missing from the runtime environment." >&2
     exit 1
 fi
+CURRENT_IMAGE_TAG=$(awk -F= '$1 == "FITCREW_IMAGE_TAG" {print $2}' "$ENV_FILE")
+case "$CURRENT_IMAGE_TAG" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+    *) echo "Current immutable image tag is invalid; database rollback cannot be verified." >&2; exit 1 ;;
+esac
 
 service_is_ready() {
     service="$1"
@@ -79,7 +85,11 @@ wait_for_public_https() {
 }
 
 docker image inspect "fitcrew-bodyos:$ROLLBACK_SHA" >/dev/null
+docker image inspect "fitcrew-bodyos:$CURRENT_IMAGE_TAG" >/dev/null
 "$HERE/backup.sh"
+$COMPOSE stop api worker gateway
+FITCREW_IMAGE_TAG="$CURRENT_IMAGE_TAG" $COMPOSE run --rm --no-deps api \
+    alembic downgrade "$ROLLBACK_DB_REVISION"
 if [ -f "$PREVIOUS_CADDYFILE" ]; then
     install -m 0644 "$PREVIOUS_CADDYFILE" "$RUNTIME/Caddyfile"
 fi

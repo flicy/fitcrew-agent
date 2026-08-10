@@ -251,9 +251,19 @@ class OutboxEvent(TimestampMixin, Base):
     __tablename__ = "outbox_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    fitcrew_user_id: Mapped[str] = mapped_column(ForeignKey("users.fitcrew_user_id"), index=True)
+    fitcrew_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.fitcrew_user_id"), index=True
+    )
     destination: Mapped[str] = mapped_column(String(64), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), unique=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(64))

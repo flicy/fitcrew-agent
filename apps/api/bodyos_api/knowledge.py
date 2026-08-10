@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
@@ -10,6 +10,18 @@ from bodyos_api.models import KnowledgeChunk, KnowledgeReview, KnowledgeSource
 
 class KnowledgeAccessDenied(PermissionError):
     pass
+
+
+SHARED_EXPERT_TITLES = frozenset(
+    {
+        "控糖革命",
+        "百岁人生行动手册",
+        "睡眠优化完全指南：科学与实践",
+    }
+)
+INTERNAL_EXPERT_RIGHTS = "user_provided_internal_expert_use"
+PUBLISHABLE_PRIVATE_RIGHTS = frozenset({INTERNAL_EXPERT_RIGHTS})
+CONFIRMABLE_PRIVATE_RIGHTS = frozenset({"user_provided_private_use_unverified"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +77,39 @@ class KnowledgeService:
             raise ValueError("private knowledge requires an owner")
         if visibility == "public" and fitcrew_user_id is not None:
             raise ValueError("public knowledge must not retain a private owner")
+        if visibility == "public" and title in SHARED_EXPERT_TITLES:
+            raise ValueError("shared expert titles require the controlled private publication path")
+        if visibility == "private" and title in SHARED_EXPERT_TITLES:
+            existing_public = self._session.scalar(
+                select(KnowledgeSource)
+                .where(
+                    KnowledgeSource.title == title,
+                    KnowledgeSource.content_hash == content_hash,
+                    KnowledgeSource.visibility == "public",
+                    KnowledgeSource.review_status.in_({"published", "superseded"}),
+                    KnowledgeSource.rights_status == INTERNAL_EXPERT_RIGHTS,
+                )
+                .order_by(KnowledgeSource.version.desc())
+                .limit(1)
+            )
+            if existing_public is not None:
+                return existing_public
+        exact_private = self._session.scalar(
+            select(KnowledgeSource)
+            .where(
+                KnowledgeSource.visibility == visibility,
+                KnowledgeSource.title == title,
+                KnowledgeSource.content_hash == content_hash,
+                KnowledgeSource.review_status != "withdrawn",
+                KnowledgeSource.fitcrew_user_id == fitcrew_user_id
+                if fitcrew_user_id is not None
+                else KnowledgeSource.fitcrew_user_id.is_(None),
+            )
+            .order_by(KnowledgeSource.version.desc())
+            .limit(1)
+        )
+        if exact_private is not None:
+            return exact_private
         owner_filter = (
             KnowledgeSource.fitcrew_user_id == fitcrew_user_id
             if fitcrew_user_id is not None
@@ -153,8 +198,96 @@ class KnowledgeService:
             source_filters=(
                 KnowledgeSource.visibility == "public",
                 KnowledgeSource.review_status == "published",
+                KnowledgeSource.title.in_(SHARED_EXPERT_TITLES),
+                KnowledgeSource.rights_status == INTERNAL_EXPERT_RIGHTS,
             ),
         )
+
+    def search_for_user(
+        self, fitcrew_user_id: str, query: str, *, limit: int = 5
+    ) -> list[SearchHit]:
+        hits = self.search_private(fitcrew_user_id, query, limit=limit) + self.search_public(
+            query, limit=limit
+        )
+        return sorted(
+            hits,
+            key=lambda hit: (-hit.score, hit.title, hit.page_number, hit.source_id),
+        )[:limit]
+
+    def publish_private_source(
+        self,
+        source_id: str,
+        *,
+        expected_owner_id: str,
+        reviewer_role: str,
+        rationale: str,
+        applicability: str,
+        rights_confirmation: str | None = None,
+    ) -> KnowledgeSource:
+        source = self._session.get(KnowledgeSource, source_id)
+        if (
+            source is None
+            or source.visibility != "private"
+            or source.review_status != "approved_private"
+            or source.fitcrew_user_id != expected_owner_id
+            or source.title not in SHARED_EXPERT_TITLES
+            or source.rights_status
+            not in (PUBLISHABLE_PRIVATE_RIGHTS | CONFIRMABLE_PRIVATE_RIGHTS)
+        ):
+            raise ValueError("approved private knowledge source not found")
+        if (
+            not expected_owner_id.strip()
+            or not reviewer_role.strip()
+            or not rationale.strip()
+            or not applicability.strip()
+        ):
+            raise ValueError("publication review fields are required")
+        if source.rights_status in CONFIRMABLE_PRIVATE_RIGHTS:
+            if rights_confirmation is None or not rights_confirmation.strip():
+                raise ValueError("explicit internal-use rights confirmation is required")
+            self._session.add(
+                KnowledgeReview(
+                    source_id=source.id,
+                    reviewer_role=reviewer_role,
+                    decision="rights_confirmed",
+                    rationale=rights_confirmation.strip(),
+                    applicability="closed BodyOS shared expert knowledge",
+                )
+            )
+            source.rights_status = INTERNAL_EXPERT_RIGHTS
+        published_sources = self._session.scalars(
+            select(KnowledgeSource).where(
+                KnowledgeSource.id != source.id,
+                KnowledgeSource.title == source.title,
+                KnowledgeSource.visibility == "public",
+                KnowledgeSource.review_status == "published",
+            )
+        ).all()
+        for published in published_sources:
+            published.review_status = "superseded"
+        prior_version = self._session.scalar(
+            select(func.max(KnowledgeSource.version)).where(
+                KnowledgeSource.id != source.id,
+                KnowledgeSource.title == source.title,
+            )
+        )
+        if prior_version is not None and source.version <= prior_version:
+            source.version = prior_version + 1
+        source.fitcrew_user_id = None
+        source.visibility = "public"
+        source.rights_status = INTERNAL_EXPERT_RIGHTS
+        source.review_status = "published"
+        self._session.add(
+            KnowledgeReview(
+                source_id=source.id,
+                reviewer_role=reviewer_role,
+                decision="approved",
+                rationale=rationale,
+                applicability=applicability,
+            )
+        )
+        self._session.commit()
+        return source
 
     def _search(self, query: str, *, limit: int, source_filters: tuple) -> list[SearchHit]:
         rows = self._session.execute(
@@ -198,6 +331,8 @@ class KnowledgeService:
         source = self._session.get(KnowledgeSource, source_id)
         if source is None or source.visibility != "public":
             raise ValueError("public knowledge source not found")
+        if source.title in SHARED_EXPERT_TITLES:
+            raise ValueError("shared expert titles require the controlled private publication path")
         if decision not in {"approved", "rejected"}:
             raise ValueError("review decision must be approved or rejected")
         self._session.add(

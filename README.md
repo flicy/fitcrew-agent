@@ -20,16 +20,19 @@ BodyOS 不是一个只会回答问题的 AI 客服。它是运行在飞书里的
    在 BodyOS 私聊中，你可以讨论今天吃了什么、血糖如何变化、自己当时有什么感受。BodyOS 结合授权数据与知识库，帮助你寻找可能的生活方式关系，并给出可执行的小行动。
 
 3. **在群聊里一起行动和学习**
-   BodyOS 可以回答通用的饮食、训练、睡眠与控糖知识问题，也可以参与打卡和日常健康互动。群聊不会读取或展示任何成员的个人健康数据、私聊内容或私人知识库。
+   BodyOS 可以结合已发布的共享专家知识，回答通用的饮食、训练、睡眠与控糖问题，也可以参与打卡和日常健康互动。群聊先检索三本已审核书籍，再用本地审核模板生成带书名和页码的回答，不转发模型自由文本。群聊不会读取或展示任何成员的个人健康数据、私聊内容或私人书摘。
 
 4. **用科学书籍辅助判断**
-   私人知识库收录《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》。BodyOS 会在可取得来源时引用相关内容，但不会把书中的观点包装成医疗结论。
+   BodyOS 的共享专家知识层收录《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》。群聊和私聊都可以在安全边界内引用已审核的书名与页码；原始 PDF 不会公开，也不会把书中观点包装成医疗结论。
+
+5. **主动陪伴群里的健康行动**
+   默认按北京时间每天 09:00 发起晨间小行动、20:30 发起晚间打卡，并在每周三 12:15 发起一次公共专家知识互动；22:00–08:00 保持静默。主动消息只包含公共行动与公共知识，不会播报任何成员的健康状态。
 
 ### 群聊与私聊怎么分工
 
 | 场景 | 适合做什么 | 明确不做什么 |
 | --- | --- | --- |
-| 飞书群聊 | 通用饮食、训练、睡眠、控糖知识；共同打卡；日常健康互动 | 不读取个人健康数据，不引用私聊，不公开原始数值 |
+| 飞书群聊 | 共享专家知识；通用饮食、训练、睡眠、控糖问答；共同打卡；主动健康互动 | 不读取个人健康数据，不引用私聊或私人书摘，不公开原始数值 |
 | BodyOS 私聊 | 基于本人授权数据，讨论食物、血糖、睡眠、训练与身体感知 | 不向其他用户泄露，不跨用户调用数据，不进行医疗诊断 |
 
 简单说：**群里谈通用知识与行动，私聊才谈属于你的数据和感受。**
@@ -39,18 +42,19 @@ BodyOS 不是一个只会回答问题的 AI 客服。它是运行在飞书里的
 - 飞书账号是主账号，系统用不可变的内部用户 ID 隔离每位用户。
 - Apple Health 授权是可选项；没有 Apple 设备或不授权健康数据，也可以使用群聊与非健康数据能力。
 - 健康类别按用户、设备和同意状态分别绑定；授权可撤回，跨用户上传会被拒绝。
-- 原始健康字段加密保存；模型只接收完成回答所需的聚合特征、意图和知识摘录，不接收姓名、飞书 ID、聊天原文或完整原始健康序列。
+- 原始健康字段加密保存；私聊模型只接收完成回答所需的聚合特征、意图和知识摘录，不接收姓名、飞书 ID、聊天原文或完整原始健康序列；群聊知识回答不调用模型。
 - BodyOS 提供生活方式指导，不提供疾病诊断、治疗或用药建议，也不能替代医生。
 
 ### 开发者与验证
 
 V2 的用户体验由以下组件组成：
 
-- `apps/api/`：授权、加密摄取、日级特征、知识库和 BodyOS 数据边界。
+- `apps/api/`：授权、加密摄取、日级特征、知识库、主动群聊调度和 BodyOS 数据边界。
 - `apps/ios-bridge/`：HealthKit 最小读取授权、增量同步和实验期对账。
 - `integrations/hermes/`：飞书通道、身份隔离、群聊隐私策略和模型路由。
 - `infra/tencent/`：腾讯云部署、严格 HTTPS、加密备份与 SHA 回滚。
 - `scripts/import_private_books.py`：在 Git 外加密导入本人拥有使用权的 PDF。
+- `scripts/publish_shared_books.py`：经人工审核后，仅把指定三本书开放为 BodyOS 内部共享专家知识；不公开文件或正文。
 
 已验证：Python / policy、Swift Core、iOS Simulator CI，以及生产 HTTPS 健康检查。公开端点 <https://124.156.218.104/healthz> 当前报告后端版本 `v2.0.0-alpha.1`。
 
@@ -80,16 +84,19 @@ BodyOS is not an AI support bot that forgets after each answer. It is a private 
    In a BodyOS DM, a person can discuss what they ate, how glucose changed, and how they felt at the time. BodyOS combines authorized data with the knowledge base to explore possible lifestyle relationships and suggest a practical small action.
 
 3. **Learn and act together in group chat**
-   BodyOS can answer general questions about food, training, sleep, and glucose management, and it can participate in check-ins and everyday health interaction. A group never reads or exposes personal health data, DMs, or private knowledge.
+   BodyOS can use published shared expert knowledge to answer general questions about food, training, sleep, and glucose management, and it can participate in check-ins and everyday health interaction. A group first retrieves from the three reviewed books, then uses a locally reviewed template to produce a title/page-cited answer; it never relays free-form model output. A group never reads or exposes personal health data, DMs, or private excerpts.
 
 4. **Use guidance from scientific books**
-   The private knowledge base includes the confirmed Chinese titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. BodyOS cites available sources without presenting a book claim as a medical conclusion.
+   The BodyOS shared expert-knowledge layer includes the confirmed Chinese titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. Groups and DMs may cite reviewed title/page references within their safety boundaries. The source PDFs are not made public, and book claims are not presented as medical conclusions.
+
+5. **Proactively support shared health actions**
+   By default, BodyOS starts a morning small action at 09:00, an evening check-in at 20:30, and a public expert-knowledge interaction every Wednesday at 12:15, all in Asia/Shanghai time. It stays quiet from 22:00 to 08:00. Proactive messages contain only public actions and knowledge, never any member's health status.
 
 ### How groups and DMs divide the work
 
 | Space | Appropriate use | Explicit boundary |
 | --- | --- | --- |
-| Feishu group | General food, training, sleep, and glucose-management knowledge; shared check-ins; everyday health interaction | No personal health-data access, no DM context, and no raw values |
+| Feishu group | Shared expert knowledge; general food, training, sleep, and glucose-management Q&A; shared check-ins; proactive health interaction | No personal health-data access, no DM or private-excerpt context, and no raw values |
 | BodyOS DM | Personal discussion of food, glucose, sleep, training, and body perception based on that person's authorization | No cross-user disclosure, no cross-user data access, and no medical diagnosis |
 
 In short: **groups are for general knowledge and shared action; DMs are where your authorized data and perception belong.**
@@ -99,18 +106,19 @@ In short: **groups are for general knowledge and shared action; DMs are where yo
 - Feishu is the primary account, and an immutable internal user ID isolates each person.
 - Apple Health authorization is optional. People without Apple hardware or health permission can still use group and non-health-data capabilities.
 - Health categories bind separately to the person, device, and current consent. Consent can be withdrawn, and cross-user uploads are rejected.
-- Raw health fields are encrypted at rest. A model receives only the aggregates, intent, and knowledge excerpts required for the answer—never names, Feishu IDs, raw chats, or a complete raw health series.
+- Raw health fields are encrypted at rest. A DM model receives only the aggregates, intent, and knowledge excerpts required for the answer—never names, Feishu IDs, raw chats, or a complete raw health series. Group knowledge answers do not invoke a model.
 - BodyOS provides lifestyle guidance, not disease diagnosis, treatment, or medication advice, and it does not replace a clinician.
 
 ### Developer and verification
 
 The V2 experience is composed of:
 
-- `apps/api/`: consent, encrypted ingestion, daily features, the knowledge base, and BodyOS data boundaries.
+- `apps/api/`: consent, encrypted ingestion, daily features, the knowledge base, proactive group scheduling, and BodyOS data boundaries.
 - `apps/ios-bridge/`: minimum HealthKit read authorization, incremental sync, and study-period reconciliation.
 - `integrations/hermes/`: Feishu channels, identity isolation, group privacy policy, and model routing.
 - `infra/tencent/`: Tencent Cloud deployment, strict HTTPS, encrypted backups, and SHA rollback.
 - `scripts/import_private_books.py`: encrypted import of privately supplied PDFs outside Git.
+- `scripts/publish_shared_books.py`: after human review, exposes only the three specified books as internal BodyOS shared expert knowledge; it does not publish files or full text.
 
 Verified evidence includes Python / policy, Swift Core, and iOS Simulator CI, plus the production HTTPS health check. The public endpoint at <https://124.156.218.104/healthz> currently reports backend version `v2.0.0-alpha.1`.
 

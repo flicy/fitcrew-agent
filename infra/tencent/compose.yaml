@@ -71,13 +71,16 @@ services:
 
   worker:
     <<: *app
-    command: ["bodyos-jobs", "loop", "--interval-seconds", "21600"]
+    command: ["bodyos-jobs", "loop", "--interval-seconds", "60"]
     depends_on:
       api:
         condition: service_healthy
     environment:
       BODYOS_DATABASE_URL: postgresql+psycopg://bodyos:${POSTGRES_PASSWORD}@db:5432/bodyos
       HOME: /home/bodyos
+    volumes:
+      - codex_auth:/home/bodyos/.codex
+      - hermes_home:/home/bodyos/.hermes
     mem_limit: 256m
     cpus: 0.25
 

@@ -54,6 +54,14 @@ def test_tencent_compose_has_owner_alpha_hardening() -> None:
     assert "healthcheck:" in compose
     assert '"8000:8000"' not in compose
     assert "/tmp:size=64m,mode=1777" in compose
+    assert '["bodyos-jobs", "loop", "--interval-seconds", "60"]' in compose
+    worker_service = compose.split("  worker:\n", maxsplit=1)[1].split(
+        "\n  gateway:\n", maxsplit=1
+    )[0]
+    assert "codex_auth:/home/bodyos/.codex" in worker_service
+    assert "hermes_home:/home/bodyos/.hermes" in worker_service
+    jobs_source = (ROOT / "apps/api/bodyos_api/jobs.py").read_text()
+    assert "time.sleep(max(30, args.interval_seconds))" in jobs_source
 
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     assert "--wait --wait-timeout 120 db api caddy" in workflow
@@ -113,6 +121,8 @@ def test_operations_bundle_has_tls_backup_restore_and_sha_rollback() -> None:
     assert "wait_for_service caddy health" in rollback
     assert "wait_for_api_loopback" in rollback
     assert "wait_for_public_https" in rollback
+    assert 'alembic downgrade "$ROLLBACK_DB_REVISION"' in rollback
+    assert 'FITCREW_IMAGE_TAG="$CURRENT_IMAGE_TAG"' in rollback
     assert "--proto '=https'" in rollback
     assert "-k" not in rollback
     assert '"$RUNTIME/tls/fullchain.pem"' in rollback
@@ -167,12 +177,77 @@ def test_examples_do_not_contain_committable_secrets() -> None:
     assert "cli_" not in example
     assert "CHANGE_ME" not in example
     assert "BODYOS_ENCRYPTION_KEY=" not in example
+    assert "BODYOS_PROACTIVE_GROUP_ENABLED" in example
+    assert "BODYOS_GROUP_TIMEZONE" in example
+
+
+def test_deploy_atomically_adds_only_missing_non_secret_group_defaults() -> None:
+    generator = (ROOT / "infra/tencent/generate-runtime-env.py").read_text()
+    deploy = (ROOT / "infra/tencent/deploy.sh").read_text()
+
+    for name in (
+        "BODYOS_PROACTIVE_GROUP_ENABLED",
+        "BODYOS_GROUP_TIMEZONE",
+        "BODYOS_GROUP_MORNING_TIME",
+        "BODYOS_GROUP_EVENING_TIME",
+        "BODYOS_GROUP_WEEKLY_WEEKDAY",
+        "BODYOS_GROUP_WEEKLY_TIME",
+        "BODYOS_GROUP_QUIET_START",
+        "BODYOS_GROUP_QUIET_END",
+    ):
+        assert name in generator
+    assert "os.replace" in generator
+    assert "--append-defaults" in generator
+    assert "generate-runtime-env.py --append-defaults" in deploy
+
+
+def test_shared_book_publication_command_is_content_free_and_private_to_the_api() -> None:
+    python_script = ROOT / "scripts/publish_shared_books.py"
+    wrapper = ROOT / "infra/tencent/publish-shared-books.sh"
+
+    assert python_script.is_file()
+    assert wrapper.is_file()
+    assert wrapper.stat().st_mode & 0o111
+    script_source = python_script.read_text()
+    wrapper_source = wrapper.read_text()
+    assert "published_count" in script_source
+    assert "already_published_count" in script_source
+    assert "excerpt" not in script_source
+    assert "content_ciphertext" not in script_source
+    assert "owner-bootstrap.json" in wrapper_source
+    assert "--owner-record /owner-runtime/owner-bootstrap.json" in wrapper_source
+    assert "KnowledgeSource.fitcrew_user_id == owner_id" in script_source
+    assert "expected_owner_id=owner_id" in script_source
+    assert "exec -T api python scripts/publish_shared_books.py" in wrapper_source
+    assert "bootstrap-invited-user" not in wrapper_source
 
 
 def test_alembic_uses_the_production_database_environment() -> None:
     migration_environment = (ROOT / "apps/api/migrations/env.py").read_text()
     assert 'os.environ.get("BODYOS_DATABASE_URL")' in migration_environment
     assert 'config.set_main_option("sqlalchemy.url"' in migration_environment
+
+
+def test_group_outbox_downgrade_removes_ownerless_events_before_restoring_not_null() -> None:
+    migration = (
+        ROOT / "apps/api/migrations/versions/0003_group_coach_outbox.py"
+    ).read_text()
+
+    delete_position = migration.index("DELETE FROM outbox_events WHERE fitcrew_user_id IS NULL")
+    not_null_position = migration.index("nullable=False")
+    assert delete_position < not_null_position
+    assert 'constraint.get("column_names")' in migration
+    assert 'constraint["name"]' in migration
+    deploy = (ROOT / "infra/tencent/deploy.sh").read_text()
+    assert 'alembic downgrade "$ROLLBACK_DB_REVISION"' in deploy
+    assert 'FITCREW_IMAGE_TAG="$DEPLOY_SHA"' in deploy
+    assert '"$HERE/backup.sh"' in deploy
+    assert deploy.index("ROLLBACK_ARMED=$ROLLBACK_AVAILABLE") > deploy.index(
+        'set-runtime-image.py" --file "$ENV_FILE" "$DEPLOY_SHA"'
+    )
+    assert deploy.index("ROLLBACK_ARMED=$ROLLBACK_AVAILABLE") > deploy.index(
+        '$COMPOSE build api'
+    )
 
 
 def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:

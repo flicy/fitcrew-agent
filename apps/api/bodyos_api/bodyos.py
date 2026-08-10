@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
 from bodyos_api.dlp import (
-    SensitiveOutput,
+    PUBLIC_FALLBACKS,
     assert_public_group_answer,
+    assert_public_knowledge_citations,
+    render_public_knowledge_answer,
     sanitize_private_request_context,
     sanitize_public_group_question,
 )
 from bodyos_api.knowledge import KnowledgeService
-from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample
 from bodyos_api.policy import BehaviorToken
 
@@ -35,7 +36,27 @@ def classify_intent(text: str) -> str:
         term in lowered for term in ("同步状态", "最新同步", "类别覆盖", "数据覆盖", "sync status")
     ):
         return "sync_status"
-    if any(term in lowered for term in ("血糖", "葡萄糖", "餐后", "控糖", "glucose")):
+    if any(
+        term in lowered
+        for term in (
+            "血糖",
+            "葡萄糖",
+            "餐后",
+            "饭后",
+            "控糖",
+            "饮食",
+            "食物",
+            "餐食",
+            "进食",
+            "蔬菜",
+            "蛋白质",
+            "碳水",
+            "glucose",
+            "food",
+            "diet",
+            "meal",
+        )
+    ):
         return "glucose_coaching"
     if any(term in lowered for term in ("睡眠", "睡觉", "失眠", "sleep")):
         return "sleep_coaching"
@@ -75,21 +96,24 @@ def classify_group_token(text: str) -> BehaviorToken:
     return classify_explicit_group_token(text) or BehaviorToken.PRIVATE_COACHING
 
 
-def build_public_group_envelope(text: str) -> dict | None:
+def build_public_group_envelope(text: str, *, knowledge: list[dict] | None = None) -> dict | None:
     if classify_explicit_group_token(text) is not None:
         return None
     safe_text = sanitize_public_group_question(text)
     if safe_text is None:
         return None
     return {
-        "schema_version": "bodyos-public.v1",
+        "schema_version": "bodyos-public.v2",
         "intent": classify_intent(safe_text),
         "channel": "group",
         "public_context": {"sanitized_text": safe_text},
+        "knowledge": knowledge or [],
         "constraints": [
             "general_knowledge_only",
+            "published_knowledge_only",
             "no_personal_health_data",
             "not_medical_diagnosis",
+            "cite_pages",
         ],
     }
 
@@ -123,6 +147,11 @@ _CATEGORY_GROUPS = (
     ),
 )
 
+def public_group_fallback(intent: str) -> str:
+    return assert_public_group_answer(
+        PUBLIC_FALLBACKS.get(intent, PUBLIC_FALLBACKS["general_health_coaching"])
+    )
+
 
 class BodyOSService:
     def __init__(self, session: Session, cipher: FieldCipher, model_gateway):
@@ -135,27 +164,58 @@ class BodyOSService:
             explicit_token = classify_explicit_group_token(request.text)
             if explicit_token is not None:
                 return ConversationReply(text=explicit_token.message, route="deterministic")
-            envelope = build_public_group_envelope(request.text)
-            if envelope is None:
+            public_base = build_public_group_envelope(request.text)
+            if public_base is None:
                 return ConversationReply(
                     text=BehaviorToken.PRIVATE_COACHING.message,
                     route="deterministic",
                 )
             try:
-                reply = self._model_gateway.respond(envelope)
-                safe_reply = assert_public_group_answer(reply.text)
-            except (HarnessFailure, SensitiveOutput):
-                return ConversationReply(
-                    text=BehaviorToken.PRIVATE_COACHING.message,
-                    route="deterministic",
+                envelope = self._with_public_knowledge(public_base)
+                if not envelope["knowledge"]:
+                    raise ValueError("public expert knowledge is unavailable")
+                first_hit = envelope["knowledge"][0]
+                reviewed_reply = render_public_knowledge_answer(
+                    envelope["intent"], first_hit["title"], first_hit["page"]
                 )
-            return ConversationReply(text=safe_reply, route=reply.route)
+                safe_reply = assert_public_knowledge_citations(
+                    reviewed_reply, envelope["knowledge"]
+                )
+            except Exception:
+                return ConversationReply(
+                    text=public_group_fallback(public_base["intent"]),
+                    route="deterministic_public",
+                )
+            return ConversationReply(text=safe_reply, route="deterministic_public_knowledge")
         if request.channel != "dm":
             raise PermissionError("unsupported conversation channel")
 
         envelope = self.build_envelope(fitcrew_user_id, request.text)
         reply = self._model_gateway.respond(envelope)
         return ConversationReply(text=reply.text, route=reply.route)
+
+    def build_public_group_envelope(self, text: str) -> dict | None:
+        envelope = build_public_group_envelope(text)
+        if envelope is None:
+            return None
+        return self._with_public_knowledge(envelope)
+
+    def _with_public_knowledge(self, envelope: dict) -> dict:
+        safe_text = envelope["public_context"]["sanitized_text"]
+        hits = KnowledgeService(self._session, self._cipher).search_public(safe_text, limit=3)
+        if not hits:
+            hits = KnowledgeService(self._session, self._cipher).search_public(
+                _KNOWLEDGE_QUERY[envelope["intent"]], limit=3
+            )
+        envelope["knowledge"] = [
+            {
+                "title": hit.title,
+                "page": hit.page_number,
+                "excerpt": hit.excerpt,
+            }
+            for hit in hits
+        ]
+        return envelope
 
     def build_envelope(self, fitcrew_user_id: str, text: str) -> dict:
         intent = classify_intent(text)
@@ -232,7 +292,7 @@ class BodyOSService:
         }
 
     def _knowledge(self, fitcrew_user_id: str, intent: str) -> list[dict]:
-        hits = KnowledgeService(self._session, self._cipher).search_private(
+        hits = KnowledgeService(self._session, self._cipher).search_for_user(
             fitcrew_user_id, _KNOWLEDGE_QUERY[intent], limit=3
         )
         return [

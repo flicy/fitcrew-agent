@@ -42,14 +42,19 @@ def envelope() -> dict:
 
 def public_group_envelope() -> dict:
     return {
-        "schema_version": "bodyos-public.v1",
+        "schema_version": "bodyos-public.v2",
         "intent": "glucose_coaching",
         "channel": "group",
         "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
+        "knowledge": [
+            {"title": "控糖革命", "page": 12, "excerpt": "餐后舒适活动有助于控糖。"}
+        ],
         "constraints": [
             "general_knowledge_only",
+            "published_knowledge_only",
             "no_personal_health_data",
             "not_medical_diagnosis",
+            "cite_pages",
         ],
     }
 
@@ -109,18 +114,36 @@ def test_raw_or_identifying_fields_are_rejected_before_any_model_call() -> None:
     assert fallback.prompts == []
 
 
-def test_public_group_envelope_can_use_model_without_private_context() -> None:
-    primary = FakeHarness([HarnessResult(text="通用回答", route="codex")])
+def test_public_group_envelope_cannot_use_any_model_harness() -> None:
+    primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
     fallback = FakeHarness([HarnessResult(text="unused", route="hermes")])
 
-    result = RoutedModelGateway(primary, fallback).respond(public_group_envelope())
+    with pytest.raises(ModelEnvelopeRejected, match="unsupported model envelope"):
+        RoutedModelGateway(primary, fallback).respond(public_group_envelope())
 
-    assert result.text == "通用回答"
-    prompt = primary.prompts[0]
-    assert "晚饭后散步为什么有助于控糖" in prompt
-    assert "general knowledge" in prompt
-    assert "features" not in prompt
-    assert '"knowledge":' not in prompt
+    assert primary.prompts == []
+    assert fallback.prompts == []
+
+
+def test_public_group_envelope_rejects_unbounded_or_identifying_knowledge() -> None:
+    primary = FakeHarness([HarnessResult(text="must not run", route="codex")])
+    fallback = FakeHarness([HarnessResult(text="must not run", route="hermes")])
+    unsafe = public_group_envelope() | {
+        "knowledge": [
+            {
+                "title": "控糖革命",
+                "page": 12,
+                "excerpt": "联系 ou_private123",
+                "source_id": "private-source",
+            }
+        ]
+    }
+
+    with pytest.raises(ModelEnvelopeRejected):
+        RoutedModelGateway(primary, fallback).respond(unsafe)
+
+    assert primary.prompts == []
+    assert fallback.prompts == []
 
 
 @pytest.mark.parametrize(

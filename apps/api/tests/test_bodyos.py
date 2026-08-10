@@ -2,6 +2,9 @@ from datetime import UTC, datetime
 
 from bodyos_api.bodyos import BodyOSService, ConversationRequest
 from bodyos_api.crypto import FieldCipher
+from bodyos_api.dlp import render_public_knowledge_answer
+from bodyos_api.knowledge import KnowledgeService
+from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample, User
 from sqlalchemy.orm import Session
 
@@ -14,7 +17,49 @@ class RecordingGateway:
 
     def respond(self, envelope: dict):
         self.envelopes.append(envelope)
+        return type(
+            "Reply",
+            (),
+            {"text": "从一顿饭的进食顺序开始（《控糖革命》第12页）。", "route": "codex"},
+        )()
+
+
+class FailingGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        raise HarnessFailure("provider unavailable")
+
+
+class DisclaimerGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        return type(
+            "Reply",
+            (),
+            {
+                "text": (
+                    "一般而言，饭后轻松活动有助于肌肉利用葡萄糖；"
+                    "这不是个体诊断（《控糖革命》第12页）。"
+                ),
+                "route": "codex",
+            },
+        )()
+
+
+class UncitedGateway:
+    def respond(self, envelope: dict):
+        del envelope
         return type("Reply", (), {"text": "从一顿饭的进食顺序开始。", "route": "codex"})()
+
+
+class HallucinatedCitationGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        return type(
+            "Reply",
+            (),
+            {"text": "从一顿饭的进食顺序开始（《虚构书籍》第99页）。", "route": "codex"},
+        )()
 
 
 def seed_feature(session: Session, cipher: FieldCipher) -> None:
@@ -40,6 +85,29 @@ def seed_feature(session: Session, cipher: FieldCipher) -> None:
     session.commit()
 
 
+def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
+    if session.get(User, USER_ID) is None:
+        session.add(User(fitcrew_user_id=USER_ID))
+        session.commit()
+    service = KnowledgeService(session, cipher)
+    source = service.import_pages(
+        fitcrew_user_id=USER_ID,
+        title="控糖革命",
+        author="Jessie Inchauspé",
+        content_hash="8" * 64,
+        rights_status="user_provided_internal_expert_use",
+        pages={12: "进餐顺序可能影响餐后葡萄糖曲线。"},
+    )
+    service.publish_private_source(
+        source.id,
+        expected_owner_id=USER_ID,
+        reviewer_role="owner_editor",
+        rationale="approved for internal expert summaries",
+        applicability="general lifestyle education",
+        rights_confirmation="owner confirmed closed BodyOS shared expert use",
+    )
+
+
 def test_personal_group_question_never_calls_model_and_returns_private_coaching_token(
     session: Session, field_cipher: FieldCipher
 ) -> None:
@@ -57,9 +125,10 @@ def test_personal_group_question_never_calls_model_and_returns_private_coaching_
     assert "10.2" not in result.text
 
 
-def test_general_group_question_uses_only_a_public_model_envelope(
+def test_general_group_question_uses_only_local_reviewed_knowledge_rendering(
     session: Session, field_cipher: FieldCipher
 ) -> None:
+    seed_shared_glucose_book(session, field_cipher)
     gateway = RecordingGateway()
     service = BodyOSService(session, field_cipher, gateway)
 
@@ -68,25 +137,11 @@ def test_general_group_question_uses_only_a_public_model_envelope(
         ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
     )
 
-    assert result.route == "codex"
-    assert result.text == "从一顿饭的进食顺序开始。"
-    assert gateway.envelopes == [
-        {
-            "schema_version": "bodyos-public.v1",
-            "intent": "glucose_coaching",
-            "channel": "group",
-            "public_context": {"sanitized_text": "晚饭后散步为什么有助于控糖？"},
-            "constraints": [
-                "general_knowledge_only",
-                "no_personal_health_data",
-                "not_medical_diagnosis",
-            ],
-        }
-    ]
-    rendered = str(gateway.envelopes[0])
-    assert USER_ID not in rendered
-    assert "features" not in rendered
-    assert "knowledge" not in gateway.envelopes[0]
+    assert result.route == "deterministic_public_knowledge"
+    assert result.text == render_public_knowledge_answer(
+        "glucose_coaching", "控糖革命", 12
+    )
+    assert gateway.envelopes == []
 
 
 def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(
@@ -105,6 +160,88 @@ def test_group_contact_request_returns_only_a_fixed_bodyos_join_route(
     assert gateway.envelopes == []
     assert "10.2" not in result.text
     assert raw_group_text not in result.text
+
+
+def test_general_group_question_uses_a_public_fallback_when_model_fails(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    result = BodyOSService(session, field_cipher, FailingGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "deterministic_public"
+    assert result.text.startswith("一般而言")
+    assert result.text != "个性化健康建议请私聊 BodyOS。"
+
+
+def test_general_group_never_relays_freeform_model_text(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_shared_glucose_book(session, field_cipher)
+    result = BodyOSService(session, field_cipher, DisclaimerGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "deterministic_public_knowledge"
+    assert "不是个体诊断" not in result.text
+    assert result.text == render_public_knowledge_answer(
+        "glucose_coaching", "控糖革命", 12
+    )
+
+
+def test_general_group_question_falls_back_without_published_expert_knowledge(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    gateway = RecordingGateway()
+
+    result = BodyOSService(session, field_cipher, gateway).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+    )
+
+    assert result.route == "deterministic_public"
+    assert result.text.startswith("一般而言")
+    assert gateway.envelopes == []
+
+
+def test_group_ignores_uncited_or_hallucinated_freeform_gateway_answers(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_shared_glucose_book(session, field_cipher)
+
+    for gateway in (UncitedGateway(), HallucinatedCitationGateway()):
+        result = BodyOSService(session, field_cipher, gateway).handle(
+            USER_ID,
+            ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+        )
+        assert result.route == "deterministic_public_knowledge"
+        assert result.text == render_public_knowledge_answer(
+            "glucose_coaching", "控糖革命", 12
+        )
+
+
+def test_group_retrieval_uses_the_sanitized_question_and_fails_to_public_fallback(
+    session: Session, field_cipher: FieldCipher, monkeypatch
+) -> None:
+    queries: list[str] = []
+
+    def unavailable_search(self, query: str, *, limit: int = 5):
+        del self, limit
+        queries.append(query)
+        raise RuntimeError("encrypted store unavailable")
+
+    monkeypatch.setattr(KnowledgeService, "search_public", unavailable_search)
+    result = BodyOSService(session, field_cipher, RecordingGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="先吃蔬菜再吃主食有什么依据？"),
+    )
+
+    assert queries and "先吃蔬菜再吃主食" in queries[0]
+    assert queries == ["先吃蔬菜再吃主食有什么依据？"]
+    assert result.route == "deterministic_public"
+    assert result.text != "个性化健康建议请私聊 BodyOS。"
 
 
 def test_dm_sends_only_deterministic_features_not_raw_question_or_identity(
