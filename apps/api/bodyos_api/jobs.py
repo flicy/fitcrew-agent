@@ -6,9 +6,13 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from bodyos_api.bodyos import BodyOSService, ConversationRequest
 from bodyos_api.config import get_settings
+from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import make_engine
+from bodyos_api.group_coach import FeishuGroupDispatcher, GroupCoachScheduler
 from bodyos_api.models import DailyFeature, HealthSample, OutboxEvent, User
+from bodyos_api.runtime import get_model_gateway
 
 RAW_RETENTION_DAYS = 30
 AGGREGATE_RETENTION_MONTHS = 13
@@ -71,23 +75,77 @@ def run_once(session: Session, *, now: datetime, study_start: date | None) -> di
     }
 
 
+def run_worker_cycle(
+    session: Session,
+    *,
+    now: datetime,
+    settings,
+    dispatcher,
+    run_maintenance: bool,
+    study_start: date | None,
+) -> dict[str, int]:
+    enqueued = GroupCoachScheduler(session, settings).enqueue_due(now)
+    delivery = dispatcher.dispatch_due(now)
+    maintenance = (
+        run_once(session, now=now, study_start=study_start)
+        if run_maintenance
+        else {"raw_deleted": 0, "aggregates_deleted": 0, "checkpoint_events": 0}
+    )
+    return {
+        "group_events_enqueued": enqueued,
+        "group_events_delivered": delivery["delivered"],
+        "group_events_retried": delivery["retried"],
+        "group_events_failed": delivery["failed"],
+        **maintenance,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run content-free BodyOS maintenance jobs")
     parser.add_argument("command", choices=("once", "loop"), nargs="?", default="once")
-    parser.add_argument("--interval-seconds", type=int, default=21_600)
+    parser.add_argument("--interval-seconds", type=int, default=60)
+    parser.add_argument("--maintenance-seconds", type=int, default=21_600)
     args = parser.parse_args()
     settings = get_settings()
     study_start = (
         date.fromisoformat(settings.study_start_date) if settings.study_start_date else None
     )
     engine = make_engine(settings.database_url)
+    encoded_key = settings.encryption_key.get_secret_value()
+    if not encoded_key:
+        raise RuntimeError("BODYOS_ENCRYPTION_KEY is required")
+    cipher = FieldCipher.from_base64(encoded_key)
+    gateway = get_model_gateway()
+    last_maintenance_at: datetime | None = None
     while True:
+        now = datetime.now(UTC)
+        run_maintenance = (
+            last_maintenance_at is None
+            or (now - last_maintenance_at).total_seconds() >= max(300, args.maintenance_seconds)
+        )
         with Session(engine) as session:
-            counts = run_once(session, now=datetime.now(UTC), study_start=study_start)
+            service = BodyOSService(session, cipher, gateway)
+            dispatcher = FeishuGroupDispatcher(
+                session,
+                settings,
+                weekly_answer=lambda question, service=service: service.handle(
+                    "", ConversationRequest(channel="group", text=question)
+                ).text,
+            )
+            counts = run_worker_cycle(
+                session,
+                now=now,
+                settings=settings,
+                dispatcher=dispatcher,
+                run_maintenance=run_maintenance,
+                study_start=study_start,
+            )
+        if run_maintenance:
+            last_maintenance_at = now
         print(json.dumps({"job": "maintenance", **counts}, separators=(",", ":")), flush=True)
         if args.command == "once":
             break
-        time.sleep(max(300, args.interval_seconds))
+        time.sleep(max(30, args.interval_seconds))
 
 
 if __name__ == "__main__":

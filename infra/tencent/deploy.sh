@@ -13,6 +13,7 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "Runtime environment missing; collecting owner-only values without echoing secrets."
     (cd "$HERE" && python3 generate-runtime-env.py)
 fi
+(cd "$HERE" && python3 generate-runtime-env.py --append-defaults --output runtime/.env.runtime)
 
 mkdir -p "$RUNTIME/acme" "$RUNTIME/tls" "$RUNTIME/letsencrypt" "$RUNTIME/backups" \
     "$RUNTIME/private-books" "$RUNTIME/owner"

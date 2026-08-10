@@ -54,6 +54,14 @@ def test_tencent_compose_has_owner_alpha_hardening() -> None:
     assert "healthcheck:" in compose
     assert '"8000:8000"' not in compose
     assert "/tmp:size=64m,mode=1777" in compose
+    assert '["bodyos-jobs", "loop", "--interval-seconds", "60"]' in compose
+    worker_service = compose.split("  worker:\n", maxsplit=1)[1].split(
+        "\n  gateway:\n", maxsplit=1
+    )[0]
+    assert "codex_auth:/home/bodyos/.codex" in worker_service
+    assert "hermes_home:/home/bodyos/.hermes" in worker_service
+    jobs_source = (ROOT / "apps/api/bodyos_api/jobs.py").read_text()
+    assert "time.sleep(max(30, args.interval_seconds))" in jobs_source
 
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     assert "--wait --wait-timeout 120 db api caddy" in workflow
@@ -167,6 +175,28 @@ def test_examples_do_not_contain_committable_secrets() -> None:
     assert "cli_" not in example
     assert "CHANGE_ME" not in example
     assert "BODYOS_ENCRYPTION_KEY=" not in example
+    assert "BODYOS_PROACTIVE_GROUP_ENABLED" in example
+    assert "BODYOS_GROUP_TIMEZONE" in example
+
+
+def test_deploy_atomically_adds_only_missing_non_secret_group_defaults() -> None:
+    generator = (ROOT / "infra/tencent/generate-runtime-env.py").read_text()
+    deploy = (ROOT / "infra/tencent/deploy.sh").read_text()
+
+    for name in (
+        "BODYOS_PROACTIVE_GROUP_ENABLED",
+        "BODYOS_GROUP_TIMEZONE",
+        "BODYOS_GROUP_MORNING_TIME",
+        "BODYOS_GROUP_EVENING_TIME",
+        "BODYOS_GROUP_WEEKLY_WEEKDAY",
+        "BODYOS_GROUP_WEEKLY_TIME",
+        "BODYOS_GROUP_QUIET_START",
+        "BODYOS_GROUP_QUIET_END",
+    ):
+        assert name in generator
+    assert "os.replace" in generator
+    assert "--append-defaults" in generator
+    assert "generate-runtime-env.py --append-defaults" in deploy
 
 
 def test_shared_book_publication_command_is_content_free_and_private_to_the_api() -> None:
