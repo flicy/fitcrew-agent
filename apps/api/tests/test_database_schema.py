@@ -31,3 +31,11 @@ def test_health_samples_have_owner_scoped_idempotency_key() -> None:
     }
 
     assert ("fitcrew_user_id", "sample_id") in unique_column_sets
+
+
+def test_group_outbox_has_idempotent_schedule_and_retry_fields() -> None:
+    table = Base.metadata.tables["outbox_events"]
+
+    assert table.c.fitcrew_user_id.nullable is True
+    for name in ("idempotency_key", "scheduled_for", "next_attempt_at", "last_error_code"):
+        assert name in table.c
