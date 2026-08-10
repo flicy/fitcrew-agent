@@ -98,6 +98,10 @@ _SECRET_RE = re.compile(
     r"\s*[:=：]?\s*[a-z0-9._-]{6,}\b"
 )
 _MENTION_RE = re.compile(r"(?is)<at\b[^>]*>.*?</at>|@(?:BodyOS|黑客松助手|_user_\d+)\s*")
+_UNTRUSTED_PUBLIC_MENTION_RE = re.compile(
+    r"(?is)<at\b|@_user_\d+|@(?!(?:BodyOS|黑客松助手)(?:\s|$))\S+"
+)
+_REPEATED_CHINESE_CHARACTER_RE = re.compile(r"([\u4e00-\u9fff])\1")
 _FIRST_PERSON_RE = re.compile(r"(?i)(?:我|本人|我的|我们|my\b|me\b|mine\b|i\s+(?:am|have|feel)\b)")
 _THIRD_PERSON_RE = re.compile(
     r"(?i)(?:"
@@ -388,7 +392,6 @@ _REVIEWED_PUBLIC_PHRASES = tuple(
             "了",
             "会",
             "能",
-            "可",
             "有",
             "里",
             "中",
@@ -469,7 +472,7 @@ _REVIEWED_PUBLIC_ENGLISH_WORDS = frozenset(
 _PUBLIC_QUESTION_PUNCTUATION_RE = re.compile(r"[\s，。！？；：、,.!?;:'\"()（）《》\-]+")
 
 
-def _plain_text(text: str) -> str:
+def _unwrapped_text(text: str) -> str:
     normalized = text.strip()
     if normalized.startswith("{"):
         try:
@@ -479,6 +482,11 @@ def _plain_text(text: str) -> str:
         else:
             if isinstance(payload, dict) and isinstance(payload.get("text"), str):
                 normalized = payload["text"]
+    return normalized
+
+
+def _plain_text(text: str) -> str:
+    normalized = _unwrapped_text(text)
     normalized = _MENTION_RE.sub("", normalized)
     return _SPACE_RE.sub(" ", normalized).strip()
 
@@ -546,7 +554,10 @@ def assert_group_safe(text: str) -> str:
 
 def sanitize_public_group_question(text: str) -> str | None:
     """Return a bounded general-health question or fail closed to private coaching."""
-    normalized = _plain_text(text)
+    unwrapped = _unwrapped_text(text)
+    if _UNTRUSTED_PUBLIC_MENTION_RE.search(unwrapped):
+        return None
+    normalized = _plain_text(unwrapped)
     if not normalized or len(normalized) > 500:
         return None
     general_start = _PUBLIC_GENERAL_START_RE.search(normalized)
@@ -558,6 +569,7 @@ def sanitize_public_group_question(text: str) -> str | None:
         or _contains_named_health_context(normalized)
         or _contains_identity_target(normalized)
         or _MIXED_LATIN_IDENTITY_RE.search(normalized)
+        or _REPEATED_CHINESE_CHARACTER_RE.search(normalized)
         or _MEDICAL_RE.search(normalized)
         or _contains_unsafe_intervention(normalized)
         or _DIAGNOSTIC_INFERENCE_RE.search(normalized)

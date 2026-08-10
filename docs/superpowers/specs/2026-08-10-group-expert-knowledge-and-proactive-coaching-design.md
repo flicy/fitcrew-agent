@@ -39,7 +39,7 @@
 
 1. 使用已验证的飞书身份和群白名单完成授权。
 2. 把问题分类为固定行为、通用知识或私人/高风险问题。
-3. 通用问题必须完全由审核过的饮食、训练、睡眠、控糖概念和问句连接词组成；任何未审核姓名、疗法、药名、数值形式或提示注入都关闭式转私聊。
+3. 先拒绝成员提及和不可信提及占位符；通用问题必须完全由审核过的饮食、训练、睡眠、控糖概念和问句连接词组成，任何未审核姓名、昵称、疗法、药名、数值形式或提示注入都关闭式转私聊。
 4. 从共享专家知识检索最多三个带页码片段。
 5. 选择与问题意图匹配的本地审核知识模板，并填入真实书名与页码。
 6. 对最终字符串执行精确的审核模板与引用匹配；任意自由文本都被拒绝。
@@ -142,7 +142,7 @@ Members must still explicitly mention the Hackathon Assistant in a Feishu group 
 
 1. Authorize the verified Feishu identity and allowlisted group.
 2. Classify the request as a fixed behavior, general knowledge, or private/high-risk content.
-3. Require the question to consist entirely of reviewed food, training, sleep, glucose-management concepts and question connectors; any unreviewed name, intervention, drug, numeric form, or prompt injection fails closed to a DM.
+3. Reject member mentions and untrusted mention placeholders first. Then require the question to consist entirely of reviewed food, training, sleep, glucose-management concepts and question connectors; any unreviewed name, nickname, intervention, drug, numeric form, or prompt injection fails closed to a DM.
 4. Retrieve at most three page-cited passages from shared expert knowledge.
 5. Select the locally reviewed knowledge template for the question intent and fill it with the real title and page.
 6. Require an exact reviewed-template and citation match for the final string; reject every free-form output.
