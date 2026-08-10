@@ -46,7 +46,13 @@ class FeishuDeliveryError(RuntimeError):
 
 class FeishuTextTransport(Protocol):
     def send_text(
-        self, *, app_id: str, app_secret: str, group_id: str, text: str
+        self,
+        *,
+        app_id: str,
+        app_secret: str,
+        group_id: str,
+        text: str,
+        idempotency_key: str,
     ) -> None: ...
 
 
@@ -55,10 +61,18 @@ class HttpxFeishuTransport:
         self._timeout_seconds = timeout_seconds
 
     def send_text(
-        self, *, app_id: str, app_secret: str, group_id: str, text: str
+        self,
+        *,
+        app_id: str,
+        app_secret: str,
+        group_id: str,
+        text: str,
+        idempotency_key: str,
     ) -> None:
-        if not app_id or not app_secret or not group_id:
+        if not app_id or not app_secret or not group_id or not idempotency_key:
             raise FeishuDeliveryError("configuration_missing")
+        if len(idempotency_key) > 50:
+            raise FeishuDeliveryError("invalid_idempotency_key")
         try:
             with httpx.Client(timeout=self._timeout_seconds) as client:
                 token_response = client.post(
@@ -71,7 +85,7 @@ class HttpxFeishuTransport:
                     raise FeishuDeliveryError("authentication_failed")
                 send_response = client.post(
                     "https://open.feishu.cn/open-apis/im/v1/messages",
-                    params={"receive_id_type": "chat_id"},
+                    params={"receive_id_type": "chat_id", "uuid": idempotency_key},
                     headers={"Authorization": f"Bearer {token}"},
                     json={
                         "receive_id": group_id,
@@ -193,6 +207,7 @@ class FeishuGroupDispatcher:
                 or_(OutboxEvent.next_attempt_at.is_(None), OutboxEvent.next_attempt_at <= now),
             )
             .order_by(OutboxEvent.scheduled_for, OutboxEvent.created_at)
+            .with_for_update(skip_locked=True)
         ).all()
         for event in events:
             try:
@@ -202,6 +217,7 @@ class FeishuGroupDispatcher:
                     app_secret=self._settings.feishu_app_secret.get_secret_value(),
                     group_id=self._settings.feishu_allowed_group_id,
                     text=text,
+                    idempotency_key=event.idempotency_key or event.id,
                 )
             except FeishuDeliveryError as error:
                 event.attempt_count += 1

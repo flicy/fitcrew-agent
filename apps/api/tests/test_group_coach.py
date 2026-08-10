@@ -99,7 +99,13 @@ class FakeTransport:
         self.calls: list[dict[str, str]] = []
 
     def send_text(
-        self, *, app_id: str, app_secret: str, group_id: str, text: str
+        self,
+        *,
+        app_id: str,
+        app_secret: str,
+        group_id: str,
+        text: str,
+        idempotency_key: str,
     ) -> None:
         self.calls.append(
             {
@@ -107,6 +113,7 @@ class FakeTransport:
                 "app_secret": app_secret,
                 "group_id": group_id,
                 "text": text,
+                "idempotency_key": idempotency_key,
             }
         )
         if self.error_code:
@@ -130,6 +137,7 @@ def test_dispatcher_sends_only_to_configured_group_and_marks_delivered(
     assert event.attempt_count == 1
     assert event.last_error_code is None
     assert transport.calls[0]["group_id"] == settings.feishu_allowed_group_id
+    assert transport.calls[0]["idempotency_key"] == event.idempotency_key
     assert "小行动" in transport.calls[0]["text"]
     assert "oc_test_group" not in event.payload_json
 
