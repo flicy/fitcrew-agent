@@ -8,6 +8,7 @@ ENV_FILE="$RUNTIME/.env.runtime"
 COMPOSE="docker compose --env-file $ENV_FILE -f $HERE/compose.yaml"
 ROLLBACK_ARMED=0
 ROLLBACK_ATTEMPTED=0
+ROLLBACK_AVAILABLE=0
 ROLLBACK_DB_REVISION=0002_pairing_exchange_sessions
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -146,9 +147,10 @@ esac
 case "$PREVIOUS_IMAGE_TAG" in
     [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f])
         if docker image inspect "fitcrew-bodyos:$PREVIOUS_IMAGE_TAG" >/dev/null 2>&1; then
-            ROLLBACK_ARMED=1
+            ROLLBACK_AVAILABLE=1
         else
             echo "Previous immutable image is unavailable; deployment will stop rather than claim rollback coverage." >&2
+            exit 1
         fi
         ;;
     *)
@@ -156,13 +158,14 @@ case "$PREVIOUS_IMAGE_TAG" in
         ;;
 esac
 
-if [ "$ROLLBACK_ARMED" -eq 1 ]; then
+if [ "$ROLLBACK_AVAILABLE" -eq 1 ]; then
     "$HERE/backup.sh"
 fi
 
 echo "Building immutable BodyOS image for ${DEPLOY_SHA}."
 FITCREW_IMAGE_TAG="$DEPLOY_SHA" $COMPOSE build api
 python3 "$HERE/set-runtime-image.py" --file "$ENV_FILE" "$DEPLOY_SHA"
+ROLLBACK_ARMED=$ROLLBACK_AVAILABLE
 
 echo "Starting database, API, worker, Feishu gateway, and HTTPS gateway."
 $COMPOSE up -d db api worker gateway caddy

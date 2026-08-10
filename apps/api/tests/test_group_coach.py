@@ -2,10 +2,17 @@ import json
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
 from bodyos_api import group_coach as group_coach_module
 from bodyos_api.config import Settings
 from bodyos_api.dlp import sanitize_public_group_question
-from bodyos_api.group_coach import FeishuDeliveryError, FeishuGroupDispatcher, GroupCoachScheduler
+from bodyos_api.group_coach import (
+    FeishuDeliveryError,
+    FeishuDeliverySuppressed,
+    FeishuGroupDispatcher,
+    GroupCoachScheduler,
+    HttpxFeishuTransport,
+)
 from bodyos_api.models import OutboxEvent
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -121,8 +128,13 @@ def test_scheduler_rejects_invalid_schedule_configuration_before_writing(
 
 
 class FakeTransport:
-    def __init__(self, error_code: str | None = None):
+    def __init__(
+        self,
+        error_code: str | None = None,
+        before_preflight=None,
+    ):
         self.error_code = error_code
+        self.before_preflight = before_preflight
         self.calls: list[dict[str, str]] = []
 
     def send_text(
@@ -133,7 +145,11 @@ class FakeTransport:
         group_id: str,
         text: str,
         idempotency_key: str,
+        preflight,
     ) -> None:
+        if self.before_preflight is not None:
+            self.before_preflight()
+        preflight()
         self.calls.append(
             {
                 "app_id": app_id,
@@ -145,6 +161,53 @@ class FakeTransport:
         )
         if self.error_code:
             raise FeishuDeliveryError(self.error_code)
+
+
+def test_http_transport_runs_final_preflight_after_token_and_before_message_post(
+    monkeypatch,
+) -> None:
+    urls: list[str] = []
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict:
+            return {"code": 0, "tenant_access_token": "opaque"}
+
+    class Client:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            del args
+
+        def post(self, url: str, **kwargs):
+            del kwargs
+            urls.append(url)
+            return Response()
+
+    monkeypatch.setattr(group_coach_module.httpx, "Client", Client)
+
+    def reject_post() -> None:
+        raise FeishuDeliverySuppressed("expired", "delivery_window_closed")
+
+    with pytest.raises(FeishuDeliverySuppressed):
+        HttpxFeishuTransport().send_text(
+            app_id="app",
+            app_secret="secret",
+            group_id="group",
+            text="safe",
+            idempotency_key="event-key",
+            preflight=reject_post,
+        )
+
+    assert urls == [
+        "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+    ]
 
 
 def test_dispatcher_sends_only_to_configured_group_and_marks_delivered(
@@ -357,3 +420,29 @@ def test_dispatcher_rechecks_window_and_disable_immediately_before_transport(
     assert transport.calls == []
     assert event is not None and event.status == "cancelled"
     assert event.last_error_code == "proactive_disabled"
+
+
+def test_transport_rechecks_window_after_token_fetch_and_before_message_post(
+    session: Session,
+) -> None:
+    scheduled = datetime(2026, 8, 12, 1, 0, tzinfo=UTC)
+    settings = enabled_settings()
+    assert GroupCoachScheduler(session, settings).enqueue_due(scheduled) == 1
+    clock_now = [scheduled + timedelta(minutes=4, seconds=59, milliseconds=500)]
+
+    def finish_token_fetch() -> None:
+        clock_now[0] = scheduled + timedelta(minutes=5, milliseconds=1)
+
+    transport = FakeTransport(before_preflight=finish_token_fetch)
+    counts = FeishuGroupDispatcher(
+        session,
+        settings,
+        transport=transport,
+        clock=lambda: clock_now[0],
+    ).dispatch_due(clock_now[0])
+
+    event = session.scalar(select(OutboxEvent))
+    assert counts["failed"] == 1
+    assert transport.calls == []
+    assert event is not None and event.status == "expired"
+    assert event.last_error_code == "delivery_window_closed"

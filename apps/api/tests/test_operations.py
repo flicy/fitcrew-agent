@@ -242,6 +242,12 @@ def test_group_outbox_downgrade_removes_ownerless_events_before_restoring_not_nu
     assert 'alembic downgrade "$ROLLBACK_DB_REVISION"' in deploy
     assert 'FITCREW_IMAGE_TAG="$DEPLOY_SHA"' in deploy
     assert '"$HERE/backup.sh"' in deploy
+    assert deploy.index("ROLLBACK_ARMED=$ROLLBACK_AVAILABLE") > deploy.index(
+        'set-runtime-image.py" --file "$ENV_FILE" "$DEPLOY_SHA"'
+    )
+    assert deploy.index("ROLLBACK_ARMED=$ROLLBACK_AVAILABLE") > deploy.index(
+        '$COMPOSE build api'
+    )
 
 
 def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:

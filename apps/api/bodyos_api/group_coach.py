@@ -46,6 +46,13 @@ class FeishuDeliveryError(RuntimeError):
         self.code = safe_code
 
 
+class FeishuDeliverySuppressed(RuntimeError):
+    def __init__(self, status: str, code: str):
+        super().__init__(code)
+        self.status = status
+        self.code = code
+
+
 class FeishuTextTransport(Protocol):
     def send_text(
         self,
@@ -55,6 +62,7 @@ class FeishuTextTransport(Protocol):
         group_id: str,
         text: str,
         idempotency_key: str,
+        preflight: Callable[[], None],
     ) -> None: ...
 
 
@@ -70,6 +78,7 @@ class HttpxFeishuTransport:
         group_id: str,
         text: str,
         idempotency_key: str,
+        preflight: Callable[[], None],
     ) -> None:
         if not app_id or not app_secret or not group_id or not idempotency_key:
             raise FeishuDeliveryError("configuration_missing")
@@ -85,6 +94,7 @@ class HttpxFeishuTransport:
                 token = token_payload.get("tenant_access_token")
                 if token_response.status_code != 200 or token_payload.get("code") != 0 or not token:
                     raise FeishuDeliveryError("authentication_failed")
+                preflight()
                 send_response = client.post(
                     "https://open.feishu.cn/open-apis/im/v1/messages",
                     params={"receive_id_type": "chat_id", "uuid": idempotency_key},
@@ -277,7 +287,13 @@ class FeishuGroupDispatcher:
                     group_id=self._settings.feishu_allowed_group_id,
                     text=text,
                     idempotency_key=event.idempotency_key or event.id,
+                    preflight=lambda event=event: self._assert_delivery_open(event),
                 )
+            except FeishuDeliverySuppressed as suppressed:
+                event.status = suppressed.status
+                event.last_error_code = suppressed.code
+                event.next_attempt_at = None
+                counts["failed"] += 1
             except FeishuDeliveryError as error:
                 event.attempt_count += 1
                 event.last_error_code = error.code
@@ -296,6 +312,11 @@ class FeishuGroupDispatcher:
                 counts["delivered"] += 1
         self._session.commit()
         return counts
+
+    def _assert_delivery_open(self, event: OutboxEvent) -> None:
+        rejection = self._delivery_rejection(event, self._clock())
+        if rejection is not None:
+            raise FeishuDeliverySuppressed(*rejection)
 
     def _delivery_rejection(
         self, event: OutboxEvent, at: datetime
