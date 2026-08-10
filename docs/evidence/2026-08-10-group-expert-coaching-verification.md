@@ -8,7 +8,7 @@
 
 ### 本地门禁（2026-08-10）
 
-- `uv run pytest -q`：331 项通过；唯一警告来自既有 Starlette/httpx 测试兼容性弃用提示。
+- `uv run pytest -q`：334 项通过；唯一警告来自既有 Starlette/httpx 测试兼容性弃用提示。
 - `uv run ruff check .`：通过。
 - `uv run python scripts/check_bilingual_docs.py`：通过。
 - `sh -n infra/tencent/*.sh scripts/*.sh` 与 `git diff --check`：通过。
@@ -18,7 +18,7 @@
 
 ### 策略证据
 
-自动化测试覆盖：仅 Owner 的三个已审核标题可进入共享知识；未经确认的私人权利状态必须先留下独立审核记录，相同哈希重复导入幂等，只有内容变化才替换旧版本。群聊问题必须完全由审核过的公共健康概念与问句连接词组成，先拒绝任何成员提及或不可信占位提及，再做正文清理；任何未审核姓名、昵称、疗法、药名或数字形式都会关闭式转私聊。群聊用安全问题检索 `published` 范围，最多返回三段候选，但只把最高相关结果的真实书名与页码填入本地审核模板；任意模型自由文本、缺失/虚构引用、个人问题、身份、健康数值、诊断、治疗、用药和供应商错误都不能进入群聊。私聊模型路径保持独立。检索或投递失败使用固定安全回退；主动任务具有总开关复核、静默期、从配置时刻计算的五分钟有效窗口、唯一事件键、飞书 `uuid`、三次有限重试与无正文 Outbox。
+自动化测试覆盖：仅 Owner 的三个已审核标题可进入共享知识；未经确认的私人权利状态必须先留下独立审核记录，相同哈希重复导入幂等，只有内容变化才替换旧版本。群聊问题必须匹配审核过的完整“公共健康主题—关系—主题”语法，先拒绝任何成员提及或不可信占位提及，再做正文清理；词片段不能自由拼接成身份，任何未审核姓名、昵称、疗法、药名或数字形式都会关闭式转私聊。群聊用安全问题检索 `published` 范围，最多返回三段候选，但只把最高相关结果的真实书名与页码填入本地审核模板；任意模型自由文本、缺失/虚构引用、个人问题、身份、健康数值、诊断、治疗、用药和供应商错误都不能进入群聊。私聊模型路径保持独立。检索或投递失败使用固定安全回退；主动任务具有总开关复核、静默期、从配置时刻计算的五分钟有效窗口、唯一事件键、飞书 `uuid`、三次有限重试与无正文 Outbox。
 
 ## English
 
@@ -28,7 +28,7 @@ This record verifies code, policy, scheduling, and builds only. It contains no m
 
 ### Local gates (2026-08-10)
 
-- `uv run pytest -q`: 331 passed; the only warning is the existing Starlette/httpx test-compatibility deprecation.
+- `uv run pytest -q`: 334 passed; the only warning is the existing Starlette/httpx test-compatibility deprecation.
 - `uv run ruff check .`: passed.
 - `uv run python scripts/check_bilingual_docs.py`: passed.
 - `sh -n infra/tencent/*.sh scripts/*.sh` and `git diff --check`: passed.
@@ -38,4 +38,4 @@ This record verifies code, policy, scheduling, and builds only. It contains no m
 
 ### Policy evidence
 
-Automated tests cover: only the Owner's three reviewed titles may enter shared knowledge; an unconfirmed private-rights state must first receive a separate audit record, a repeated identical hash is idempotent, and only changed content supersedes an old edition. A group question must consist entirely of reviewed public-health concepts and question connectors. Member mentions and untrusted mention placeholders are rejected before text cleanup; any unreviewed name, nickname, intervention, drug, or numeric form fails closed to a DM. A group searches the `published` scope with the safe question and may retrieve three candidates, but only the top result's real title and page fill a locally reviewed template. Arbitrary model text, missing or fabricated citations, personal questions, identity, health values, diagnosis, treatment, medication, and provider errors cannot enter a group reply. The DM model path remains separate. Retrieval or delivery failure uses a fixed safe fallback; proactive jobs recheck the master switch, quiet hours, a five-minute validity window measured from the configured schedule, a unique event key, Feishu `uuid`, three bounded retries, and a content-free Outbox.
+Automated tests cover: only the Owner's three reviewed titles may enter shared knowledge; an unconfirmed private-rights state must first receive a separate audit record, a repeated identical hash is idempotent, and only changed content supersedes an old edition. A group question must match a reviewed complete “public-health topic—relation—topic” grammar. Member mentions and untrusted mention placeholders are rejected before text cleanup; word fragments cannot be freely composed into an identity, and any unreviewed name, nickname, intervention, drug, or numeric form fails closed to a DM. A group searches the `published` scope with the safe question and may retrieve three candidates, but only the top result's real title and page fill a locally reviewed template. Arbitrary model text, missing or fabricated citations, personal questions, identity, health values, diagnosis, treatment, medication, and provider errors cannot enter a group reply. The DM model path remains separate. Retrieval or delivery failure uses a fixed safe fallback; proactive jobs recheck the master switch, quiet hours, a five-minute validity window measured from the configured schedule, a unique event key, Feishu `uuid`, three bounded retries, and a content-free Outbox.

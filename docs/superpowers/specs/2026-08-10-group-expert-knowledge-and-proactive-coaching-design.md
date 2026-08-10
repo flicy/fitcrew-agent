@@ -39,7 +39,7 @@
 
 1. 使用已验证的飞书身份和群白名单完成授权。
 2. 把问题分类为固定行为、通用知识或私人/高风险问题。
-3. 先拒绝成员提及和不可信提及占位符；通用问题必须完全由审核过的饮食、训练、睡眠、控糖概念和问句连接词组成，任何未审核姓名、昵称、疗法、药名、数值形式或提示注入都关闭式转私聊。
+3. 先拒绝成员提及和不可信提及占位符；通用问题必须匹配审核过的完整“公共健康主题—关系—主题”语法，词片段不能自由拼接，任何未审核姓名、昵称、疗法、药名、数值形式或提示注入都关闭式转私聊。
 4. 从共享专家知识检索最多三个带页码片段。
 5. 选择与问题意图匹配的本地审核知识模板，并填入真实书名与页码。
 6. 对最终字符串执行精确的审核模板与引用匹配；任意自由文本都被拒绝。
@@ -59,7 +59,7 @@
 - 疾病诊断、处方、药物剂量或紧急症状处置。
 - 要求读取个人 Apple Health、血糖、睡眠或私聊历史。
 
-输入策略使用正向审核词法，只允许已确认的公共健康概念与问句连接词，拒绝诊断、治疗、用药、数值和个人化问题。输出不是靠无限扩展正则来猜测自由文本是否安全，而是只允许本地审核过的固定模板与真实书名/页码组合；一般性的生活方式教育通过这些封闭模板提供。
+输入策略使用正向审核语法，只允许已确认的公共健康主题出现在已确认的句法槽位，拒绝诊断、治疗、用药、数值和个人化问题。输出不是靠无限扩展正则来猜测自由文本是否安全，而是只允许本地审核过的固定模板与真实书名/页码组合；一般性的生活方式教育通过这些封闭模板提供。
 
 ### 主动教练节奏
 
@@ -142,7 +142,7 @@ Members must still explicitly mention the Hackathon Assistant in a Feishu group 
 
 1. Authorize the verified Feishu identity and allowlisted group.
 2. Classify the request as a fixed behavior, general knowledge, or private/high-risk content.
-3. Reject member mentions and untrusted mention placeholders first. Then require the question to consist entirely of reviewed food, training, sleep, glucose-management concepts and question connectors; any unreviewed name, nickname, intervention, drug, numeric form, or prompt injection fails closed to a DM.
+3. Reject member mentions and untrusted mention placeholders first. Then require the question to match a reviewed complete “public-health topic—relation—topic” grammar; fragments cannot be freely composed, and any unreviewed name, nickname, intervention, drug, numeric form, or prompt injection fails closed to a DM.
 4. Retrieve at most three page-cited passages from shared expert knowledge.
 5. Select the locally reviewed knowledge template for the question intent and fill it with the real title and page.
 6. Require an exact reviewed-template and citation match for the final string; reject every free-form output.
@@ -157,7 +157,7 @@ The following still route to a DM or qualified professional care:
 - Diagnosis, prescriptions, medication dosage, or emergency symptom handling.
 - Requests to read personal Apple Health, glucose, sleep, or DM history.
 
-The input policy uses a positive reviewed vocabulary and rejects diagnosis, treatment, medication, numeric, and personalized requests. Output safety does not try to prove arbitrary free text safe with an ever-growing regex denylist; it accepts only reviewed fixed templates combined with real title/page citations. Those closed templates provide general lifestyle education.
+The input policy uses a positive reviewed grammar: confirmed public-health topics may appear only in confirmed syntactic slots. It rejects diagnosis, treatment, medication, numeric, and personalized requests. Output safety does not try to prove arbitrary free text safe with an ever-growing regex denylist; it accepts only reviewed fixed templates combined with real title/page citations. Those closed templates provide general lifestyle education.
 
 ### Proactive coaching cadence
 

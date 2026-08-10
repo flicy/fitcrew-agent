@@ -190,7 +190,7 @@ _PUBLIC_GENERAL_START_RE = re.compile(
     r"(?:why|how|what|which|does|do|can|is|are|should|in\s+general|generally|usually|"
     r"after|before|food|diet|meal|training|workout|exercise|sleep|recovery|glucose)\b)"
 )
-_TITLECASE_IDENTITY_RE = re.compile(r"\b[A-Z][a-z]{1,30}\b")
+_TITLECASE_IDENTITY_RE = re.compile(r"\b[A-Z][a-z]{0,30}\b")
 _ENGLISH_NAMED_HEALTH_CONTEXT_RE = re.compile(
     r"(?i)(?:"
     r"(?:why|how|what)\s+(?:does|can|is|should)\s+([a-z][a-z'-]{1,30})\s+"
@@ -284,192 +284,58 @@ _CHINESE_ALIAS_RE = re.compile(
 _SAFE_CHINESE_ALIASES = frozenset(
     {"小行动", "小步骤", "小目标", "小习惯", "小幅度", "小一点"}
 )
-_REVIEWED_PUBLIC_PHRASES = tuple(
-    sorted(
-        {
-            "一般来说",
-            "通常来说",
-            "一顿饭里",
-            "一顿饭中",
-            "一顿饭",
-            "餐食结构",
-            "饮食结构",
-            "进食顺序",
-            "力量训练",
-            "训练计划",
-            "睡眠节律",
-            "睡眠不足",
-            "稳定起床时间",
-            "起床时间",
-            "晚饭后散步",
-            "饭后散步",
-            "餐后散步",
-            "短期冲刺",
-            "可持续",
-            "小行动",
-            "生活方式",
-            "身体感受",
-            "身体感知",
-            "餐后波动",
-            "血糖波动",
-            "葡萄糖曲线",
-            "碳水化合物",
-            "蛋白质",
-            "为什么",
-            "有什么",
-            "有没有",
-            "有助于",
-            "会不会",
-            "更重要",
-            "一般",
-            "通常",
-            "怎样",
-            "怎么",
-            "如何",
-            "为何",
-            "什么",
-            "哪些",
-            "是否",
-            "能否",
-            "可以",
-            "可能",
-            "主食",
-            "蔬菜",
-            "碳水",
-            "食欲",
-            "犯困",
-            "困倦",
-            "恢复",
-            "睡眠",
-            "睡觉",
-            "训练",
-            "运动",
-            "健身",
-            "散步",
-            "步行",
-            "跑步",
-            "血糖",
-            "葡萄糖",
-            "控糖",
-            "饮食",
-            "食物",
-            "餐食",
-            "进食",
-            "早餐",
-            "午餐",
-            "晚餐",
-            "晚饭",
-            "饭后",
-            "餐后",
-            "机制",
-            "原理",
-            "依据",
-            "关系",
-            "意义",
-            "影响",
-            "节律",
-            "作息",
-            "稳定",
-            "建立",
-            "支持",
-            "改善",
-            "帮助",
-            "形成",
-            "安排",
-            "管理",
-            "保持",
-            "开始",
-            "选择",
-            "需要",
-            "之间",
-            "重要",
-            "和",
-            "与",
-            "及",
-            "或",
-            "对",
-            "的",
-            "了",
-            "会",
-            "能",
-            "有",
-            "里",
-            "中",
-            "受",
-            "比",
-            "更",
-            "先",
-            "再",
-            "后",
-            "前",
-            "时",
-            "吃",
-            "吗",
-            "呢",
-        },
-        key=len,
-        reverse=True,
+_REVIEWED_CN_TOPIC = (
+    r"(?:晚饭后散步|饭后散步|餐后散步|饭后犯困|餐后犯困|餐食结构|饮食结构|"
+    r"进食顺序|力量训练|训练计划|睡眠不足|睡眠节律|稳定起床时间|起床时间|"
+    r"短期冲刺|可持续的小行动|小行动|生活方式|身体感受|身体感知|餐后波动|"
+    r"血糖波动|葡萄糖曲线|碳水化合物|蛋白质|主食|蔬菜|碳水|食欲|困倦|"
+    r"恢复|睡眠|训练|运动|健身|散步|步行|跑步|血糖|葡萄糖|控糖|饮食|"
+    r"食物|餐食|进食|作息)"
+)
+_REVIEWED_CN_RELATION = (
+    r"(?:有助于|影响|支持|改善|建立|形成|管理|保持|帮助|关联|相关|"
+    r"有什么关系|有什么意义|有什么依据|为什么更重要)"
+)
+_REVIEWED_CN_QUESTION_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        rf"^(?:一般来说|通常来说)?{_REVIEWED_CN_TOPIC}(?:通常|一般)?"
+        rf"(?:为什么|为何|怎样|怎么|如何|是否|能否|会不会|有什么)?"
+        rf"(?:会|能|可以)?{_REVIEWED_CN_RELATION}(?:{_REVIEWED_CN_TOPIC})?$",
+        rf"^(?:为什么|为何){_REVIEWED_CN_TOPIC}(?:通常|一般)?(?:会|能|可以)?"
+        rf"{_REVIEWED_CN_RELATION}(?:{_REVIEWED_CN_TOPIC})?$",
+        rf"^(?:怎样|怎么|如何){_REVIEWED_CN_RELATION}(?:更稳定的|稳定的|更)?"
+        rf"{_REVIEWED_CN_TOPIC}$",
+        rf"^{_REVIEWED_CN_TOPIC}(?:可能)?(?:和|与|及){_REVIEWED_CN_TOPIC}"
+        r"(?:有什么关系|有什么意义|有什么依据|怎样互相影响|如何互相影响)$",
+        rf"^一顿饭(?:里|中){_REVIEWED_CN_TOPIC}(?:和|与){_REVIEWED_CN_TOPIC}的"
+        rf"{_REVIEWED_CN_TOPIC}(?:通常)?(?:有什么意义|有什么依据)$",
+        rf"^{_REVIEWED_CN_TOPIC}(?:和|与){_REVIEWED_CN_TOPIC}的"
+        rf"{_REVIEWED_CN_TOPIC}(?:通常)?(?:有什么意义|有什么依据)$",
+        rf"^先(?:吃)?{_REVIEWED_CN_TOPIC}再(?:吃)?{_REVIEWED_CN_TOPIC}"
+        rf"(?:有什么依据|有什么意义|为什么有助于{_REVIEWED_CN_TOPIC})$",
+        r"^训练计划中为什么可持续的小行动比短期冲刺更重要$",
+        r"^睡眠通常怎样受稳定起床时间影响$",
     )
 )
-_REVIEWED_PUBLIC_ENGLISH_WORDS = frozenset(
-    {
-        "a",
-        "affect",
-        "an",
-        "and",
-        "appetite",
-        "are",
-        "before",
-        "between",
-        "can",
-        "carbohydrate",
-        "carbohydrates",
-        "diet",
-        "do",
-        "does",
-        "exercise",
-        "food",
-        "for",
-        "general",
-        "generally",
-        "glucose",
-        "help",
-        "how",
-        "in",
-        "is",
-        "meal",
-        "meals",
-        "of",
-        "or",
-        "order",
-        "postmeal",
-        "protein",
-        "recovery",
-        "rhythm",
-        "should",
-        "sleep",
-        "stable",
-        "strength",
-        "structure",
-        "support",
-        "the",
-        "time",
-        "to",
-        "training",
-        "usually",
-        "vegetables",
-        "wake",
-        "walk",
-        "walking",
-        "what",
-        "when",
-        "which",
-        "why",
-        "with",
-        "workout",
-    }
+_REVIEWED_EN_TOPIC = (
+    r"(?:walking after a meal|postmeal walking|strength training|meal order|"
+    r"stable wake time|sleep rhythm|sleep recovery|sleep|recovery|glucose|diet|food|"
+    r"exercise|training|appetite|vegetables|protein|carbohydrates?)"
 )
-_PUBLIC_QUESTION_PUNCTUATION_RE = re.compile(r"[\s，。！？；：、,.!?;:'\"()（）《》\-]+")
+_REVIEWED_EN_RELATION = r"(?:affect|help|support|improve|relate to|matter for)"
+_REVIEWED_EN_QUESTION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        rf"^(?:why|how|what|which) (?:does|do|can|should|is|are) "
+        rf"{_REVIEWED_EN_TOPIC} {_REVIEWED_EN_RELATION}(?: {_REVIEWED_EN_TOPIC})?$",
+        rf"^{_REVIEWED_EN_TOPIC} (?:usually )?{_REVIEWED_EN_RELATION} "
+        rf"{_REVIEWED_EN_TOPIC}$",
+        rf"^{_REVIEWED_EN_TOPIC} (?:and|with|or) {_REVIEWED_EN_TOPIC} "
+        r"(?:relate to each other|affect each other)$",
+    )
+)
+_PUBLIC_QUESTION_PUNCTUATION_RE = re.compile(r"[，。！？；：、,.!?;:'\"()（）《》\-]+")
 
 
 def _unwrapped_text(text: str) -> str:
@@ -534,14 +400,15 @@ def _contains_unsafe_intervention(text: str) -> bool:
     return False
 
 
-def _uses_only_reviewed_public_vocabulary(text: str) -> bool:
-    english_words = re.findall(r"[a-z][a-z'-]*", text.casefold())
-    if any(word not in _REVIEWED_PUBLIC_ENGLISH_WORDS for word in english_words):
-        return False
-    residual = re.sub(r"(?i)[a-z][a-z'-]*", "", text)
-    for phrase in _REVIEWED_PUBLIC_PHRASES:
-        residual = residual.replace(phrase, "")
-    return not _PUBLIC_QUESTION_PUNCTUATION_RE.sub("", residual)
+def _matches_reviewed_public_question_grammar(text: str) -> bool:
+    without_punctuation = _PUBLIC_QUESTION_PUNCTUATION_RE.sub("", text).strip()
+    compact_chinese = re.sub(r"\s+", "", without_punctuation)
+    if any(pattern.fullmatch(compact_chinese) for pattern in _REVIEWED_CN_QUESTION_PATTERNS):
+        return True
+    normalized_english = _SPACE_RE.sub(" ", without_punctuation).strip()
+    return any(
+        pattern.fullmatch(normalized_english) for pattern in _REVIEWED_EN_QUESTION_PATTERNS
+    )
 
 
 def assert_group_safe(text: str) -> str:
@@ -579,7 +446,7 @@ def sanitize_public_group_question(text: str) -> str | None:
         or _HEALTH_UNIT_RE.search(normalized)
         or not _PUBLIC_TOPIC_RE.search(normalized)
         or general_start is None
-        or not _uses_only_reviewed_public_vocabulary(normalized)
+        or not _matches_reviewed_public_question_grammar(normalized)
     ):
         return None
     remainder = normalized[general_start.end() :]
