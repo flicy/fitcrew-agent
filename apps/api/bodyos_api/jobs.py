@@ -31,7 +31,7 @@ _SHARED_CITATION_RE = re.compile(
 
 def _weekly_public_answer(service: BodyOSService, question: str) -> str:
     result = service.handle("", ConversationRequest(channel="group", text=question))
-    if result.route in {"deterministic", "deterministic_public"}:
+    if result.route != "deterministic_public_knowledge":
         raise RuntimeError("weekly public answer unavailable")
     if _SHARED_CITATION_RE.search(result.text) is None:
         raise RuntimeError("weekly public answer unavailable")

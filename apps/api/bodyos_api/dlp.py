@@ -8,6 +8,82 @@ class SensitiveOutput(ValueError):
     pass
 
 
+PUBLIC_FALLBACKS = {
+    "glucose_coaching": (
+        "一般而言，均衡餐食、合理进食顺序和饭后舒适活动有助于管理餐后波动。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "sleep_coaching": (
+        "规律作息、稳定起床时间和合适的白天活动通常有助于睡眠与恢复。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "activity_coaching": (
+        "训练量、恢复时间和睡眠需要共同安排；可以从能稳定坚持的小行动开始。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "knowledge_coaching": (
+        "健康知识需要结合适用范围理解；可以先选择一个今天能稳定完成的小行动。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+    "general_health_coaching": (
+        "可以先选择一个今天能够稳定完成的小行动，再观察长期变化。"
+        "个体情况请在 BodyOS 私聊中讨论。"
+    ),
+}
+PROACTIVE_FIXED_TEMPLATES = {
+    "morning_action": (
+        "早上好。今天你最想稳定完成的一个健康小行动是什么？可以从足够小的一步开始。"
+    ),
+    "evening_checkin": (
+        "今晚的小行动完成了吗？可以回复：已完成、需要搭子，或行动小一点。"
+    ),
+}
+WEEKLY_PUBLIC_FALLBACKS = {
+    "meal_order": "本周一起讨论：一顿饭中的进食顺序，怎样帮助我们形成更稳定的饮食行动？",
+    "small_actions": "本周一起讨论：怎样把健康目标变成今天可以完成的一小步？",
+    "sleep_rhythm": "本周一起讨论：怎样用稳定作息支持睡眠与恢复？",
+}
+_KNOWLEDGE_STEMS = {
+    intent: message.removesuffix("个体情况请在 BodyOS 私聊中讨论。").strip().rstrip("。！？；;")
+    for intent, message in PUBLIC_FALLBACKS.items()
+}
+_REVIEWED_STATIC_MESSAGES = frozenset(
+    [
+        *PUBLIC_FALLBACKS.values(),
+        *PROACTIVE_FIXED_TEMPLATES.values(),
+        *WEEKLY_PUBLIC_FALLBACKS.values(),
+    ]
+)
+_REVIEWED_TITLES = frozenset(
+    {"控糖革命", "百岁人生行动手册", "睡眠优化完全指南：科学与实践"}
+)
+_REVIEWED_SUFFIX = "个体情况请在 BodyOS 私聊中讨论。"
+
+
+def render_public_knowledge_answer(intent: str, title: str, page: int) -> str:
+    if intent not in _KNOWLEDGE_STEMS or title not in _REVIEWED_TITLES:
+        raise SensitiveOutput("public knowledge template is not reviewed")
+    if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= 99_999:
+        raise SensitiveOutput("public knowledge page is invalid")
+    return f"{_KNOWLEDGE_STEMS[intent]}（《{title}》第{page}页）。{_REVIEWED_SUFFIX}"
+
+
+def _is_reviewed_public_message(text: str) -> bool:
+    if text in _REVIEWED_STATIC_MESSAGES:
+        return True
+    citations = _CITATION_RE.findall(text)
+    if len(citations) != 1:
+        return False
+    title, page = citations[0]
+    try:
+        return any(
+            text == render_public_knowledge_answer(intent, title, int(page))
+            for intent in _KNOWLEDGE_STEMS
+        )
+    except (SensitiveOutput, ValueError):
+        return False
+
+
 _CANONICAL_GROUP_MESSAGES = frozenset(token.message for token in BehaviorToken)
 
 _EMAIL_RE = re.compile(r"(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b")
@@ -43,6 +119,7 @@ _NAMED_SCENARIO_RE = re.compile(
 _MEDICAL_RE = re.compile(
     r"(?i)(?:诊断|确诊|疾病|病症|治疗|处方|药物|用药|剂量|二甲双胍|胰岛素|急诊|昏迷|"
     r"药|(?:安神|助眠|降糖)(?:片|剂)|褪黑素|镇静剂|注射|打针|口服|服药|吃药|"
+    r"手术|旁路|切除|植入|[\u4e00-\u9fff]{2,12}(?:肽|激素)|"
     r"(?:吃|用|使用|服用).{0,8}(?:片|剂|药|素|辅助品)|病|症|患者|胸痛|呼吸困难|"
     r"doctor|diagnos|disease|treatment|medication|dosage|melatonin|metformin|emergency)"
 )
@@ -58,6 +135,7 @@ _LIFESTYLE_OBJECT_RE = re.compile(
 )
 _DIAGNOSTIC_INFERENCE_RE = re.compile(
     r"(?i)(?:说明|表明|意味着|判断).{0,12}(?:是不是|是否|是|有|患)|"
+    r"(?:说明|表明|意味着|判断).{0,20}(?:存在|出现).{0,12}(?:倾向|风险|病|症)|"
     r"(?:是不是|是否).{0,12}(?:病|症|患者)|"
     r"(?:indicate|mean|show|determine).{0,20}(?:diagnos|disease|condition)"
 )
@@ -148,9 +226,15 @@ _PERSONALIZED_ANSWER_RE = re.compile(
     r"your (?:glucose|sleep|heart rate|health data)|you (?:have|are diagnosed))"
 )
 _SPELLED_HEALTH_VALUE_RE = re.compile(
-    r"(?i)(?:血糖|葡萄糖|心率|HRV|体重|睡眠).{0,12}"
+    r"(?i)(?:(?:血糖|葡萄糖|心率|HRV|体重|睡眠).{0,12}"
+    r"[零〇一二两三四五六七八九十百]+(?:点[零〇一二两三四五六七八九]+)?|"
     r"[零〇一二两三四五六七八九十百]+(?:点[零〇一二两三四五六七八九]+)?"
+    r"(?:左右|上下|约|是|为|的).{0,8}(?:血糖|葡萄糖|心率|HRV|体重|睡眠))"
     r"(?:毫摩尔每升|毫摩尔|mg/dl|mmol/l|次每分|小时|公斤)?"
+)
+_MIXED_LATIN_IDENTITY_RE = re.compile(
+    r"(?i)(?:[\u4e00-\u9fff].*\b[a-z][a-z'-]{1,30}\b|"
+    r"\b[a-z][a-z'-]{1,30}\b.*[\u4e00-\u9fff])"
 )
 _HEALTH_UNIT_RE = re.compile(
     r"(?i)(?:毫摩尔(?:每升)?|mmol\s*/\s*l|millimoles?\s+per\s+lit(?:re|er)|"
@@ -276,6 +360,7 @@ def sanitize_public_group_question(text: str) -> str | None:
         or _NAMED_SCENARIO_RE.search(normalized)
         or _contains_named_health_context(normalized)
         or _contains_identity_target(normalized)
+        or _MIXED_LATIN_IDENTITY_RE.search(normalized)
         or _MEDICAL_RE.search(normalized)
         or _contains_unsafe_intervention(normalized)
         or _DIAGNOSTIC_INFERENCE_RE.search(normalized)
@@ -294,31 +379,14 @@ def sanitize_public_group_question(text: str) -> str | None:
 
 
 def assert_public_group_answer(text: str) -> str:
-    """Validate a model answer before it can be relayed to a Feishu group."""
+    """Accept only locally rendered and reviewed public messages."""
     if not isinstance(text, str):
         raise SensitiveOutput("public group answer must be text")
     normalized = _SPACE_RE.sub(" ", text).strip()
     if not normalized or len(normalized) > 800:
         raise SensitiveOutput("public group answer must be non-empty and bounded")
-    medical_check = _SAFE_MEDICAL_DISCLAIMER_RE.sub("", normalized)
-    number_check = _CITATION_RE.sub("", normalized)
-    if (
-        _contains_identifier(normalized)
-        or _contains_named_health_context(normalized)
-        or _contains_identity_target(normalized)
-        or _PERSONALIZED_ANSWER_RE.search(normalized)
-        or _SPELLED_HEALTH_VALUE_RE.search(normalized)
-        or _HEALTH_UNIT_RE.search(normalized)
-        or re.search(r"(?i)(?:你|you).{0,24}(?:糖尿病|疾病|病症|患者|diabetes|disease)", normalized)
-        or _UNSAFE_MEDICAL_ANSWER_RE.search(normalized)
-        or _MEDICAL_RE.search(medical_check)
-        or _contains_unsafe_intervention(normalized)
-        or _DIAGNOSTIC_INFERENCE_RE.search(normalized)
-        or _NUMBER_RE.search(number_check)
-        or _PROVIDER_DETAIL_RE.search(normalized)
-        or any(ord(character) < 32 for character in normalized)
-    ):
-        raise SensitiveOutput("public group answer contains private or medical content")
+    if not _is_reviewed_public_message(normalized):
+        raise SensitiveOutput("public group answer is not a reviewed local template")
     return normalized
 
 

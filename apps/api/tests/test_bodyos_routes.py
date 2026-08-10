@@ -6,6 +6,7 @@ from bodyos_api.app import create_app
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
+from bodyos_api.dlp import render_public_knowledge_answer
 from bodyos_api.knowledge import KnowledgeService
 from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import (
@@ -241,24 +242,17 @@ def test_general_group_question_returns_a_checked_public_answer_envelope(
     )
 
     assert response.status_code == 200
+    reviewed = render_public_knowledge_answer("glucose_coaching", "控糖革命", 12)
     assert response.json() == {
         "mode": "group_public",
-        "reply": "安全建议（《控糖革命》第12页）。",
+        "reply": reviewed,
         "envelope": {
             "schema_version": "bodyos-group-answer.v1",
             "channel": "group",
-            "reply": "安全建议（《控糖革命》第12页）。",
+            "reply": reviewed,
         },
     }
-    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"
-    assert "features" not in gateway.envelopes[0]
-    assert gateway.envelopes[0]["knowledge"] == [
-        {
-            "title": "控糖革命",
-            "page": 12,
-            "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
-        }
-    ]
+    assert gateway.envelopes == []
 
 
 def test_group_endpoints_return_public_fallback_when_model_is_unavailable(
@@ -291,7 +285,7 @@ def test_group_endpoints_return_public_fallback_when_model_is_unavailable(
     assert reply_response.json()["route"] == "deterministic_public"
 
 
-def test_proxy_returns_only_a_prechecked_public_group_answer(
+def test_proxy_rejects_freeform_public_group_answers(
     session: Session, field_cipher: FieldCipher
 ) -> None:
     gateway = RecordingGateway()
@@ -317,9 +311,7 @@ def test_proxy_returns_only_a_prechecked_public_group_answer(
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["choices"][0]["message"]["content"] == envelope["reply"]
-    assert response.json()["bodyos_route"] == "deterministic"
+    assert response.status_code == 403
     assert gateway.envelopes == []
 
 
@@ -577,18 +569,10 @@ def test_reply_endpoint_returns_a_checked_public_group_answer_without_private_co
     assert response.status_code == 200
     assert response.json() == {
         "mode": "group_public",
-        "reply": "安全建议（《控糖革命》第12页）。",
-        "route": "codex",
+        "reply": render_public_knowledge_answer("glucose_coaching", "控糖革命", 12),
+        "route": "deterministic_public_knowledge",
     }
-    assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"
-    assert "features" not in gateway.envelopes[0]
-    assert gateway.envelopes[0]["knowledge"] == [
-        {
-            "title": "控糖革命",
-            "page": 12,
-            "excerpt": "进餐顺序可能影响餐后葡萄糖曲线。",
-        }
-    ]
+    assert gateway.envelopes == []
 
 
 def test_reply_endpoint_fails_closed_for_third_person_health_context(

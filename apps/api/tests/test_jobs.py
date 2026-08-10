@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import pytest
 from bodyos_api.bodyos import ConversationReply
 from bodyos_api.config import Settings
+from bodyos_api.dlp import render_public_knowledge_answer
 from bodyos_api.jobs import _weekly_public_answer, run_once, run_worker_cycle
 from bodyos_api.models import DailyFeature, OutboxEvent, User
 from sqlalchemy import func, select
@@ -29,15 +30,16 @@ class StubWeeklyService:
         return self.reply
 
 
-def test_weekly_worker_accepts_only_a_real_public_model_answer() -> None:
+def test_weekly_worker_accepts_only_a_reviewed_public_knowledge_answer() -> None:
+    reviewed_answer = render_public_knowledge_answer("glucose_coaching", "控糖革命", 12)
     assert (
         _weekly_public_answer(
             StubWeeklyService(
-                ConversationReply("有页码的公共回答（《控糖革命》第12页）。", "codex")
+                ConversationReply(reviewed_answer, "deterministic_public_knowledge")
             ),
             "公共问题",
         )
-        == "有页码的公共回答（《控糖革命》第12页）。"
+        == reviewed_answer
     )
     for route in ("deterministic", "deterministic_public"):
         with pytest.raises(RuntimeError, match="weekly public answer unavailable"):
@@ -47,7 +49,7 @@ def test_weekly_worker_accepts_only_a_real_public_model_answer() -> None:
             )
     with pytest.raises(RuntimeError, match="weekly public answer unavailable"):
         _weekly_public_answer(
-            StubWeeklyService(ConversationReply("没有引用的公共回答", "codex")),
+            StubWeeklyService(ConversationReply("没有引用的公共回答", "deterministic_public")),
             "公共问题",
         )
 

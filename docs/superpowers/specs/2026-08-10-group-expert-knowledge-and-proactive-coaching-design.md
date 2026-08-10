@@ -31,7 +31,7 @@
 
 现有知识来源经一次明确的发布操作进入 `public + published` 状态，并移除用户所有权。发布操作必须保留来源版本、内容哈希、权利状态和审核记录。书籍原文不进入 Git、日志、群聊历史或公共网页。
 
-私聊检索可以同时使用共享专家知识和该用户自己的私人知识；群聊只能使用 `public + published` 的共享知识。每次检索最多返回三个相关片段，模型负责概括，不输出长段原文，并保留书名和页码引用。
+私聊检索可以同时使用共享专家知识和该用户自己的私人知识；群聊只能使用 `public + published` 的共享知识。每次群聊检索最多返回三个相关片段，服务只用最高相关片段的书名与页码填充本地审核模板，不把摘录或自由文本交给群聊模型。私聊模型仍可在对应用户授权边界内概括知识。
 
 ### 群聊被动问答
 
@@ -41,10 +41,9 @@
 2. 把问题分类为固定行为、通用知识或私人/高风险问题。
 3. 通用问题完成标识符、联系方式、个人数值和提示注入清理。
 4. 从共享专家知识检索最多三个带页码片段。
-5. 构造不含用户身份、健康特征、私聊历史和原始数据的 `bodyos-public.v2` 信封。
-6. 通过 Codex 主路由和 Hermes 备用路由生成简短中文回答。
-7. 对答案执行身份、个人化、原始数值、诊断、用药、基础设施错误和控制字符检查。
-8. 安全答案返回群聊；模型不可用或答案被拒绝时返回经过审核的通用知识兜底，不再把所有合法问题都导向私聊。
+5. 选择与问题意图匹配的本地审核知识模板，并填入真实书名与页码。
+6. 对最终字符串执行精确的审核模板与引用匹配；任意自由文本都被拒绝。
+7. 安全答案返回群聊；检索失败时返回经过审核的通用知识兜底，不再把所有合法问题都导向私聊。
 
 以下问题属于群聊允许范围：
 
@@ -60,7 +59,7 @@
 - 疾病诊断、处方、药物剂量或紧急症状处置。
 - 要求读取个人 Apple Health、血糖、睡眠或私聊历史。
 
-输出安全策略从“命中任意医疗词即拒绝”改为“拒绝诊断、治疗、用药和个人化结论”。一般性的生理机制、生活方式教育和谨慎免责声明允许出现。
+输入策略拒绝诊断、治疗、用药和个人化问题。输出不是靠无限扩展正则来猜测自由文本是否安全，而是只允许本地审核过的固定模板与真实书名/页码组合；一般性的生活方式教育通过这些封闭模板提供。
 
 ### 主动教练节奏
 
@@ -72,12 +71,12 @@
 
 默认安静时段为 22:00–08:00。时间、时区和总开关均由生产环境配置控制，不需要重新构建镜像。每个触发事件使用“群 + 事件类型 + 本地日期”作为幂等键；服务重启、网络重试或并发运行不得产生重复消息。
 
-早间和晚间消息使用审核过的固定模板，不调用模型。每周专家知识消息使用固定安全主题、共享知识检索和群聊公共答案门禁；模型或检索失败时使用审核过的固定提示，不发送供应商错误或私人内容。
+早间和晚间消息使用审核过的固定模板，不调用模型。每周专家知识消息使用固定安全主题、共享知识检索和本地审核的书籍引用模板；检索失败时使用审核过的固定提示，不发送供应商错误或私人内容。
 
 ### 组件与数据流
 
 - `KnowledgeService`：发布共享来源，分别提供 `search_public`、`search_private` 和组合私聊检索。
-- `BodyOSService`：为群聊通用问题构造带共享知识的公共信封，并提供安全的确定性兜底。
+- `BodyOSService`：为群聊通用问题检索共享知识，以本地审核模板渲染引用答案，并提供安全的确定性兜底；只在私聊调用模型。
 - `GroupCoachScheduler`：根据上海时间生成到期事件，只写入无个人信息的 Outbox。
 - `FeishuGroupDispatcher`：使用现有飞书应用凭据和已配置群白名单发送经过检查的群消息，不接受任意群 ID。
 - 维护 Worker：以短周期检查到期触发与待发送 Outbox，同时保留原有六小时维护和研究检查点。
@@ -95,7 +94,7 @@
 
 ### 验收标准
 
-- 群聊通用问题可以得到引用共享书籍的答案，且信封不包含用户 ID、个人特征、私聊内容或原始健康值。
+- 群聊通用问题可以得到引用共享书籍的答案，且不调用模型、不包含用户 ID、个人特征、私聊内容、知识摘录或原始健康值。
 - 合法的通用生理机制和生活方式回答不会仅因出现谨慎医疗措辞而被拒绝。
 - 个人、第三人、数值、诊断和用药问题仍安全关闭。
 - 每日 09:00、20:30 和每周三 12:15 各只产生一条消息；重启与重试不会重复。
@@ -135,7 +134,7 @@ The initial shared sources are:
 
 An explicit publication operation moves each existing source into the `public + published` state and removes user ownership. Publication retains the source version, content hash, rights status, and review record. Book text never enters Git, logs, public web pages, or unbounded group history.
 
-DM retrieval may combine shared expert knowledge with that user's own private knowledge. Group retrieval may use only `public + published` knowledge. A retrieval returns at most three relevant page-scoped passages. The model summarizes rather than reproducing long passages and preserves title and page citations.
+DM retrieval may combine shared expert knowledge with that user's own private knowledge. Group retrieval may use only `public + published` knowledge. It retrieves at most three relevant page-scoped passages, then fills a locally reviewed template with the top passage's real title and page; no excerpt or free-form text is sent to a group model. A DM model may still summarize knowledge within that user's authorization boundary.
 
 ### Reactive group Q&A
 
@@ -145,10 +144,9 @@ Members must still explicitly mention the Hackathon Assistant in a Feishu group 
 2. Classify the request as a fixed behavior, general knowledge, or private/high-risk content.
 3. Remove identifiers, contact details, personal values, and prompt-injection material from a general question.
 4. Retrieve at most three page-cited passages from shared expert knowledge.
-5. Build a `bodyos-public.v2` envelope without user identity, personal features, DM history, or raw data.
-6. Generate a concise Chinese answer through the Codex primary route and Hermes fallback.
-7. Check the answer for identity, personalization, raw values, diagnosis, medication, infrastructure errors, and control characters.
-8. Return a safe answer to the group. If the model is unavailable or the answer is rejected, return a reviewed general-knowledge fallback instead of redirecting every valid question to a DM.
+5. Select the locally reviewed knowledge template for the question intent and fill it with the real title and page.
+6. Require an exact reviewed-template and citation match for the final string; reject every free-form output.
+7. Return the safe answer to the group. If retrieval fails, return a reviewed general-knowledge fallback instead of redirecting every valid question to a DM.
 
 Allowed examples include questions about post-meal sleepiness and meal composition, walking after a meal, strength training and sleep recovery, or eating vegetables before staple foods.
 
@@ -159,7 +157,7 @@ The following still route to a DM or qualified professional care:
 - Diagnosis, prescriptions, medication dosage, or emergency symptom handling.
 - Requests to read personal Apple Health, glucose, sleep, or DM history.
 
-The output policy changes from “reject any medical word” to “reject diagnosis, treatment, medication, and personalized conclusions.” General physiological mechanisms, lifestyle education, and cautious disclaimers are allowed.
+The input policy rejects diagnosis, treatment, medication, and personalized requests. Output safety does not try to prove arbitrary free text safe with an ever-growing regex denylist; it accepts only reviewed fixed templates combined with real title/page citations. Those closed templates provide general lifestyle education.
 
 ### Proactive coaching cadence
 
@@ -171,12 +169,12 @@ Production gains a dedicated group scheduler and Outbox consumer. The default ti
 
 Default quiet hours are 22:00–08:00. Times, timezone, and the master enable switch are production configuration and do not require rebuilding the image. Each event uses group, event type, and local date as its idempotency key, so restarts, retries, and concurrent workers cannot create duplicate messages.
 
-Morning and evening messages use reviewed fixed templates and do not call a model. The weekly message uses a fixed safe topic, shared retrieval, and the public group answer gate. If retrieval or the model fails, it uses a reviewed fixed prompt and never emits provider errors or private content.
+Morning and evening messages use reviewed fixed templates and do not call a model. The weekly message uses a fixed safe topic, shared retrieval, and a locally reviewed book-citation template. If retrieval fails, it uses a reviewed fixed prompt and never emits provider errors or private content.
 
 ### Components and data flow
 
 - `KnowledgeService`: publishes shared sources and provides public, private, and combined DM retrieval.
-- `BodyOSService`: builds public envelopes with shared knowledge and supplies deterministic safe fallbacks.
+- `BodyOSService`: retrieves shared knowledge for groups, renders a locally reviewed cited answer, and supplies deterministic safe fallbacks; it invokes a model only for DMs.
 - `GroupCoachScheduler`: creates due events in Shanghai time and writes only content-free or general-knowledge Outbox records.
 - `FeishuGroupDispatcher`: sends checked group messages with the existing Feishu app credentials and configured group allowlist; it never accepts an arbitrary group ID.
 - Maintenance worker: checks due triggers and pending Outbox events at a short interval while preserving the existing six-hour maintenance and study checkpoints.
@@ -194,7 +192,7 @@ The proactive Outbox stores only event type, template or knowledge topic, config
 
 ### Acceptance criteria
 
-- A general group question can receive an answer citing shared books, while its envelope contains no user ID, personal feature, DM content, or raw health value.
+- A general group question can receive an answer citing shared books without a model call or any user ID, personal feature, DM content, knowledge excerpt, or raw health value.
 - Valid general physiology and lifestyle answers are not rejected merely for cautious medical language.
 - Personal, third-party, numeric, diagnosis, and medication requests still fail closed.
 - The daily 09:00 and 20:30 events and Wednesday 12:15 event each produce exactly one message; restarts and retries do not duplicate them.

@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
 from bodyos_api.dlp import (
+    PUBLIC_FALLBACKS,
     assert_public_group_answer,
     assert_public_knowledge_citations,
+    render_public_knowledge_answer,
     sanitize_private_request_context,
     sanitize_public_group_question,
 )
@@ -145,33 +147,9 @@ _CATEGORY_GROUPS = (
     ),
 )
 
-_PUBLIC_FALLBACKS = {
-    "glucose_coaching": (
-        "一般而言，均衡餐食、合理进食顺序和饭后舒适活动有助于管理餐后波动。"
-        "个体情况请在 BodyOS 私聊中讨论。"
-    ),
-    "sleep_coaching": (
-        "规律作息、稳定起床时间和合适的白天活动通常有助于睡眠与恢复。"
-        "个体情况请在 BodyOS 私聊中讨论。"
-    ),
-    "activity_coaching": (
-        "训练量、恢复时间和睡眠需要共同安排；可以从能稳定坚持的小行动开始。"
-        "个体情况请在 BodyOS 私聊中讨论。"
-    ),
-    "knowledge_coaching": (
-        "健康知识需要结合适用范围理解；可以先选择一个今天能稳定完成的小行动。"
-        "个体情况请在 BodyOS 私聊中讨论。"
-    ),
-    "general_health_coaching": (
-        "可以先选择一个今天能够稳定完成的小行动，再观察长期变化。"
-        "个体情况请在 BodyOS 私聊中讨论。"
-    ),
-}
-
-
 def public_group_fallback(intent: str) -> str:
     return assert_public_group_answer(
-        _PUBLIC_FALLBACKS.get(intent, _PUBLIC_FALLBACKS["general_health_coaching"])
+        PUBLIC_FALLBACKS.get(intent, PUBLIC_FALLBACKS["general_health_coaching"])
     )
 
 
@@ -196,14 +174,19 @@ class BodyOSService:
                 envelope = self._with_public_knowledge(public_base)
                 if not envelope["knowledge"]:
                     raise ValueError("public expert knowledge is unavailable")
-                reply = self._model_gateway.respond(envelope)
-                safe_reply = assert_public_knowledge_citations(reply.text, envelope["knowledge"])
+                first_hit = envelope["knowledge"][0]
+                reviewed_reply = render_public_knowledge_answer(
+                    envelope["intent"], first_hit["title"], first_hit["page"]
+                )
+                safe_reply = assert_public_knowledge_citations(
+                    reviewed_reply, envelope["knowledge"]
+                )
             except Exception:
                 return ConversationReply(
                     text=public_group_fallback(public_base["intent"]),
                     route="deterministic_public",
                 )
-            return ConversationReply(text=safe_reply, route=reply.route)
+            return ConversationReply(text=safe_reply, route="deterministic_public_knowledge")
         if request.channel != "dm":
             raise PermissionError("unsupported conversation channel")
 

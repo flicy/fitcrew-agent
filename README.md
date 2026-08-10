@@ -20,7 +20,7 @@ BodyOS 不是一个只会回答问题的 AI 客服。它是运行在飞书里的
    在 BodyOS 私聊中，你可以讨论今天吃了什么、血糖如何变化、自己当时有什么感受。BodyOS 结合授权数据与知识库，帮助你寻找可能的生活方式关系，并给出可执行的小行动。
 
 3. **在群聊里一起行动和学习**
-   BodyOS 可以结合已发布的共享专家知识，回答通用的饮食、训练、睡眠与控糖问题，也可以参与打卡和日常健康互动。群聊不会读取或展示任何成员的个人健康数据、私聊内容或私人书摘。
+   BodyOS 可以结合已发布的共享专家知识，回答通用的饮食、训练、睡眠与控糖问题，也可以参与打卡和日常健康互动。群聊先检索三本已审核书籍，再用本地审核模板生成带书名和页码的回答，不转发模型自由文本。群聊不会读取或展示任何成员的个人健康数据、私聊内容或私人书摘。
 
 4. **用科学书籍辅助判断**
    BodyOS 的共享专家知识层收录《控糖革命》《百岁人生行动手册》《睡眠优化完全指南：科学与实践》。群聊和私聊都可以在安全边界内引用已审核的书名与页码；原始 PDF 不会公开，也不会把书中观点包装成医疗结论。
@@ -42,7 +42,7 @@ BodyOS 不是一个只会回答问题的 AI 客服。它是运行在飞书里的
 - 飞书账号是主账号，系统用不可变的内部用户 ID 隔离每位用户。
 - Apple Health 授权是可选项；没有 Apple 设备或不授权健康数据，也可以使用群聊与非健康数据能力。
 - 健康类别按用户、设备和同意状态分别绑定；授权可撤回，跨用户上传会被拒绝。
-- 原始健康字段加密保存；模型只接收完成回答所需的聚合特征、意图和知识摘录，不接收姓名、飞书 ID、聊天原文或完整原始健康序列。
+- 原始健康字段加密保存；私聊模型只接收完成回答所需的聚合特征、意图和知识摘录，不接收姓名、飞书 ID、聊天原文或完整原始健康序列；群聊知识回答不调用模型。
 - BodyOS 提供生活方式指导，不提供疾病诊断、治疗或用药建议，也不能替代医生。
 
 ### 开发者与验证
@@ -84,7 +84,7 @@ BodyOS is not an AI support bot that forgets after each answer. It is a private 
    In a BodyOS DM, a person can discuss what they ate, how glucose changed, and how they felt at the time. BodyOS combines authorized data with the knowledge base to explore possible lifestyle relationships and suggest a practical small action.
 
 3. **Learn and act together in group chat**
-   BodyOS can use published shared expert knowledge to answer general questions about food, training, sleep, and glucose management, and it can participate in check-ins and everyday health interaction. A group never reads or exposes personal health data, DMs, or private excerpts.
+   BodyOS can use published shared expert knowledge to answer general questions about food, training, sleep, and glucose management, and it can participate in check-ins and everyday health interaction. A group first retrieves from the three reviewed books, then uses a locally reviewed template to produce a title/page-cited answer; it never relays free-form model output. A group never reads or exposes personal health data, DMs, or private excerpts.
 
 4. **Use guidance from scientific books**
    The BodyOS shared expert-knowledge layer includes the confirmed Chinese titles *《控糖革命》*, *《百岁人生行动手册》*, and *《睡眠优化完全指南：科学与实践》*. Groups and DMs may cite reviewed title/page references within their safety boundaries. The source PDFs are not made public, and book claims are not presented as medical conclusions.
@@ -106,7 +106,7 @@ In short: **groups are for general knowledge and shared action; DMs are where yo
 - Feishu is the primary account, and an immutable internal user ID isolates each person.
 - Apple Health authorization is optional. People without Apple hardware or health permission can still use group and non-health-data capabilities.
 - Health categories bind separately to the person, device, and current consent. Consent can be withdrawn, and cross-user uploads are rejected.
-- Raw health fields are encrypted at rest. A model receives only the aggregates, intent, and knowledge excerpts required for the answer—never names, Feishu IDs, raw chats, or a complete raw health series.
+- Raw health fields are encrypted at rest. A DM model receives only the aggregates, intent, and knowledge excerpts required for the answer—never names, Feishu IDs, raw chats, or a complete raw health series. Group knowledge answers do not invoke a model.
 - BodyOS provides lifestyle guidance, not disease diagnosis, treatment, or medication advice, and it does not replace a clinician.
 
 ### Developer and verification

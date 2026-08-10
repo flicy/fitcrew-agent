@@ -13,27 +13,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from bodyos_api.config import Settings
-from bodyos_api.dlp import SensitiveOutput, assert_public_group_answer
+from bodyos_api.dlp import (
+    PROACTIVE_FIXED_TEMPLATES,
+    WEEKLY_PUBLIC_FALLBACKS,
+    SensitiveOutput,
+    assert_public_group_answer,
+)
 from bodyos_api.models import OutboxEvent
 
 _WEEKLY_TOPICS = ("meal_order", "small_actions", "sleep_rhythm")
-_FIXED_TEMPLATES = {
-    "morning_action": (
-        "早上好。今天你最想稳定完成的一个健康小行动是什么？可以从足够小的一步开始。"
-    ),
-    "evening_checkin": (
-        "今晚的小行动完成了吗？可以回复：已完成、需要搭子，或行动小一点。"
-    ),
-}
 _WEEKLY_QUESTIONS = {
     "meal_order": "蔬菜和主食的进食顺序通常有什么意义？",
     "small_actions": "训练计划中为什么可持续的小行动比短期冲刺更重要？",
     "sleep_rhythm": "睡眠通常怎样受稳定起床时间影响？",
-}
-_WEEKLY_FALLBACKS = {
-    "meal_order": "本周一起讨论：一顿饭中的进食顺序，怎样帮助我们形成更稳定的饮食行动？",
-    "small_actions": "本周一起讨论：怎样把健康目标变成今天可以完成的一小步？",
-    "sleep_rhythm": "本周一起讨论：怎样用稳定作息支持睡眠与恢复？",
 }
 _ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 _DELIVERY_GRACE = timedelta(minutes=5)
@@ -356,10 +348,10 @@ class FeishuGroupDispatcher:
             raise FeishuDeliveryError("invalid_event") from error
         if not isinstance(payload, dict):
             raise FeishuDeliveryError("invalid_event")
-        if event.event_type in _FIXED_TEMPLATES:
+        if event.event_type in PROACTIVE_FIXED_TEMPLATES:
             if payload != {"template_id": event.event_type}:
                 raise FeishuDeliveryError("invalid_event")
-            return assert_public_group_answer(_FIXED_TEMPLATES[event.event_type])
+            return assert_public_group_answer(PROACTIVE_FIXED_TEMPLATES[event.event_type])
         if event.event_type == "weekly_expert":
             topic = payload.get("topic_id")
             if set(payload) != {"topic_id"} or topic not in _WEEKLY_QUESTIONS:
@@ -371,5 +363,5 @@ class FeishuGroupDispatcher:
                     )
                 except (Exception, SensitiveOutput):
                     pass
-            return assert_public_group_answer(_WEEKLY_FALLBACKS[topic])
+            return assert_public_group_answer(WEEKLY_PUBLIC_FALLBACKS[topic])
         raise FeishuDeliveryError("invalid_event")

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from bodyos_api import group_coach as group_coach_module
 from bodyos_api.config import Settings
-from bodyos_api.dlp import sanitize_public_group_question
+from bodyos_api.dlp import render_public_knowledge_answer, sanitize_public_group_question
 from bodyos_api.group_coach import (
     FeishuDeliveryError,
     FeishuDeliverySuppressed,
@@ -275,7 +275,7 @@ def test_weekly_dispatch_uses_checked_expert_answer_and_fixed_fallback(
 
     def expert_answer(question: str) -> str:
         questions.append(question)
-        return "饭前先安排蔬菜有助于形成更均衡的进食顺序（《控糖革命》第12页）。"
+        return render_public_knowledge_answer("glucose_coaching", "控糖革命", 12)
 
     counts = FeishuGroupDispatcher(
         session,
