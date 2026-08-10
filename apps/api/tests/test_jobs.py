@@ -1,7 +1,9 @@
 from datetime import UTC, date, datetime
 
+import pytest
+from bodyos_api.bodyos import ConversationReply
 from bodyos_api.config import Settings
-from bodyos_api.jobs import run_once, run_worker_cycle
+from bodyos_api.jobs import _weekly_public_answer, run_once, run_worker_cycle
 from bodyos_api.models import DailyFeature, OutboxEvent, User
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +18,38 @@ class RecordingDispatcher:
     def dispatch_due(self, now: datetime) -> dict[str, int]:
         self.calls.append(now)
         return {"delivered": 1, "retried": 0, "failed": 0}
+
+
+class StubWeeklyService:
+    def __init__(self, reply: ConversationReply):
+        self.reply = reply
+
+    def handle(self, fitcrew_user_id: str, request):
+        del fitcrew_user_id, request
+        return self.reply
+
+
+def test_weekly_worker_accepts_only_a_real_public_model_answer() -> None:
+    assert (
+        _weekly_public_answer(
+            StubWeeklyService(
+                ConversationReply("有页码的公共回答（《控糖革命》第12页）。", "codex")
+            ),
+            "公共问题",
+        )
+        == "有页码的公共回答（《控糖革命》第12页）。"
+    )
+    for route in ("deterministic", "deterministic_public"):
+        with pytest.raises(RuntimeError, match="weekly public answer unavailable"):
+            _weekly_public_answer(
+                StubWeeklyService(ConversationReply("个性化健康建议请私聊 BodyOS。", route)),
+                "公共问题",
+            )
+    with pytest.raises(RuntimeError, match="weekly public answer unavailable"):
+        _weekly_public_answer(
+            StubWeeklyService(ConversationReply("没有引用的公共回答", "codex")),
+            "公共问题",
+        )
 
 
 def test_maintenance_enforces_aggregate_retention_and_idempotent_day16_event(

@@ -16,7 +16,11 @@ class RecordingGateway:
 
     def respond(self, envelope: dict):
         self.envelopes.append(envelope)
-        return type("Reply", (), {"text": "从一顿饭的进食顺序开始。", "route": "codex"})()
+        return type(
+            "Reply",
+            (),
+            {"text": "从一顿饭的进食顺序开始（《控糖革命》第12页）。", "route": "codex"},
+        )()
 
 
 class FailingGateway:
@@ -35,6 +39,22 @@ class DisclaimerGateway:
                 "text": "一般而言，饭后轻松活动有助于肌肉利用葡萄糖；这不是个体诊断。",
                 "route": "codex",
             },
+        )()
+
+
+class UncitedGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        return type("Reply", (), {"text": "从一顿饭的进食顺序开始。", "route": "codex"})()
+
+
+class HallucinatedCitationGateway:
+    def respond(self, envelope: dict):
+        del envelope
+        return type(
+            "Reply",
+            (),
+            {"text": "从一顿饭的进食顺序开始（《虚构书籍》第99页）。", "route": "codex"},
         )()
 
 
@@ -76,6 +96,7 @@ def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
     )
     service.publish_private_source(
         source.id,
+        expected_owner_id=USER_ID,
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
@@ -112,7 +133,7 @@ def test_general_group_question_uses_only_a_public_model_envelope(
     )
 
     assert result.route == "codex"
-    assert result.text == "从一顿饭的进食顺序开始。"
+    assert result.text == "从一顿饭的进食顺序开始（《控糖革命》第12页）。"
     assert gateway.envelopes == [
         {
             "schema_version": "bodyos-public.v2",
@@ -182,6 +203,41 @@ def test_general_group_answer_is_not_discarded_for_a_cautious_disclaimer(
 
     assert result.route == "codex"
     assert "不是个体诊断" in result.text
+
+
+def test_group_answer_falls_back_when_required_citation_is_missing_or_hallucinated(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_shared_glucose_book(session, field_cipher)
+
+    for gateway in (UncitedGateway(), HallucinatedCitationGateway()):
+        result = BodyOSService(session, field_cipher, gateway).handle(
+            USER_ID,
+            ConversationRequest(channel="group", text="晚饭后散步为什么有助于控糖？"),
+        )
+        assert result.route == "deterministic_public"
+        assert result.text.startswith("一般而言")
+
+
+def test_group_retrieval_uses_the_sanitized_question_and_fails_to_public_fallback(
+    session: Session, field_cipher: FieldCipher, monkeypatch
+) -> None:
+    queries: list[str] = []
+
+    def unavailable_search(self, query: str, *, limit: int = 5):
+        del self, limit
+        queries.append(query)
+        raise RuntimeError("encrypted store unavailable")
+
+    monkeypatch.setattr(KnowledgeService, "search_public", unavailable_search)
+    result = BodyOSService(session, field_cipher, RecordingGateway()).handle(
+        USER_ID,
+        ConversationRequest(channel="group", text="先吃蔬菜再吃主食有什么依据？"),
+    )
+
+    assert queries and "先吃蔬菜再吃主食" in queries[0]
+    assert result.route == "deterministic_public"
+    assert result.text != "个性化健康建议请私聊 BodyOS。"
 
 
 def test_dm_sends_only_deterministic_features_not_raw_question_or_identity(

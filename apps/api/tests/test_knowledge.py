@@ -1,3 +1,6 @@
+import importlib.util
+from pathlib import Path
+
 from bodyos_api.crypto import FieldCipher
 from bodyos_api.knowledge import KnowledgeAccessDenied, KnowledgeService
 from bodyos_api.models import KnowledgeChunk, KnowledgeReview, KnowledgeSource, User
@@ -6,6 +9,16 @@ from sqlalchemy.orm import Session
 
 OWNER = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
+ROOT = Path(__file__).parents[3]
+
+
+def _publication_script():
+    path = ROOT / "scripts/publish_shared_books.py"
+    spec = importlib.util.spec_from_file_location("publish_shared_books_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def seed_users(session: Session) -> None:
@@ -61,7 +74,7 @@ def test_other_user_cannot_search_owner_private_book(
         raise AssertionError("another user accessed an owner-only source")
 
 
-def test_public_search_reads_only_published_versions(
+def test_group_public_search_rejects_published_sources_outside_the_three_book_boundary(
     session: Session, field_cipher: FieldCipher
 ) -> None:
     seed_users(session)
@@ -86,7 +99,7 @@ def test_public_search_reads_only_published_versions(
         applicability="一般成人的低强度活动建议",
     )
 
-    assert service.search_public("步行")[0].title == "公共候选"
+    assert service.search_public("步行") == []
 
 
 def test_withdrawn_source_is_removed_from_retrieval(
@@ -165,6 +178,7 @@ def test_private_source_can_be_published_for_shared_retrieval(
 
     published = service.publish_private_source(
         source.id,
+        expected_owner_id=OWNER,
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
@@ -198,6 +212,7 @@ def test_user_search_combines_published_and_owned_private_sources(
     )
     service.publish_private_source(
         shared.id,
+        expected_owner_id=OWNER,
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
@@ -239,6 +254,7 @@ def test_publishing_requires_an_approved_private_source(
     try:
         service.publish_private_source(
             public_draft.id,
+            expected_owner_id=OWNER,
             reviewer_role="owner_editor",
             rationale="invalid source",
             applicability="general",
@@ -247,3 +263,122 @@ def test_publishing_requires_an_approved_private_source(
         pass
     else:
         raise AssertionError("a public draft was republished through the private-source path")
+
+
+def test_publication_rejects_another_users_matching_private_book(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    other_source = service.import_pages(
+        fitcrew_user_id=OTHER,
+        title="控糖革命",
+        author=None,
+        content_hash="5" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "其他用户的私人内容。"},
+    )
+
+    try:
+        service.publish_private_source(
+            other_source.id,
+            expected_owner_id=OWNER,
+            reviewer_role="owner_editor",
+            rationale="must remain private",
+            applicability="general",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("another user's private book was published")
+    assert service.search_public("私人内容") == []
+
+
+def test_publishing_a_new_reviewed_edition_supersedes_the_old_shared_version(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    first = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="6" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={12: "第一版进餐顺序。"},
+    )
+    service.publish_private_source(
+        first.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved internal expert use",
+        applicability="general lifestyle education",
+    )
+    second = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="7" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={14: "第二版蔬菜进食顺序。"},
+    )
+
+    published = service.publish_private_source(
+        second.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved updated internal expert use",
+        applicability="general lifestyle education",
+    )
+
+    assert first.review_status == "superseded"
+    assert published.version == 2
+    assert published.rights_status == "user_provided_internal_expert_use"
+    hits = service.search_public("蔬菜进食顺序")
+    assert {hit.source_id for hit in hits} == {second.id}
+
+
+def test_publication_script_prefers_the_owners_new_private_edition_over_existing_public(
+    session: Session, field_cipher: FieldCipher
+) -> None:
+    seed_users(session)
+    service = KnowledgeService(session, field_cipher)
+    first = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="8" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={1: "第一版。"},
+    )
+    service.publish_private_source(
+        first.id,
+        expected_owner_id=OWNER,
+        reviewer_role="owner_editor",
+        rationale="approved internal expert use",
+        applicability="general lifestyle education",
+    )
+    owner_update = service.import_pages(
+        fitcrew_user_id=OWNER,
+        title="控糖革命",
+        author=None,
+        content_hash="9" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={2: "Owner 更新版。"},
+    )
+    service.import_pages(
+        fitcrew_user_id=OTHER,
+        title="控糖革命",
+        author=None,
+        content_hash="a" * 64,
+        rights_status="user_provided_private_use_unverified",
+        pages={3: "其他用户版本。"},
+    )
+
+    action, candidate = _publication_script().select_title_candidate(
+        session, OWNER, "控糖革命"
+    )
+
+    assert action == "publish"
+    assert candidate is not None
+    assert candidate.id == owner_update.id

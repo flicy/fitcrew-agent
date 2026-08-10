@@ -38,4 +38,5 @@ def downgrade() -> None:
     op.drop_column("outbox_events", "next_attempt_at")
     op.drop_column("outbox_events", "scheduled_for")
     op.drop_column("outbox_events", "idempotency_key")
+    op.execute(sa.text("DELETE FROM outbox_events WHERE fitcrew_user_id IS NULL"))
     op.alter_column("outbox_events", "fitcrew_user_id", existing_type=sa.String(36), nullable=False)

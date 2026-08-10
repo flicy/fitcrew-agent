@@ -6,13 +6,12 @@ from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
 from bodyos_api.dlp import (
-    SensitiveOutput,
     assert_public_group_answer,
+    assert_public_knowledge_citations,
     sanitize_private_request_context,
     sanitize_public_group_question,
 )
 from bodyos_api.knowledge import KnowledgeService
-from bodyos_api.model_gateway import HarnessFailure
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample
 from bodyos_api.policy import BehaviorToken
 
@@ -167,18 +166,19 @@ class BodyOSService:
             explicit_token = classify_explicit_group_token(request.text)
             if explicit_token is not None:
                 return ConversationReply(text=explicit_token.message, route="deterministic")
-            envelope = self.build_public_group_envelope(request.text)
-            if envelope is None:
+            public_base = build_public_group_envelope(request.text)
+            if public_base is None:
                 return ConversationReply(
                     text=BehaviorToken.PRIVATE_COACHING.message,
                     route="deterministic",
                 )
             try:
+                envelope = self._with_public_knowledge(public_base)
                 reply = self._model_gateway.respond(envelope)
-                safe_reply = assert_public_group_answer(reply.text)
-            except (HarnessFailure, SensitiveOutput):
+                safe_reply = assert_public_knowledge_citations(reply.text, envelope["knowledge"])
+            except Exception:
                 return ConversationReply(
-                    text=public_group_fallback(envelope["intent"]),
+                    text=public_group_fallback(public_base["intent"]),
                     route="deterministic_public",
                 )
             return ConversationReply(text=safe_reply, route=reply.route)
@@ -193,7 +193,11 @@ class BodyOSService:
         envelope = build_public_group_envelope(text)
         if envelope is None:
             return None
-        query = _KNOWLEDGE_QUERY[envelope["intent"]]
+        return self._with_public_knowledge(envelope)
+
+    def _with_public_knowledge(self, envelope: dict) -> dict:
+        safe_text = envelope["public_context"]["sanitized_text"]
+        query = f"{safe_text} {_KNOWLEDGE_QUERY[envelope['intent']]}"
         hits = KnowledgeService(self._session, self._cipher).search_public(query, limit=3)
         envelope["knowledge"] = [
             {

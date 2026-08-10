@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
@@ -10,6 +10,19 @@ from bodyos_api.models import KnowledgeChunk, KnowledgeReview, KnowledgeSource
 
 class KnowledgeAccessDenied(PermissionError):
     pass
+
+
+SHARED_EXPERT_TITLES = frozenset(
+    {
+        "控糖革命",
+        "百岁人生行动手册",
+        "睡眠优化完全指南：科学与实践",
+    }
+)
+INTERNAL_EXPERT_RIGHTS = "user_provided_internal_expert_use"
+PUBLISHABLE_PRIVATE_RIGHTS = frozenset(
+    {"user_provided_private_use_unverified", INTERNAL_EXPERT_RIGHTS}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +166,8 @@ class KnowledgeService:
             source_filters=(
                 KnowledgeSource.visibility == "public",
                 KnowledgeSource.review_status == "published",
+                KnowledgeSource.title.in_(SHARED_EXPERT_TITLES),
+                KnowledgeSource.rights_status == INTERNAL_EXPERT_RIGHTS,
             ),
         )
 
@@ -171,6 +186,7 @@ class KnowledgeService:
         self,
         source_id: str,
         *,
+        expected_owner_id: str,
         reviewer_role: str,
         rationale: str,
         applicability: str,
@@ -180,12 +196,39 @@ class KnowledgeService:
             source is None
             or source.visibility != "private"
             or source.review_status != "approved_private"
+            or source.fitcrew_user_id != expected_owner_id
+            or source.title not in SHARED_EXPERT_TITLES
+            or source.rights_status not in PUBLISHABLE_PRIVATE_RIGHTS
         ):
             raise ValueError("approved private knowledge source not found")
-        if not reviewer_role.strip() or not rationale.strip() or not applicability.strip():
+        if (
+            not expected_owner_id.strip()
+            or not reviewer_role.strip()
+            or not rationale.strip()
+            or not applicability.strip()
+        ):
             raise ValueError("publication review fields are required")
+        published_sources = self._session.scalars(
+            select(KnowledgeSource).where(
+                KnowledgeSource.id != source.id,
+                KnowledgeSource.title == source.title,
+                KnowledgeSource.visibility == "public",
+                KnowledgeSource.review_status == "published",
+            )
+        ).all()
+        for published in published_sources:
+            published.review_status = "superseded"
+        prior_version = self._session.scalar(
+            select(func.max(KnowledgeSource.version)).where(
+                KnowledgeSource.id != source.id,
+                KnowledgeSource.title == source.title,
+            )
+        )
+        if prior_version is not None and source.version <= prior_version:
+            source.version = prior_version + 1
         source.fitcrew_user_id = None
         source.visibility = "public"
+        source.rights_status = INTERNAL_EXPERT_RIGHTS
         source.review_status = "published"
         self._session.add(
             KnowledgeReview(

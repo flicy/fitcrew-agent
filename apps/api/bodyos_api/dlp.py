@@ -49,6 +49,21 @@ _UNSAFE_MEDICAL_ANSWER_RE = re.compile(
     r"你(?:患有|得了|应该(?:服用|使用|停用))|建议你(?:服用|使用|停用)|"
     r"diagnosed|prescription|dosage|you should (?:take|stop)|emergency)"
 )
+_SAFE_MEDICAL_DISCLAIMER_RE = re.compile(
+    r"(?i)(?:这|本回答)?不(?:是|构成)(?:个体|医疗|医学)?诊断|"
+    r"不能替代(?:医生|医疗专业人员|专业诊疗)|not (?:a )?(?:personal |medical )?diagnosis"
+)
+_PROVIDER_DETAIL_RE = re.compile(
+    r"(?i)(?:"
+    r"\b(?:api|provider|upstream|backend|status|error|failed|failure|authorization|"
+    r"authentication|credentials?|quota|retry|retries|rate[- ]?limit(?:ed|ing)?|http|"
+    r"request[_ -]?id|bearer|unauthorized|forbidden|unavailable|gateway|timeout|"
+    r"connection)\b|"
+    r"(?<!\d)[45]\d{2}(?!\d)|api[_ -]?key|too\s+many\s+requests|"
+    r"模型(?:服务|提供商|供应商|认证|鉴权|调用)|鉴权|密钥|配额|上游服务|后端服务|"
+    r"错误代码|状态码|调用失败|认证失败|认证错误|配置错误|请重试|限流)"
+)
+_CITATION_RE = re.compile(r"《([^》]{1,300})》[，,\s]*第\s*(\d{1,5})\s*页")
 _PROMPT_INJECTION_RE = re.compile(
     r"(?i)(?:忽略(?:之前|以上|所有)?(?:的)?(?:指令|规则)|绕过(?:规则|限制)|"
     r"system\s+prompt|developer\s+message|reveal\s+(?:the\s+)?prompt|jailbreak)"
@@ -61,13 +76,20 @@ _PUBLIC_TOPIC_RE = re.compile(
 _PUBLIC_GENERAL_START_RE = re.compile(
     r"(?i)^(?:"
     r"(?:为什么|为何|怎样|怎么|如何|什么|哪些|是否|能否|可以|一顿饭|一餐|通常|一般|"
-    r"晚饭后|饭后|餐后|早餐|午餐|晚餐|晚饭|力量训练|训练|运动|健身|散步|跑步|"
+    r"晚饭后|饭后|餐后|早餐|午餐|晚餐|晚饭|先吃|力量训练|训练|运动|健身|散步|跑步|"
     r"睡眠|睡觉|恢复|血糖|葡萄糖|控糖|饮食|食物|进食|蔬菜|蛋白质|碳水)|"
     r"关于(?:饮食|食物|训练|运动|健身|睡眠|恢复|血糖|葡萄糖|控糖)|"
     r"(?:why|how|what|which|does|do|can|is|are|should|in\s+general|generally|usually|"
     r"after|before|food|diet|meal|training|workout|exercise|sleep|recovery|glucose)\b)"
 )
 _TITLECASE_IDENTITY_RE = re.compile(r"\b[A-Z][a-z]{1,30}\b")
+_ENGLISH_NAMED_HEALTH_CONTEXT_RE = re.compile(
+    r"(?i)(?:"
+    r"(?:why|how|what)\s+(?:does|can|is|should)\s+([a-z][a-z'-]{1,30})\s+"
+    r"(?=(?:feel|feels|felt|has|had|gets|sleeps|ate|eats|is|was)\b)|"
+    r"\b([a-z][a-z'-]{1,30})\b\s*(?=(?:晚饭|餐后|睡眠|睡觉|失眠|血糖|葡萄糖|"
+    r"恢复|犯困|训练|运动|身体|不适|感觉)))"
+)
 _CHINESE_SURNAMES = (
     "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻"
     "柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤"
@@ -97,6 +119,20 @@ _EXPLICIT_NAME_RE = re.compile(
 )
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 _SPACE_RE = re.compile(r"\s+")
+_GENERAL_ENGLISH_WORDS = frozenset(
+    {
+        "food",
+        "diet",
+        "meal",
+        "training",
+        "workout",
+        "exercise",
+        "sleep",
+        "recovery",
+        "glucose",
+        "bodyos",
+    }
+)
 
 
 def _plain_text(text: str) -> str:
@@ -120,6 +156,16 @@ def _contains_identifier(text: str) -> bool:
     )
 
 
+def _contains_named_health_context(text: str) -> bool:
+    if _CHINESE_NAMED_HEALTH_CONTEXT_RE.search(text):
+        return True
+    for match in _ENGLISH_NAMED_HEALTH_CONTEXT_RE.finditer(text):
+        candidate = next((value for value in match.groups() if value), "")
+        if candidate.casefold() not in _GENERAL_ENGLISH_WORDS:
+            return True
+    return False
+
+
 def assert_group_safe(text: str) -> str:
     """Accept only canonical, pre-reviewed low-sensitivity group messages."""
     normalized = text.strip()
@@ -139,6 +185,7 @@ def sanitize_public_group_question(text: str) -> str | None:
         or _FIRST_PERSON_RE.search(normalized)
         or _THIRD_PERSON_RE.search(normalized)
         or _NAMED_SCENARIO_RE.search(normalized)
+        or _contains_named_health_context(normalized)
         or _MEDICAL_RE.search(normalized)
         or _PROMPT_INJECTION_RE.search(normalized)
         or _NUMBER_RE.search(normalized)
@@ -147,9 +194,7 @@ def sanitize_public_group_question(text: str) -> str | None:
     ):
         return None
     remainder = normalized[general_start.end() :]
-    if _TITLECASE_IDENTITY_RE.search(remainder) or _CHINESE_NAMED_HEALTH_CONTEXT_RE.search(
-        remainder
-    ):
+    if _TITLECASE_IDENTITY_RE.search(remainder) or _contains_named_health_context(remainder):
         return None
     return normalized
 
@@ -161,13 +206,38 @@ def assert_public_group_answer(text: str) -> str:
     normalized = _SPACE_RE.sub(" ", text).strip()
     if not normalized or len(normalized) > 800:
         raise SensitiveOutput("public group answer must be non-empty and bounded")
+    medical_check = _SAFE_MEDICAL_DISCLAIMER_RE.sub("", normalized)
+    number_check = _CITATION_RE.sub("", normalized)
     if (
         _contains_identifier(normalized)
+        or _contains_named_health_context(normalized)
         or _PERSONALIZED_ANSWER_RE.search(normalized)
         or _UNSAFE_MEDICAL_ANSWER_RE.search(normalized)
+        or _MEDICAL_RE.search(medical_check)
+        or _NUMBER_RE.search(number_check)
+        or _PROVIDER_DETAIL_RE.search(normalized)
         or any(ord(character) < 32 for character in normalized)
     ):
         raise SensitiveOutput("public group answer contains private or medical content")
+    return normalized
+
+
+def assert_public_knowledge_citations(text: str, knowledge: list[dict]) -> str:
+    """Require every public citation to match one of the retrieved title/page pairs."""
+    normalized = assert_public_group_answer(text)
+    allowed = {
+        (hit.get("title"), hit.get("page"))
+        for hit in knowledge
+        if isinstance(hit, dict)
+        and isinstance(hit.get("title"), str)
+        and isinstance(hit.get("page"), int)
+        and not isinstance(hit.get("page"), bool)
+    }
+    citations = {(title, int(page)) for title, page in _CITATION_RE.findall(normalized)}
+    if citations - allowed or (allowed and not citations):
+        raise SensitiveOutput("public knowledge citation is missing or unverified")
+    if not allowed and citations:
+        raise SensitiveOutput("public knowledge citation was not retrieved")
     return normalized
 
 

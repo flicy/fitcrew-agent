@@ -32,7 +32,14 @@ class RecordingGateway:
 
     def respond(self, envelope: dict):
         self.envelopes.append(envelope)
-        return type("Reply", (), {"text": "安全建议", "route": "codex"})()
+        text = "安全建议"
+        if envelope.get("schema_version") == "bodyos-public.v2" and envelope.get("knowledge"):
+            text = "安全建议（《控糖革命》第12页）。"
+        return type(
+            "Reply",
+            (),
+            {"text": text, "route": "codex"},
+        )()
 
 
 class FailingGateway:
@@ -161,6 +168,7 @@ def seed_shared_glucose_book(session: Session, cipher: FieldCipher) -> None:
     )
     service.publish_private_source(
         source.id,
+        expected_owner_id=USER_ID,
         reviewer_role="owner_editor",
         rationale="approved for internal expert summaries",
         applicability="general lifestyle education",
@@ -234,11 +242,11 @@ def test_general_group_question_returns_a_checked_public_answer_envelope(
     assert response.status_code == 200
     assert response.json() == {
         "mode": "group_public",
-        "reply": "安全建议",
+        "reply": "安全建议（《控糖革命》第12页）。",
         "envelope": {
             "schema_version": "bodyos-group-answer.v1",
             "channel": "group",
-            "reply": "安全建议",
+            "reply": "安全建议（《控糖革命》第12页）。",
         },
     }
     assert gateway.envelopes[0]["schema_version"] == "bodyos-public.v2"

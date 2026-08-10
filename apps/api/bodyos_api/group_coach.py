@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from bodyos_api.config import Settings
@@ -25,9 +26,9 @@ _FIXED_TEMPLATES = {
     ),
 }
 _WEEKLY_QUESTIONS = {
-    "meal_order": "先吃蔬菜再吃主食有什么依据？",
-    "small_actions": "为什么可持续的小行动比短期冲刺更重要？",
-    "sleep_rhythm": "稳定起床时间为什么有助于睡眠恢复？",
+    "meal_order": "蔬菜和主食的进食顺序通常有什么意义？",
+    "small_actions": "训练计划中为什么可持续的小行动比短期冲刺更重要？",
+    "sleep_rhythm": "睡眠通常怎样受稳定起床时间影响？",
 }
 _WEEKLY_FALLBACKS = {
     "meal_order": "本周一起讨论：一顿饭中的进食顺序，怎样帮助我们形成更稳定的饮食行动？",
@@ -191,7 +192,11 @@ class GroupCoachScheduler:
                 )
             )
             created += 1
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError:
+            self._session.rollback()
+            return 0
         return created
 
 
@@ -212,6 +217,16 @@ class FeishuGroupDispatcher:
     def dispatch_due(self, now: datetime) -> dict[str, int]:
         if now.tzinfo is None:
             raise ValueError("group dispatch requires timezone-aware time")
+        try:
+            local = now.astimezone(ZoneInfo(self._settings.group_timezone))
+        except ZoneInfoNotFoundError as error:
+            raise ValueError("invalid group schedule timezone") from error
+        quiet_start = _parse_time(self._settings.group_quiet_start)
+        quiet_end = _parse_time(self._settings.group_quiet_end)
+        quiet = _inside_quiet_hours(
+            local.time().replace(second=0, microsecond=0), quiet_start, quiet_end
+        )
+        now_utc = now.astimezone(UTC)
         counts = {"delivered": 0, "retried": 0, "failed": 0}
         events = self._session.scalars(
             select(OutboxEvent)
@@ -224,6 +239,32 @@ class FeishuGroupDispatcher:
             .with_for_update(skip_locked=True)
         ).all()
         for event in events:
+            if not self._settings.proactive_group_enabled:
+                event.status = "cancelled"
+                event.last_error_code = "proactive_disabled"
+                event.next_attempt_at = None
+                counts["failed"] += 1
+                continue
+            if not self._settings.feishu_allowed_group_id.strip():
+                event.status = "cancelled"
+                event.last_error_code = "configuration_missing"
+                event.next_attempt_at = None
+                counts["failed"] += 1
+                continue
+            scheduled_for = event.scheduled_for
+            if scheduled_for is not None and scheduled_for.tzinfo is None:
+                scheduled_for = scheduled_for.replace(tzinfo=UTC)
+            if (
+                quiet
+                or scheduled_for is None
+                or scheduled_for > now_utc
+                or now_utc - scheduled_for >= _DELIVERY_GRACE
+            ):
+                event.status = "expired"
+                event.last_error_code = "delivery_window_closed"
+                event.next_attempt_at = None
+                counts["failed"] += 1
+                continue
             try:
                 text = self._render(event)
                 self._transport.send_text(
@@ -241,7 +282,7 @@ class FeishuGroupDispatcher:
                     event.next_attempt_at = None
                     counts["failed"] += 1
                 else:
-                    event.next_attempt_at = now + timedelta(minutes=2**event.attempt_count)
+                    event.next_attempt_at = now + timedelta(minutes=event.attempt_count)
                     counts["retried"] += 1
             else:
                 event.attempt_count += 1

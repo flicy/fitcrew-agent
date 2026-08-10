@@ -2,7 +2,9 @@ import json
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from bodyos_api import group_coach as group_coach_module
 from bodyos_api.config import Settings
+from bodyos_api.dlp import sanitize_public_group_question
 from bodyos_api.group_coach import FeishuDeliveryError, FeishuGroupDispatcher, GroupCoachScheduler
 from bodyos_api.models import OutboxEvent
 from sqlalchemy import func, select
@@ -77,6 +79,11 @@ def test_scheduler_creates_evening_and_weekly_events_at_their_own_times(
     assert {event.event_type for event in events} == {"evening_checkin", "weekly_expert"}
     weekly_event = next(event for event in events if event.event_type == "weekly_expert")
     assert json.loads(weekly_event.payload_json) == {"topic_id": "meal_order"}
+
+
+def test_every_production_weekly_question_passes_the_public_question_gate() -> None:
+    for question in group_coach_module._WEEKLY_QUESTIONS.values():
+        assert sanitize_public_group_question(question) == question
 
 
 def test_scheduler_does_not_enqueue_when_disabled_missing_group_or_inside_quiet_hours(
@@ -168,8 +175,8 @@ def test_dispatcher_retries_three_times_without_persisting_message_or_provider_d
     dispatcher = FeishuGroupDispatcher(session, settings, transport=transport)
 
     first = dispatcher.dispatch_due(now)
-    second = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 3, tzinfo=UTC))
-    third = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 8, tzinfo=UTC))
+    second = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 1, tzinfo=UTC))
+    third = dispatcher.dispatch_due(datetime(2026, 8, 12, 1, 3, tzinfo=UTC))
 
     event = session.scalar(select(OutboxEvent))
     assert first == {"delivered": 0, "retried": 1, "failed": 0}
@@ -204,7 +211,7 @@ def test_weekly_dispatch_uses_checked_expert_answer_and_fixed_fallback(
     ).dispatch_due(now)
 
     assert counts["delivered"] == 1
-    assert questions == ["先吃蔬菜再吃主食有什么依据？"]
+    assert questions == ["蔬菜和主食的进食顺序通常有什么意义？"]
     assert "《控糖革命》第12页" in transport.calls[0]["text"]
 
 
@@ -231,3 +238,62 @@ def test_weekly_dispatch_falls_back_without_exposing_model_error(
     assert "HTTP" not in transport.calls[0]["text"]
     assert "provider" not in transport.calls[0]["text"]
     assert "一起讨论" in transport.calls[0]["text"]
+
+
+def test_dispatcher_cancels_pending_delivery_when_proactive_coaching_is_disabled(
+    session: Session,
+) -> None:
+    now = datetime(2026, 8, 12, 1, 0, tzinfo=UTC)
+    GroupCoachScheduler(session, enabled_settings()).enqueue_due(now)
+    transport = FakeTransport()
+
+    counts = FeishuGroupDispatcher(
+        session,
+        enabled_settings(proactive_group_enabled=False),
+        transport=transport,
+    ).dispatch_due(now)
+
+    event = session.scalar(select(OutboxEvent))
+    assert counts["failed"] == 1
+    assert transport.calls == []
+    assert event is not None and event.status == "cancelled"
+    assert event.last_error_code == "proactive_disabled"
+
+
+def test_dispatcher_never_sends_a_stale_or_quiet_hour_event(session: Session) -> None:
+    settings = enabled_settings()
+    morning = datetime(2026, 8, 12, 1, 0, tzinfo=UTC)
+    GroupCoachScheduler(session, settings).enqueue_due(morning)
+    quiet_now = datetime(2026, 8, 12, 15, 0, tzinfo=UTC)
+    session.add(
+        OutboxEvent(
+            fitcrew_user_id=None,
+            destination="feishu_group",
+            event_type="evening_checkin",
+            payload_json=json.dumps({"template_id": "evening_checkin"}),
+            status="pending",
+            attempt_count=0,
+            idempotency_key="quiet-event",
+            scheduled_for=quiet_now,
+            next_attempt_at=quiet_now,
+        )
+    )
+    session.commit()
+    transport = FakeTransport()
+
+    stale_counts = FeishuGroupDispatcher(session, settings, transport=transport).dispatch_due(
+        datetime(2026, 8, 12, 1, 5, tzinfo=UTC)
+    )
+    quiet_counts = FeishuGroupDispatcher(session, settings, transport=transport).dispatch_due(
+        quiet_now
+    )
+
+    assert stale_counts["failed"] == 1
+    assert quiet_counts["failed"] == 1
+    assert transport.calls == []
+    statuses = {
+        event.idempotency_key: event.status
+        for event in session.scalars(select(OutboxEvent))
+    }
+    assert statuses["feishu-group:morning_action:2026-08-12"] == "expired"
+    assert statuses["quiet-event"] == "expired"

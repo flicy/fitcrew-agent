@@ -212,14 +212,28 @@ def test_shared_book_publication_command_is_content_free_and_private_to_the_api(
     assert "already_published_count" in script_source
     assert "excerpt" not in script_source
     assert "content_ciphertext" not in script_source
+    assert "owner-bootstrap.json" in wrapper_source
+    assert "--owner-record /owner-runtime/owner-bootstrap.json" in wrapper_source
+    assert "KnowledgeSource.fitcrew_user_id == owner_id" in script_source
+    assert "expected_owner_id=owner_id" in script_source
     assert "exec -T api python scripts/publish_shared_books.py" in wrapper_source
-    assert "bootstrap" not in wrapper_source
+    assert "bootstrap-invited-user" not in wrapper_source
 
 
 def test_alembic_uses_the_production_database_environment() -> None:
     migration_environment = (ROOT / "apps/api/migrations/env.py").read_text()
     assert 'os.environ.get("BODYOS_DATABASE_URL")' in migration_environment
     assert 'config.set_main_option("sqlalchemy.url"' in migration_environment
+
+
+def test_group_outbox_downgrade_removes_ownerless_events_before_restoring_not_null() -> None:
+    migration = (
+        ROOT / "apps/api/migrations/versions/0003_group_coach_outbox.py"
+    ).read_text()
+
+    delete_position = migration.index("DELETE FROM outbox_events WHERE fitcrew_user_id IS NULL")
+    not_null_position = migration.index("nullable=False")
+    assert delete_position < not_null_position
 
 
 def test_invited_user_bootstrap_never_prints_pairing_secrets() -> None:

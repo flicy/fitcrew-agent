@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import time
 from datetime import UTC, date, datetime, timedelta
 
@@ -22,6 +23,19 @@ STUDY_CHECKPOINTS = {
     15: "stage_summary",
     16: "full_reconciliation",
 }
+_SHARED_CITATION_RE = re.compile(
+    r"《(?:控糖革命|百岁人生行动手册|睡眠优化完全指南：科学与实践)》"
+    r"[，,\s]*第\s*\d{1,5}\s*页"
+)
+
+
+def _weekly_public_answer(service: BodyOSService, question: str) -> str:
+    result = service.handle("", ConversationRequest(channel="group", text=question))
+    if result.route in {"deterministic", "deterministic_public"}:
+        raise RuntimeError("weekly public answer unavailable")
+    if _SHARED_CITATION_RE.search(result.text) is None:
+        raise RuntimeError("weekly public answer unavailable")
+    return result.text
 
 
 def _subtract_months(value: date, months: int) -> date:
@@ -128,9 +142,9 @@ def main() -> None:
             dispatcher = FeishuGroupDispatcher(
                 session,
                 settings,
-                weekly_answer=lambda question, service=service: service.handle(
-                    "", ConversationRequest(channel="group", text=question)
-                ).text,
+                weekly_answer=lambda question, service=service: _weekly_public_answer(
+                    service, question
+                ),
             )
             counts = run_worker_cycle(
                 session,
