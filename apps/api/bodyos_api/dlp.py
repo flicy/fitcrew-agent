@@ -346,8 +346,14 @@ def _unwrapped_text(text: str) -> str:
         except (json.JSONDecodeError, TypeError):
             pass
         else:
-            if isinstance(payload, dict) and isinstance(payload.get("text"), str):
+            if (
+                isinstance(payload, dict)
+                and set(payload) == {"text"}
+                and isinstance(payload.get("text"), str)
+            ):
                 normalized = payload["text"]
+            else:
+                return ""
     return normalized
 
 
