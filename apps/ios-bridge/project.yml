@@ -15,8 +15,8 @@ targets:
     info:
       path: FitCrewHealthBridge/Info.plist
       properties:
-        CFBundleDisplayName: FitCrew Health Bridge
-        CFBundleShortVersionString: 2.0.0
+        CFBundleDisplayName: FitCrew
+        CFBundleShortVersionString: 3.0.0
         CFBundleVersion: "1"
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
@@ -24,7 +24,7 @@ targets:
             CFBundleURLSchemes:
               - fitcrew-health
         LSRequiresIPhoneOS: true
-        NSHealthShareUsageDescription: FitCrew 只读取你明确授权的血糖、睡眠、恢复与活动数据，为你的 BodyOS 私聊生成私人健康洞察。
+        NSHealthShareUsageDescription: FitCrew 仅在你授权后读取所选的血糖、睡眠、恢复与活动数据，并同步至你的私人账号，在 FitCrew 中展示同步状态并与个人记录一起供你查看。
         NSHealthUpdateUsageDescription: FitCrew 不写入健康数据；此说明仅用于系统能力声明。
         UIBackgroundModes:
           - processing
@@ -35,6 +35,8 @@ targets:
       path: FitCrewHealthBridge/FitCrewHealthBridge.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.developer.applesignin:
+          - Default
     dependencies:
       - package: FitCrewHealthCore
     settings:

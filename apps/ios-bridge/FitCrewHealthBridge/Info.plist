@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>FitCrew Health Bridge</string>
+	<string>FitCrew</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,7 +21,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.0</string>
+	<string>3.0.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -40,7 +40,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>FitCrew 只读取你明确授权的血糖、睡眠、恢复与活动数据，为你的 BodyOS 私聊生成私人健康洞察。</string>
+	<string>FitCrew 仅在你授权后读取所选的血糖、睡眠、恢复与活动数据，并同步至你的私人账号，在 FitCrew 中展示同步状态并与个人记录一起供你查看。</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>FitCrew 不写入健康数据；此说明仅用于系统能力声明。</string>
 	<key>UIBackgroundModes</key>

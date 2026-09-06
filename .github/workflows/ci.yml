@@ -35,6 +35,8 @@ jobs:
           if git grep -nE 'BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|sk-[A-Za-z0-9_-]{16,}' -- ':!uv.lock'; then
             exit 1
           fi
+      - name: Test native WeChat client boundaries
+        run: node --test apps/wechat-mini/tests/*.test.js
       - name: Validate and smoke-test Compose
         run: |
           mkdir -p infra/tencent/runtime/acme infra/tencent/runtime/tls \

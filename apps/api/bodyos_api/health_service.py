@@ -14,6 +14,7 @@ from bodyos_api.models import (
     HealthSample,
     Insight,
     SyncBatch,
+    User,
 )
 from bodyos_api.schemas import HealthKind, HealthSampleIn, HealthSyncBatchIn
 
@@ -50,6 +51,14 @@ class HealthIngestionService:
         self._cipher = cipher
 
     def ingest(self, fitcrew_user_id: str, batch: HealthSyncBatchIn) -> IngestResult:
+        user = self._session.scalar(
+            select(User)
+            .where(User.fitcrew_user_id == fitcrew_user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if not user or user.status != "active":
+            raise DeviceBindingRejected("account is not active")
         existing = self._session.scalar(
             select(SyncBatch).where(
                 SyncBatch.fitcrew_user_id == fitcrew_user_id,
@@ -59,7 +68,9 @@ class HealthIngestionService:
         if existing is not None:
             return IngestResult(str(batch.batch_id), inserted_samples=0, replayed=True)
 
-        device = self._session.get(DeviceBinding, str(batch.device_binding_id))
+        device = self._session.get(
+            DeviceBinding, str(batch.device_binding_id), populate_existing=True
+        )
         if (
             device is None
             or device.fitcrew_user_id != fitcrew_user_id
@@ -67,7 +78,7 @@ class HealthIngestionService:
         ):
             raise DeviceBindingRejected("device binding is not active for this user")
 
-        consent = self._session.get(Consent, str(batch.consent_id))
+        consent = self._session.get(Consent, str(batch.consent_id), populate_existing=True)
         sample_categories = {sample.kind.value for sample in batch.samples}
         if (
             consent is None
@@ -169,6 +180,12 @@ class HealthIngestionService:
         return {"fitcrew_user_id": fitcrew_user_id, "samples": exported}
 
     def withdraw_consent(self, fitcrew_user_id: str, consent_id: str, *, at: datetime) -> None:
+        self._session.scalar(
+            select(User)
+            .where(User.fitcrew_user_id == fitcrew_user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         consent = self._session.get(Consent, consent_id)
         if consent is None or consent.fitcrew_user_id != fitcrew_user_id:
             raise ConsentRequired("consent does not belong to user")
@@ -177,6 +194,12 @@ class HealthIngestionService:
         self._session.commit()
 
     def delete_user_health(self, fitcrew_user_id: str) -> dict[str, int]:
+        self._session.scalar(
+            select(User)
+            .where(User.fitcrew_user_id == fitcrew_user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         counts = {
             "health_samples": self._session.execute(
                 delete(HealthSample).where(HealthSample.fitcrew_user_id == fitcrew_user_id)
