@@ -1,0 +1,1 @@
+const {base}=require('../../lib/page');Page(base({data:{goals:['睡得更好','精力更稳','动得更多'],goalIndex:0},select(e){this.syncBoundary();this.setData({goalIndex:Number(e.detail.value)});},async save(){this.syncBoundary();await this.write('journey','/v3/journey',{goal:['sleep','energy','activity'][this.data.goalIndex]},'PUT');}}));

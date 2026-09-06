@@ -2,6 +2,13 @@
 
 ## 中文
 
+### 未发布：V3 双端正式版开发（2026-09-07）
+
+- 新增加密旅程、实验、每日行动与手动记录，复用 V2 身份与健康摄取。
+- 新增 Apple/微信公开登录验证、独立 AI 聚合同意、导出、删除及注销；加强旧请求和撤回后的写入保护。
+- iOS 新增五个原生页；微信新增五页小程序工程。免费，无微信提醒。
+- 后端 364 项测试通过，iOS 无签名构建通过；本轮客户端复核通过；真机、平台配置及提审仍未完成。详见发布门槛文档，不代表完整 Demo 或正式上线。
+
 ### 未发布：v2.0.0-alpha.1（Owner-only）
 
 - 新增可选 HealthKit Bridge，接入 Apple 健康、Apple 健身及鱼跃写入 Apple 健康的血糖数据。
@@ -16,6 +23,13 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: V3 dual-platform production-release development (2026-09-07)
+
+- Added encrypted journeys, experiments, daily actions and manual logs on V2 identity and health ingestion.
+- Added verified Apple/WeChat login, separate AI aggregate consent, export and erasure; strengthened stale-request and revocation write protection.
+- Added five native iOS tabs and a five-page WeChat project. Free, without WeChat reminders.
+- 364 backend tests and unsigned iOS builds pass. This round of client review passed; device verification, platform configuration and submission remain incomplete; see release gates. This is not full demo parity or a production release.
 
 ### Unreleased: v2.0.0-alpha.1 (owner-only)
 

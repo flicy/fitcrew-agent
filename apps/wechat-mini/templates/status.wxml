@@ -1,0 +1,1 @@
+<template name="status"><view wx:if="{{loading}}" class="muted">正在读取你的记录…</view><view wx:if="{{error}}" class="error">{{error}}<button bindtap="refresh" disabled="{{busy}}">重新读取</button><button bindtap="openProfile">前往登录与设置</button></view></template>

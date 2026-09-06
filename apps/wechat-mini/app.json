@@ -1,0 +1,44 @@
+{
+  "pages": [
+    "pages/today/index",
+    "pages/journey/index",
+    "pages/experiments/index",
+    "pages/log/index",
+    "pages/profile/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "FitCrew",
+    "navigationBarBackgroundColor": "#F5F1FA",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F5F1FA"
+  },
+  "tabBar": {
+    "color": "#777181",
+    "selectedColor": "#7757A5",
+    "backgroundColor": "#FFFFFF",
+    "list": [
+      {
+        "pagePath": "pages/today/index",
+        "text": "今日"
+      },
+      {
+        "pagePath": "pages/journey/index",
+        "text": "旅程"
+      },
+      {
+        "pagePath": "pages/experiments/index",
+        "text": "实验"
+      },
+      {
+        "pagePath": "pages/log/index",
+        "text": "记录"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "__usePrivacyCheck__": true,
+  "sitemapLocation": "sitemap.json"
+}

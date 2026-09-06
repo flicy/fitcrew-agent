@@ -26,20 +26,31 @@ actor HealthKitClient {
         return types
     }()
 
-    func requestAuthorization() async throws {
-        try await store.requestAuthorization(toShare: [], read: Self.approvedReadTypes)
+    func requestAuthorization(kinds: Set<String>) async throws {
+        let quantities: [(String, HKQuantityTypeIdentifier)] = [
+            ("blood_glucose", .bloodGlucose), ("heart_rate_variability", .heartRateVariabilitySDNN),
+            ("resting_heart_rate", .restingHeartRate), ("active_energy", .activeEnergyBurned),
+            ("step_count", .stepCount), ("stand_hours", .appleStandTime)
+        ]
+        var types = Set<HKObjectType>()
+        for (kind, identifier) in quantities where kinds.contains(kind) {
+            if let type = HKObjectType.quantityType(forIdentifier: identifier) { types.insert(type) }
+        }
+        if kinds.contains(where: { $0.hasPrefix("sleep_") }), let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(sleep) }
+        if kinds.contains("workout") { types.insert(HKObjectType.workoutType()) }
+        try await store.requestAuthorization(toShare: [], read: types)
     }
 
-    func readSamples(since startDate: Date, until endDate: Date) async throws -> [HealthSampleDTO] {
+    func readSamples(since startDate: Date, until endDate: Date, kinds: Set<String>) async throws -> [HealthSampleDTO] {
         var samples: [HealthSampleDTO] = []
-        samples += try await readQuantity(.bloodGlucose, kind: .bloodGlucose, unit: glucoseUnit, since: startDate, until: endDate)
-        samples += try await readQuantity(.heartRateVariabilitySDNN, kind: .heartRateVariability, unit: .secondUnit(with: .milli), since: startDate, until: endDate)
-        samples += try await readQuantity(.restingHeartRate, kind: .restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()), since: startDate, until: endDate)
-        samples += try await readQuantity(.activeEnergyBurned, kind: .activeEnergy, unit: .kilocalorie(), since: startDate, until: endDate)
-        samples += try await readQuantity(.stepCount, kind: .stepCount, unit: .count(), since: startDate, until: endDate)
-        samples += try await readQuantity(.appleStandTime, kind: .standHours, unit: .hour(), since: startDate, until: endDate)
-        samples += try await readSleep(since: startDate, until: endDate)
-        samples += try await readWorkouts(since: startDate, until: endDate)
+        if kinds.contains("blood_glucose") { samples += try await readQuantity(.bloodGlucose, kind: .bloodGlucose, unit: glucoseUnit, since: startDate, until: endDate) }
+        if kinds.contains("heart_rate_variability") { samples += try await readQuantity(.heartRateVariabilitySDNN, kind: .heartRateVariability, unit: .secondUnit(with: .milli), since: startDate, until: endDate) }
+        if kinds.contains("resting_heart_rate") { samples += try await readQuantity(.restingHeartRate, kind: .restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()), since: startDate, until: endDate) }
+        if kinds.contains("active_energy") { samples += try await readQuantity(.activeEnergyBurned, kind: .activeEnergy, unit: .kilocalorie(), since: startDate, until: endDate) }
+        if kinds.contains("step_count") { samples += try await readQuantity(.stepCount, kind: .stepCount, unit: .count(), since: startDate, until: endDate) }
+        if kinds.contains("stand_hours") { samples += try await readQuantity(.appleStandTime, kind: .standHours, unit: .hour(), since: startDate, until: endDate) }
+        if kinds.contains(where: { $0.hasPrefix("sleep_") }) { samples += try await readSleep(since: startDate, until: endDate) }
+        if kinds.contains("workout") { samples += try await readWorkouts(since: startDate, until: endDate) }
         return samples
     }
 

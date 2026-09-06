@@ -1,0 +1,12 @@
+{
+  "appid": "",
+  "projectname": "FitCrew",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "libVersion": "3.10.0",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "minified": true
+  }
+}
