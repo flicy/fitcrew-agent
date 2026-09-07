@@ -233,3 +233,20 @@ def test_stale_mission_choice_cannot_replace_another_device_or_day(session, fiel
     stale_day = rid(action="done", mission_id="2000-01-01", revision=1)
     assert client.post("/v3/mission", json=stale_day).status_code == 409
     assert client.get("/v3/state").json()["mission"] == accepted.json()
+
+
+def test_trends_keep_missing_days_and_recompute_after_erasure(session, field_cipher):
+    client, _ = client_for(session, field_cipher)
+    empty = client.get("/v3/state").json()["trends"]
+    assert empty["source"] == "manual_logs"
+    assert len(empty["points"]) == 90
+    assert all(p["energy"] is None and p["count"] == 0 for p in empty["points"])
+    first = client.post("/v3/logs", json=rid(energy=1, stress=1, feeling="正常")).json()
+    second = client.post("/v3/logs", json=rid(energy=5, stress=3, feeling="正常")).json()
+    points = client.get("/v3/state").json()["trends"]["points"]
+    assert points[-1] == {"date": first["date"], "count": 2, "energy": 3, "stress": 2}
+    assert points[-2]["energy"] is None
+    assert client.delete("/v3/logs/" + second["id"]).status_code == 200
+    assert client.get("/v3/state").json()["trends"]["points"][-1]["energy"] == 1
+    assert client.delete("/v3/logs/" + first["id"]).status_code == 200
+    assert client.get("/v3/state").json()["trends"] == empty

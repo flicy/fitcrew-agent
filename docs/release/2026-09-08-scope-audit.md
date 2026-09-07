@@ -59,3 +59,9 @@ Continue by completing confirmed specification gaps, confirming the newer proact
 2026-09-08：两端补齐可选睡醒/训练感受与压力来源，不适时提供前往停止实验的入口。Today 增加两个调轻方案的选择面板，取消不写入；确认后保存所选方案、调整时间与记录版本。小程序测试覆盖离线保留、取消零写入与同一请求重试。后端覆盖字段保存/导出/删除、方案校验与幂等。此补记更新上述两行的代码状态，不代表真机验收或提审完成。iOS 当前修改只做语法检查，尚待完整构建及设备验证。
 
 2026-09-08: Both clients now include optional sleep/training feelings and stress source, with a discomfort link to experiment stop controls. Today offers two lighter alternatives in a choice panel; cancellation performs no write. Confirmation persists the selected alternative, adjustment timestamp and record revision. Mini-program tests cover offline preservation, zero-write cancellation and idempotent retries; backend tests cover persistence/export/deletion and alternative validation. This updates the corresponding implementation statuses above, but does not establish device acceptance or formal submission. Current iOS edits have syntax validation only; full build and device verification remain outstanding.
+
+### 趋势与构建进展 / Trends and build progress
+
+提交 `1cfbc9e` 的 CI 34159001171 已全部通过，包含 iOS 模拟器构建与测试、Swift 核心、后端/小程序及容器检查。之后补充任务日期/版本冲突保护，以及两端 30/60/90 天手动精力记录趋势。趋势以同日均值展示，空缺不补零、不连线；删除记录后重新计算。当前后端 368 项、小程序 17 项测试通过，新 iOS 页面仅语法检查通过，待下一次云端构建。HealthKit 趋势、里程碑及完整旅程阶段仍未完成，不将手动趋势当作整个旅程要求完成。
+
+CI 34159001171 passed for commit `1cfbc9e`, including iOS simulator build/tests, Swift core, backend/mini-program checks and the container smoke test. Subsequent changes add mission date/revision conflict protection and 30/60/90-day manual energy trends in both clients. Daily means preserve gaps without zero filling or connecting lines; source deletion recomputes aggregates. The backend has 368 passing tests and the mini-program has 17. New iOS views passed syntax checking only and await the next cloud build. HealthKit trends, milestones and full journey stages remain incomplete.

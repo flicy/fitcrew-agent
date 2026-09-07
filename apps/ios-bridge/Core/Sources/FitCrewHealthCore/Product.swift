@@ -7,6 +7,7 @@ public struct ProductState: Decodable, Sendable {
     public let mission: ProductMission?
     public let health: ProductHealth
     public let privacyVersion: String
+    public let trends: ProductTrends?
 
     public static func decode(_ data: Data) throws -> ProductState {
         let decoder = JSONDecoder()
@@ -79,4 +80,16 @@ public enum BodyCheckInput {
     public static func isValid(energy: Int, stress: Int, note: String) -> Bool {
         (1...5).contains(energy) && (1...3).contains(stress) && note.count <= 500
     }
+}
+
+public struct ProductTrends: Decodable, Sendable {
+    public let source, windowEnd: String
+    public let points: [ProductTrendPoint]
+}
+
+public struct ProductTrendPoint: Decodable, Identifiable, Sendable {
+    public var id: String { date }
+    public let date: String
+    public let count: Int
+    public let energy, stress: Double?
 }

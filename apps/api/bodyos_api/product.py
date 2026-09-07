@@ -138,6 +138,29 @@ class ProductService:
         self.session.commit()
         return result
 
+    def trends(self, logs):
+        end = datetime.fromisoformat(self.today()).date()
+        grouped = {}
+        for item in logs:
+            grouped.setdefault(item["date"], []).append(item)
+        points = []
+        for offset in range(89, -1, -1):
+            day = (end - timedelta(days=offset)).isoformat()
+            records = grouped.get(day, [])
+            points.append(
+                {
+                    "date": day,
+                    "count": len(records),
+                    "energy": round(sum(r["energy"] for r in records) / len(records), 2)
+                    if records
+                    else None,
+                    "stress": round(sum(r["stress"] for r in records) / len(records), 2)
+                    if records
+                    else None,
+                }
+            )
+        return {"source": "manual_logs", "window_end": end.isoformat(), "points": points}
+
     def state(self):
         journey = self.read(self.row("journey", "current"))
         last = self.session.scalar(
@@ -148,10 +171,12 @@ class ProductService:
         count = self.session.scalar(
             select(func.count(HealthSample.id)).where(HealthSample.fitcrew_user_id == self.user_id)
         )
+        logs = [self.read(row) for row in self.rows("log")]
         return {
             "journey": journey,
             "experiments": [self.read(row) for row in self.rows("experiment")],
-            "logs": [self.read(row) for row in self.rows("log")],
+            "logs": logs,
+            "trends": self.trends(logs),
             "mission": self.mission(journey) if journey else None,
             "health": {
                 "sample_count": count or 0,

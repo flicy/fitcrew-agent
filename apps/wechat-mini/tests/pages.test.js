@@ -72,3 +72,12 @@ test('lighten selection and cancel never write; confirmed choice retries unchang
  h.setRequest(async(path,method,body)=>{if(path==='/v3/mission'){sent.push(body);return {id:'saved'};}return {logs:[],experiments:[]};});
  await page.chooseLighten(choice);assert.equal(page.data.choosing,false);assert.equal(sent[0].alternative,'quiet_minute');assert.equal(sent[0].mission_id,'2026-09-08');assert.equal(sent[0].revision,2);assert.equal(sent[0].request_id,sent[1].request_id);
 });
+test('trend windows retain gaps and clear on failed refresh',async()=>{
+ const h=setup(),page=mount(base());
+ const points=Array.from({length:90},(_,i)=>({date:String(i),count:i===89?1:0,energy:i===89?4:null,stress:i===89?2:null}));
+ h.setRequest(async()=>({logs:[],experiments:[],trends:{points}}));await page.refresh();
+ assert.equal(page.data.trendPoints.length,30);assert.equal(page.data.observedDays,1);assert.equal(page.data.trendPoints[0].energy,null);
+ page.selectTrend({currentTarget:{dataset:{days:60}}});assert.equal(page.data.trendPoints.length,60);
+ page.selectTrend({currentTarget:{dataset:{days:90}}});assert.equal(page.data.trendPoints.length,90);
+ h.setRequest(async()=>{throw new Error('offline');});await page.refresh();assert.deepEqual(page.data.trendPoints,[]);assert.equal(page.data.observedDays,0);
+});

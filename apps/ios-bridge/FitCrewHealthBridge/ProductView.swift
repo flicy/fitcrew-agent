@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject var model: BridgeViewModel
     @StateObject private var store = ProductStore()
     @State private var tab = 0
+    @State private var trendDays = 30
     @State private var showLighten = false
     @State private var lightenMission: ProductMission?
     @State private var goal = "sleep"
@@ -116,7 +117,33 @@ struct ContentView: View {
                 Picker("目标", selection: $goal) { Text("睡得更好").tag("sleep"); Text("更有精力").tag("energy"); Text("动得更多").tag("activity") }.pickerStyle(.segmented)
                 Button(store.state?.journey == nil ? "开启 90 天旅程" : "更新目标") { Task { await store.mutate("/v3/journey", method: "PUT", body: ["goal": goal]) } }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy)
             }
+            if let trends = store.state?.trends { trendCard(trends) }
             card { Text("旅程足迹").font(.title2.bold()); Text("\(store.state?.logs.count ?? 0) 次身体记录"); ForEach(store.state?.experiments ?? []) { e in Text("\(e.title) · \(status(e.status))") }; Text("通过观察积累证据，暂不推断因果关系。").font(.footnote) }
+        }
+    }
+    private func trendCard(_ trends: ProductTrends) -> some View {
+        let points = Array(trends.points.suffix(trendDays))
+        return card {
+            Text("精力记录趋势").font(.title2.bold())
+            Picker("观察窗口", selection: $trendDays) {
+                Text("30 天").tag(30); Text("60 天").tag(60); Text("90 天").tag(90)
+            }.pickerStyle(.segmented)
+            Text("近 \(trendDays) 天 · \(points.filter { $0.count > 0 }.count) 天有记录")
+            Text("来源：手动身体记录。同日取均值，精力 1–5 档；空缺表示未记录，不代表零分。不能据此判断行动效果。").font(.footnote)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .bottom, spacing: 12) {
+                    ForEach(points) { point in
+                        VStack(spacing: 6) {
+                            VStack { Spacer(minLength: 0)
+                                if let energy = point.energy { RoundedRectangle(cornerRadius: 4).fill(green).frame(width: 20, height: CGFloat(energy * 20)) }
+                                else { Text("—").foregroundStyle(.secondary) }
+                            }.frame(height: 100)
+                            Text(point.energy.map { $0.formatted() } ?? "缺失").font(.caption)
+                            Text(point.date).font(.caption2)
+                        }.frame(width: 82).accessibilityElement(children: .combine)
+                    }
+                }.padding(.vertical, 8)
+            }
         }
     }
     private var experiments: some View {

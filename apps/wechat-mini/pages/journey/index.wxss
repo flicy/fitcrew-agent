@@ -1,0 +1,4 @@
+.trend-chart { display: flex; gap: 12rpx; padding-top: 20rpx; }
+.trend-day { width: 150rpx; flex-shrink: 0; text-align: center; }
+.trend-column { height: 100px; display: flex; align-items: flex-end; justify-content: center; }
+.trend-bar { width: 36rpx; background: #7757a5; border-radius: 8rpx 8rpx 0 0; }
