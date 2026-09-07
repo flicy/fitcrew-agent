@@ -25,6 +25,21 @@ def _sum_or_none(values: list[float], divisor: float = 1) -> float | None:
     return sum(values) / divisor if values else None
 
 
+def _sleep_hours(samples: list[DecryptedSample]) -> float | None:
+    if not samples or any(s.end_at < s.start_at for s in samples):
+        return None
+    intervals = sorted((s.start_at, s.end_at) for s in samples)
+    start, end = intervals[0]
+    seconds = 0.0
+    for next_start, next_end in intervals[1:]:
+        if next_start <= end:
+            end = max(end, next_end)
+        else:
+            seconds += (end - start).total_seconds()
+            start, end = next_start, next_end
+    return (seconds + (end - start).total_seconds()) / 3600
+
+
 def compute_daily_features(
     samples: list[DecryptedSample], *, expected_glucose_interval_minutes: int = 5
 ) -> dict[str, Any]:
@@ -55,21 +70,18 @@ def compute_daily_features(
             glucose["mean_mg_dl"]
         )
 
-    sleep_deep = _values(samples, "sleep_deep")
-    sleep_rem = _values(samples, "sleep_rem")
-    sleep_core = _values(samples, "sleep_core")
-    sleep_unspecified = _values(samples, "sleep_asleep")
-    sleep_values = sleep_deep + sleep_rem + sleep_core + sleep_unspecified
+    sleep_kinds = {"sleep_deep", "sleep_rem", "sleep_core", "sleep_asleep"}
+    sleep_samples = [s for s in samples if s.kind in sleep_kinds]
     workouts = _values(samples, "workout")
 
     return {
-        "algorithm_version": "features.v2",
+        "algorithm_version": "features.v3",
         "glucose": glucose,
         "sleep": {
-            "total_hours": _sum_or_none(sleep_values, 3600),
-            "deep_hours": _sum_or_none(sleep_deep, 3600),
-            "rem_hours": _sum_or_none(sleep_rem, 3600),
-            "core_hours": _sum_or_none(sleep_core, 3600),
+            "total_hours": _sleep_hours(sleep_samples),
+            "deep_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_deep"]),
+            "rem_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_rem"]),
+            "core_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_core"]),
         },
         "activity": {
             "steps": _sum_or_none(_values(samples, "step_count")),
@@ -84,6 +96,7 @@ def compute_daily_features(
         },
         "data_quality": {
             "duplicate_count": duplicate_count,
+            "invalid_sleep_intervals": sum(s.end_at < s.start_at for s in sleep_samples),
             "expected_glucose_points": expected_points,
             "glucose_completeness": min(1.0, len(values) / expected_points),
             "sample_counts": {

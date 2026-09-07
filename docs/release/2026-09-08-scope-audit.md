@@ -151,3 +151,9 @@ The release branch reproduced an official wcc expression-escaping failure (unexp
 iOS 不再静默忽略旧导出删除失败：关闭分享入口、阻止新生成，并保留独立错误及重试入口。服务器删除成功与本机清理失败分别展示。新增注入失败的测试覆盖不发起生成、跨账号清理失败提示、重试成功及 health 查询参数。当前只通过 Swift 语法检查，测试尚未执行；本机空间不足时不反复启动完整构建，等待云端网络恢复验证。
 
 iOS now surfaces old-export cleanup failures, disables sharing, blocks regeneration and provides a persistent retry action. Server erasure and local cleanup failures remain distinct. Added failure-injection tests cover blocked generation, identity changes, successful retry and the health query parameter. These changes have syntax validation only; the new tests have not run. Full builds await cloud connectivity instead of repeatedly exhausting local disk.
+
+### 睡眠重复时长 / Overlapping sleep duration
+
+日汇总升级 `features.v3`：总睡眠按时间区间并集合并，重复来源、通用睡眠与分期重叠不再重复计时；各分期也在自身类别内合并。真实区间缺口保留，反向区间返回未知并记录质量计数。原测试中 1 小时深睡与同起点 1.5 小时 REM 实际覆盖 1.5 小时，已纠正原先相加为 2.5 小时的错误预期；新增重复来源/缺口测试。386 项后端测试通过。旧缓存尚未重算；分期冲突、跨午夜归属及活动多来源去重仍需处理，不能据此宣称完整健康趋势或真机准确性。
+
+Daily aggregation now uses `features.v3`: total sleep is the union of sleep intervals, preventing duplicate sources and generic/staged overlap from double counting. Each stage is also merged within its category. Real gaps remain; reversed intervals produce unknown values and a quality count. The earlier fixture's one-hour deep sleep and same-start 1.5-hour REM cover 1.5 hours, not the previously asserted 2.5. Added duplicate-source/gap regression coverage; all 386 backend tests pass. Legacy caches are not recomputed. Stage conflicts, cross-midnight attribution and activity-source deduplication remain outstanding; this is not full health-trend or device-accuracy proof.

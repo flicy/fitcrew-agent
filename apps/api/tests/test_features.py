@@ -55,7 +55,9 @@ def test_daily_features_cover_apple_health_and_fitness_aggregates() -> None:
 
     features = compute_daily_features(samples)
 
-    assert features["sleep"]["total_hours"] == pytest.approx(2.5)
+    assert features["sleep"]["total_hours"] == pytest.approx(
+        1.5
+    )  # overlapping intervals count once
     assert features["sleep"]["deep_hours"] == pytest.approx(1.0)
     assert features["activity"]["steps"] == pytest.approx(6000.0)
     assert features["activity"]["active_energy_kcal"] == pytest.approx(320.0)
@@ -69,7 +71,7 @@ def test_daily_features_cover_apple_health_and_fitness_aggregates() -> None:
 
 def test_absent_health_categories_are_unknown_not_zero():
     features = compute_daily_features([])
-    assert features["algorithm_version"] == "features.v2"
+    assert features["algorithm_version"] == "features.v3"
     assert all(value is None for value in features["sleep"].values())
     assert all(value is None for value in features["activity"].values())
     assert all(value is None for value in features["recovery"].values())
@@ -100,3 +102,24 @@ def test_legacy_normalization_masks_unproven_values_without_rewriting_original()
     assert legacy["sleep"]["total_hours"] == 0
     assert "read_policy_version" not in legacy
     assert normalize_cached_features({"sleep": {"total_hours": 8}})["sleep"]["total_hours"] is None
+
+
+def test_sleep_totals_union_overlapping_sources_and_preserve_real_gaps():
+    start = datetime(2026, 8, 1, tzinfo=UTC)
+    samples = [
+        DecryptedSample("sleep_asleep", start, start + timedelta(hours=4), 14400),
+        DecryptedSample("sleep_deep", start, start + timedelta(hours=1), 3600),
+        DecryptedSample("sleep_deep", start, start + timedelta(hours=1), 3600),
+        DecryptedSample("sleep_rem", start + timedelta(hours=3), start + timedelta(hours=5), 7200),
+        DecryptedSample("sleep_core", start + timedelta(hours=6), start + timedelta(hours=7), 3600),
+    ]
+    result = compute_daily_features(samples)
+    assert result["sleep"]["total_hours"] == 6  # gap from hour five to six stays excluded
+    assert result["sleep"]["deep_hours"] == 1
+    assert result["sleep"]["rem_hours"] == 2
+    assert result["sleep"]["core_hours"] == 1
+    invalid = compute_daily_features(
+        [DecryptedSample("sleep_core", start, start - timedelta(hours=1), 3600)]
+    )
+    assert invalid["sleep"]["total_hours"] is None
+    assert invalid["data_quality"]["invalid_sleep_intervals"] == 1
