@@ -172,7 +172,11 @@ struct ContentView: View {
         }
     }
     private func details(_ e: ProductExperiment) -> some View {
-        VStack(alignment: .leading, spacing: 12) { Text("假设：\(e.hypothesis)"); Text("行动：\(e.intervention)"); Text("持续时间：\(e.durationDays) 天"); Text("观察指标：\(e.metrics.joined(separator: "、"))"); Text("成功标准：\(e.successCriteria.joined(separator: "；"))"); Text("停止条件：\(e.stopConditions.joined(separator: "；"))"); Text("使用数据：\(e.dataCategories.joined(separator: "、"))"); Text("用于本人的实验评价，不会自动分享到群聊。").font(.footnote) }
+        VStack(alignment: .leading, spacing: 12) {
+            Text(e.purpose ?? "用于本人的生活方式观察；开始前七天为基线，开始后七天为观察期。两窗各至少四个记录日才比较均值，不判断疗效。")
+            if let start = e.baselineStart, let accepted = e.acceptedAt { Text("基线：\(start) — \(accepted)（不含开始时刻）").font(.footnote) }
+            if let accepted = e.acceptedAt, let end = e.endsAt { Text("观察：\(accepted) — \(end)，暂停时段不计入。时间到且记录足够才能比较；不足会如实显示。").font(.footnote) }
+            Text("假设：\(e.hypothesis)"); Text("行动：\(e.intervention)"); Text("持续时间：\(e.durationDays) 天"); Text("观察指标：\(e.metrics.joined(separator: "、"))"); Text("成功标准：\(e.successCriteria.joined(separator: "；"))"); Text("停止条件：\(e.stopConditions.joined(separator: "；"))"); Text("使用数据：\(e.dataCategories.joined(separator: "、"))"); Text("用于本人的实验评价，不会自动分享到群聊。").font(.footnote) }
     }
     private var logs: some View {
         Group {

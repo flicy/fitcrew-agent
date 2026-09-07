@@ -59,6 +59,7 @@ public struct ProductExperiment: Decodable, Identifiable, Sendable {
     public let id, title, hypothesis, intervention, status, source: String
     public let metrics, successCriteria, stopConditions, dataCategories: [String]
     public let durationDays, revision: Int
+    public let purpose, baselineStart, acceptedAt, endsAt: String?
     public let result: JSONValue?
     public var actions: [String] {
         switch status {

@@ -65,3 +65,9 @@ Continue by completing confirmed specification gaps, confirming the newer proact
 提交 `1cfbc9e` 的 CI 34159001171 已全部通过，包含 iOS 模拟器构建与测试、Swift 核心、后端/小程序及容器检查。之后补充任务日期/版本冲突保护，以及两端 30/60/90 天手动精力记录趋势。趋势以同日均值展示，空缺不补零、不连线；删除记录后重新计算。当前后端 368 项、小程序 17 项测试通过，新 iOS 页面仅语法检查通过，待下一次云端构建。HealthKit 趋势、里程碑及完整旅程阶段仍未完成，不将手动趋势当作整个旅程要求完成。
 
 CI 34159001171 passed for commit `1cfbc9e`, including iOS simulator build/tests, Swift core, backend/mini-program checks and the container smoke test. Subsequent changes add mission date/revision conflict protection and 30/60/90-day manual energy trends in both clients. Daily means preserve gaps without zero filling or connecting lines; source deletion recomputes aggregates. The backend has 368 passing tests and the mini-program has 17. New iOS views passed syntax checking only and await the next cloud build. HealthKit trends, milestones and full journey stages remain incomplete.
+
+### 实验窗口补记 / Experiment windows update
+
+已加入开始前七天基线、开始后七天观察期及用途说明；暂停时段仍从观察记录排除。两窗各至少四个不同日期才计算按日均值差，缺失基线不推断；既有观察期内部比较与基线比较分别标明。删除基线来源记录会使结果和缓存失效。新增基线比较/撤回测试通过，仍只验证合成手动记录，不代表真实 HealthKit 聚合已接入实验。两端显示窗口与开始前用途说明，新代码仍待完整 iOS 构建验证。
+
+Added a seven-day pre-start baseline, seven-day observation window and purpose disclosure; paused periods remain excluded. Both windows require four distinct recorded dates before comparing day-weighted means. Missing baseline data yields no between-window estimate. Within-window and baseline comparisons remain separately labeled. Deleting baseline source records invalidates results and cached responses. Synthetic manual-record tests cover comparison and withdrawal; real HealthKit aggregates are not yet integrated into experiment evaluation. Both clients disclose the windows before acceptance; current changes still await full iOS build validation.

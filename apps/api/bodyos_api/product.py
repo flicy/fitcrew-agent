@@ -259,6 +259,11 @@ class ProductService:
                 "stop_conditions": ["出现不适立即停止", "你可以随时暂停、停止或删除数据"],
                 "data_categories": ["手动精力与压力记录"],
                 "duration_days": 7,
+                "baseline_days": 7,
+                "purpose": (
+                    "用于你本人的生活方式观察；基线为开始前七天，观察期为开始后七天。"
+                    "两窗各至少四个记录日才比较均值，不判断疗效。"
+                ),
                 "status": "proposed",
                 "source": selection["source"],
                 "ai_status": selection["ai_status"],
@@ -285,6 +290,7 @@ class ProductService:
             raise HTTPException(409, "invalid experiment transition")
         if action == "accept":
             item["accepted_at"] = self.now().isoformat()
+            item["baseline_start"] = (self.now() - timedelta(days=7)).isoformat()
             item["consent_version"] = PRIVACY_VERSION
             item["ends_at"] = (self.now() + timedelta(days=item["duration_days"])).isoformat()
         if action == "pause":
@@ -298,6 +304,19 @@ class ProductService:
             if self.now() < datetime.fromisoformat(item["ends_at"]):
                 raise HTTPException(409, "observation window is not complete")
             records = [self.read(row) for row in self.rows("log")]
+            baseline_start = item.get(
+                "baseline_start",
+                (datetime.fromisoformat(item["accepted_at"]) - timedelta(days=7)).isoformat(),
+            )
+            baseline = [
+                r for r in records if baseline_start <= r["created_at"] < item["accepted_at"]
+            ]
+            baseline_dates = sorted({r["date"] for r in baseline})
+            baseline_means = [
+                sum(r["energy"] for r in baseline if r["date"] == day)
+                / sum(r["date"] == day for r in baseline)
+                for day in baseline_dates
+            ]
             records = [
                 r
                 for r in records
@@ -322,7 +341,22 @@ class ProductService:
                 )
             else:
                 summary = "有效记录不足四天，不能比较前后变化。" + summary
+            between_change = (
+                round(
+                    sum(day_means) / len(day_means) - sum(baseline_means) / len(baseline_means), 2
+                )
+                if len(days) >= 4 and len(baseline_dates) >= 4
+                else None
+            )
+            if between_change is None:
+                summary += "基线或观察期不足四个记录日，无法比较两窗均值。"
+            else:
+                summary += f"观察期相对基线的每日精力均值变化 {between_change:+g} 档，仅为描述。"
             item["result"] = {
+                "baseline_window_start": baseline_start,
+                "baseline_window_end": item["accepted_at"],
+                "baseline_observed_days": len(baseline_dates),
+                "between_window_energy_change": between_change,
                 "status": "descriptive_only" if len(days) >= 4 else "insufficient_data",
                 "observed_days": len(days),
                 "window_start": item["accepted_at"],
@@ -406,9 +440,9 @@ class ProductService:
         invalidated = {key}
         for experiment in self.rows("experiment"):
             item = self.read(experiment)
-            if item.get("result") and item.get("accepted_at", "") <= removed[
-                "created_at"
-            ] <= item.get("ends_at", ""):
+            if item.get("result") and item.get("result", {}).get(
+                "baseline_window_start", item.get("accepted_at", "")
+            ) <= removed["created_at"] <= item.get("ends_at", ""):
                 item["result"] = {
                     "status": "invalidated",
                     "observed_days": 0,

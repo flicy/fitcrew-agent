@@ -27,6 +27,8 @@ def test_evaluation_compares_days_without_claiming_causality(session, field_ciph
     result = svc.transition(exp["id"], "evaluate", exp["revision"])["result"]
     assert result["status"] == "descriptive_only"
     assert result["energy_change"] == 3.0
+    assert result["baseline_observed_days"] == 0
+    assert result["between_window_energy_change"] is None
     assert "因果" in result["summary"] or "导致" in result["summary"]
     assert session.scalars(select(Memory)).all() == []  # never silently confirmed
 
@@ -59,3 +61,26 @@ def test_paused_days_do_not_count_as_experiment_observations(session, field_ciph
     svc.now = lambda: start + timedelta(days=10)
     result = svc.transition(exp["id"], "evaluate", resumed["revision"])["result"]
     assert result["observed_days"] == 0
+
+
+def test_baseline_comparison_requires_both_windows_and_invalidates_on_withdrawal(
+    session, field_cipher
+):
+    svc, exp, start = fixture_experiment(session, field_cipher)
+    baseline_records = []
+    for day in range(4):
+        svc.now = lambda day=day: start - timedelta(days=day + 1)
+        baseline_records.append(
+            svc.add_log({"energy": 2, "stress": 1, "feeling": "正常", "note": ""})
+        )
+    for day in range(4):
+        svc.now = lambda day=day: start + timedelta(days=day)
+        svc.add_log({"energy": 4, "stress": 1, "feeling": "正常", "note": ""})
+    svc.now = lambda: start + timedelta(days=8)
+    completed = svc.transition(exp["id"], "evaluate", exp["revision"])
+    result = completed["result"]
+    assert result["baseline_observed_days"] == 4
+    assert result["between_window_energy_change"] == 2
+    assert result["energy_change"] == 0  # within-window and baseline comparisons differ
+    svc.delete_log(baseline_records[0]["id"])
+    assert svc.read(svc.row("experiment", exp["id"]))["result"]["status"] == "invalidated"
