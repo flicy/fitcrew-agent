@@ -145,3 +145,9 @@ Deletion now supports all private data or all manual body records. The latter re
 主发布分支用已安装微信开发者工具的 wcc 复现了表达式转义错误（unexpected `;`），已仅修复 Today、Experiments、Profile 的绑定表达式。运行 `python3 scripts/verify_wechat_compilation.py` 已成功编译 6 个 WXML 模板与 3 个 WXSS 样式文件，输出在临时目录验证后清除；18 项 Node 测试通过。脚本找不到官方编译器时会失败，不假装通过。此证据不包含真实登录、设备渲染、后台联调或正式提审。
 
 The release branch reproduced an official wcc expression-escaping failure (unexpected `;`) and corrected bindings in Today, Experiments and Profile only. `python3 scripts/verify_wechat_compilation.py` successfully compiled six WXML templates and three WXSS files, verified nonempty output and removed temporary artifacts. All 18 Node tests passed. The script fails if official compilers are unavailable. This does not prove authentication, device rendering, backend integration or formal review submission.
+
+### iOS 本机导出清理 / iOS local export cleanup
+
+iOS 不再静默忽略旧导出删除失败：关闭分享入口、阻止新生成，并保留独立错误及重试入口。服务器删除成功与本机清理失败分别展示。新增注入失败的测试覆盖不发起生成、跨账号清理失败提示、重试成功及 health 查询参数。当前只通过 Swift 语法检查，测试尚未执行；本机空间不足时不反复启动完整构建，等待云端网络恢复验证。
+
+iOS now surfaces old-export cleanup failures, disables sharing, blocks regeneration and provides a persistent retry action. Server erasure and local cleanup failures remain distinct. Added failure-injection tests cover blocked generation, identity changes, successful retry and the health query parameter. These changes have syntax validation only; the new tests have not run. Full builds await cloud connectivity instead of repeatedly exhausting local disk.

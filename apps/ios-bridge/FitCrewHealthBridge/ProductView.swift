@@ -382,6 +382,10 @@ struct ContentView: View {
                 if let policyURL = ReleaseConfiguration.privacyPolicyURL {
                     Link("阅读完整隐私政策", destination: policyURL).frame(minHeight: 44)
                 } else { Text("公开隐私政策尚未配置，正式登录暂不可用。").font(.footnote) }
+                if let cleanupError = store.exportCleanupError {
+                    Text(cleanupError).foregroundStyle(.red)
+                    Button("重试清理本机导出") { store.retryExportCleanup() }.disabled(store.busy)
+                }
                 Picker("导出范围", selection: $exportScope) {
                     Text("全部数据").tag("all")
                     Text("手动记录与实验").tag("product")

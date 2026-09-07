@@ -8,6 +8,7 @@ final class ProductStore: ObservableObject {
     @Published var error: String?
     @Published var receipt: String?
     @Published var exportURL: URL?
+    @Published private(set) var exportCleanupError: String?
     @Published private(set) var capabilities: ProductCapabilities?
     @Published private(set) var requiresReauthentication = false
     private var pendingRequestIDs: [String: String] = [:]
@@ -18,29 +19,44 @@ final class ProductStore: ObservableObject {
     private let tokenProvider: () -> String?
     private let transport: (URLRequest) async throws -> (Data, URLResponse)
     private let exportDirectory: URL
+    private let removeExportFile: (URL) throws -> Void
 
     init(
         revisionProvider: @escaping () -> UUID = { ConsentStore().identityRevision },
         configurationProvider: @escaping () -> BridgeConfiguration? = { ConsentStore().configuration },
         tokenProvider: @escaping () -> String? = { KeychainStore.deviceToken() },
         exportDirectory: URL = FileManager.default.temporaryDirectory,
+        removeExportFile: @escaping (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) },
         transport: @escaping (URLRequest) async throws -> (Data, URLResponse) = { try await URLSession.shared.data(for: $0) }
     ) {
         self.revisionProvider = revisionProvider
         self.configurationProvider = configurationProvider
         self.tokenProvider = tokenProvider
         self.exportDirectory = exportDirectory
+        self.removeExportFile = removeExportFile
         self.transport = transport
         synchronizeIdentity()
     }
 
-    private func clearExports() {
-        let files = (try? FileManager.default.contentsOfDirectory(at: exportDirectory, includingPropertiesForKeys: nil)) ?? []
-        for url in files where url.lastPathComponent.hasPrefix("FitCrew-export-") && url.pathExtension == "json" {
-            try? FileManager.default.removeItem(at: url)
-        }
+    @discardableResult
+    private func clearExports() -> Bool {
         exportURL = nil
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: exportDirectory, includingPropertiesForKeys: nil)
+            var failed = false
+            for url in files where url.lastPathComponent.hasPrefix("FitCrew-export-") && url.pathExtension == "json" {
+                do { try removeExportFile(url) } catch { failed = true }
+            }
+            if failed { throw ProductError.message("部分文件未能清除") }
+            exportCleanupError = nil
+            return true
+        } catch {
+            exportCleanupError = "本机旧导出文件未确认清除。分享入口已关闭，请重试清理；服务器删除回执不代表本机文件已删除。"
+            return false
+        }
     }
+
+    func retryExportCleanup() { clearExports() }
 
     func synchronizeIdentity() {
         let revision = revisionProvider()
@@ -170,10 +186,10 @@ final class ProductStore: ObservableObject {
         guard let operation = beginOperation() else { return }
         defer { finish(operation) }
         do {
-            clearExports()
+            guard clearExports() else { throw ProductError.message(exportCleanupError ?? "请先清理旧导出") }
             let data = try await request("/v3/export", operation: operation, query: [URLQueryItem(name: "scope", value: scope)])
             guard isCurrent(operation) else { return }
-            clearExports()
+            guard clearExports() else { throw ProductError.message(exportCleanupError ?? "请先清理旧导出") }
             let url = exportDirectory.appending(path: "FitCrew-export-\(UUID().uuidString).json")
             try data.write(to: url, options: [.atomic, .completeFileProtection])
             exportURL = url

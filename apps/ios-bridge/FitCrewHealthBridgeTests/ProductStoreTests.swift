@@ -188,3 +188,42 @@ private final class ProductHarness {
     #expect(store.state != nil)
     #expect(store.error == nil)
 }
+
+@Test @MainActor func failedExportCleanupBlocksGenerationUntilRetry() async throws {
+    let harness = ProductHarness()
+    try FileManager.default.createDirectory(at: harness.directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: harness.directory) }
+    var failCleanup = true
+    var requests = 0
+    let store = ProductStore(
+        revisionProvider: { harness.revision }, configurationProvider: { harness.configuration },
+        tokenProvider: { "synthetic" }, exportDirectory: harness.directory,
+        removeExportFile: { url in
+            if failCleanup { throw CocoaError(.fileWriteNoPermission) }
+            try FileManager.default.removeItem(at: url)
+        },
+        transport: { request in
+            requests += 1
+            #expect(request.url?.path == "/v3/export")
+            #expect(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "scope", value: "health")])
+            return harness.response("{}")
+        }
+    )
+    let orphan = harness.directory.appending(path: "FitCrew-export-old.json")
+    try Data("private".utf8).write(to: orphan)
+    await store.exportData(scope: "health")
+    #expect(requests == 0)
+    #expect(store.exportURL == nil)
+    #expect(store.exportCleanupError != nil)
+    #expect(FileManager.default.fileExists(atPath: orphan.path))
+    harness.switchIdentity()
+    store.synchronizeIdentity()
+    #expect(store.exportCleanupError != nil)
+    failCleanup = false
+    store.retryExportCleanup()
+    #expect(store.exportCleanupError == nil)
+    #expect(!FileManager.default.fileExists(atPath: orphan.path))
+    await store.exportData(scope: "health")
+    #expect(requests == 1)
+    #expect(store.exportURL != nil)
+}
