@@ -132,8 +132,15 @@ final class ProductStore: ObservableObject {
             let requestID = pendingRequestIDs[operationKey] ?? UUID().uuidString
             pendingRequestIDs[operationKey] = requestID
             if path != "/v3/ai-consent" { payload["request_id"] = requestID }
-            _ = try await request(path, operation: operation, method: method, body: payload)
+            let responseData = try await request(path, operation: operation, method: method, body: payload)
             guard isCurrent(operation) else { return false }
+            if method == "DELETE" {
+                let confirmation = try JSONDecoder().decode(DeletionReceipt.self, from: responseData)
+                guard confirmation.deleted else { throw ProductError.message("服务器未确认删除，请重试。") }
+                receipt = confirmation.receipt_id
+                state = nil
+                clearExports()
+            }
             pendingRequestIDs.removeValue(forKey: operationKey)
             // A successful mutation is acknowledged even if the following refresh fails.
             do {
@@ -144,7 +151,7 @@ final class ProductStore: ObservableObject {
                 capabilities = newCapabilities
                 error = nil
             }
-            catch { guard isCurrent(operation) else { return false }; self.error = "已保存，但刷新失败，请下拉刷新。" }
+            catch { guard isCurrent(operation) else { return false }; self.error = "操作已完成，但刷新失败，请下拉刷新。" }
             return true
         } catch { if isCurrent(operation) { self.error = error.localizedDescription }; return false }
     }

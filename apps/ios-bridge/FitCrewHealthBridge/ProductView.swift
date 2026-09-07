@@ -44,6 +44,7 @@ struct ContentView: View {
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
         }
+        .onChange(of: store.state?.trends?.points) { _, _ in selectedTrend = nil }
         .sheet(item: $selectedTrend) { point in
             NavigationStack {
                 VStack(alignment: .leading, spacing: 20) {
@@ -221,6 +222,7 @@ struct ContentView: View {
                 }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy || !BodyCheckInput.isValid(energy: energy, stress: stress, note: note))
                 if saved { Text("记录已保存").foregroundStyle(green) }
             }.disabled(store.busy)
+            if let receipt = store.receipt { Text("删除回执：\(receipt)").font(.footnote).textSelection(.enabled) }
             ForEach(Array((store.state?.logs ?? []).reversed())) { log in card { Text(log.feeling).font(.headline); Text("精力 \(log.energy)/5 · 压力 \(log.stress)/3"); if let value = log.sleepFeeling { Text("睡醒：\(value)") }; if let value = log.trainingFeeling { Text("运动：\(value)") }; if let value = log.stressSource { Text("压力来源：\(value)") }; if !log.note.isEmpty { Text(log.note) }; Text(log.createdAt).font(.footnote); Button("删除记录", role: .destructive) { deletion = "logs/\(log.id)" }.frame(minHeight: 44) } }
         }
     }

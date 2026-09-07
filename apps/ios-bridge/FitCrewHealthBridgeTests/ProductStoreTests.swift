@@ -8,6 +8,8 @@ private final class ProductHarness {
     var binding = UUID()
     var delayed: CheckedContinuation<(Data, URLResponse), Error>?
     var delayNext = true
+    var failRefresh = false
+    var confirmDelete = false
     let directory = FileManager.default.temporaryDirectory.appending(path: "FitCrew-tests-\(UUID().uuidString)")
     var configuration: BridgeConfiguration { BridgeConfiguration(baseURL: URL(string: "https://example.invalid")!, deviceBindingID: binding, consentIDs: [:]) }
     func response(_ json: String, status: Int = 200) -> (Data, URLResponse) {
@@ -18,6 +20,11 @@ private final class ProductHarness {
             delayNext = false
             return try await withCheckedThrowingContinuation { delayed = $0 }
         }
+        if request.httpMethod == "DELETE", confirmDelete {
+            failRefresh = true
+            return response(#"{"deleted":true,"receipt_id":"synthetic-receipt"}"#)
+        }
+        if request.url!.path == "/v3/state", failRefresh { throw URLError(.notConnectedToInternet) }
         if request.url!.path == "/v3/capabilities" {
             return response(#"{"ai_available":false,"ai_provider":"none","ai_notice":"none","ai_notice_version":"v1","ai_consent_granted":false}"#)
         }
@@ -142,4 +149,23 @@ private final class ProductHarness {
     let nextStart = AccountIdentitySnapshot(store: store)
     store.configuration = BridgeConfiguration(baseURL: URL(string: "https://other.invalid")!, deviceBindingID: UUID(), consentIDs: [:])
     #expect(!nextStart.isCurrent(in: store))
+}
+
+@Test @MainActor func acknowledgedDeletionClearsSnapshotAndExportEvenIfRefreshFails() async throws {
+    let harness = ProductHarness()
+    harness.delayNext = false
+    let store = try harness.makeStore()
+    defer { try? FileManager.default.removeItem(at: harness.directory) }
+    await store.refresh()
+    #expect(store.state != nil)
+    await store.exportData()
+    let exported = try #require(store.exportURL)
+    harness.confirmDelete = true
+    let deleted = await store.mutate("/v3/logs/synthetic", method: "DELETE")
+    #expect(deleted)
+    #expect(store.receipt == "synthetic-receipt")
+    #expect(store.state == nil)
+    #expect(store.exportURL == nil)
+    #expect(!FileManager.default.fileExists(atPath: exported.path))
+    #expect(store.error?.contains("刷新失败") == true)
 }

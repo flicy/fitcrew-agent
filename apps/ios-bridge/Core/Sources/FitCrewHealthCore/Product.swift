@@ -89,7 +89,7 @@ public struct ProductTrends: Decodable, Sendable {
     public let points: [ProductTrendPoint]
 }
 
-public struct ProductTrendPoint: Decodable, Identifiable, Sendable {
+public struct ProductTrendPoint: Decodable, Identifiable, Sendable, Equatable {
     public var id: String { date }
     public let date: String
     public let count: Int
