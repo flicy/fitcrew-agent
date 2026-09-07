@@ -77,3 +77,13 @@ Added a seven-day pre-start baseline, seven-day observation window and purpose d
 `afeac8b` 的 CI 34159297298 三项已全部通过，包含 iOS 模拟器构建与测试。后续本地补充趋势详情、实验基线和 Today 下一次检查条件，尚需新一轮完整构建。Next Check 根据目标、提案、暂停、期限及有效记录日数显示后续动作；时间到不等于样本充足。iOS 停止实验增加确认，保留历史与记录。目标仍未完成，不能将此进展当作完整 Today 四态、真实 HealthKit 评价或正式提审的证明。
 
 All three jobs in CI 34159297298 passed for `afeac8b`, including iOS simulator build/tests. Later local changes add trend details, experiment baselines and conditional Next Check guidance and need a new full build. Guidance distinguishes missing goals, proposals, pauses, elapsed windows and valid recorded days; elapsed time does not establish sufficient evidence. iOS now confirms stopping while retaining history and records. The full goal remains incomplete, including full Today states, real HealthKit evaluation and formal submission.
+
+### 安装与汇总修正 / Installation and aggregate correction
+
+微信开发者工具 2.02.2608070 已安装至 `/Applications/wechatwebdevtools.app`，官方安装包 SHA-256 已核对；CLI 已启动，但 `islogin` 返回 false，测试项目导入返回 code 10，需要用户扫码登录。二维码是临时登录凭据，仅在 Git 排除的本地 sandbox 中。用户尚未完成登录，不能声称已编译或真机预览。CI 34159571316 对 `a269eb8` 已全部通过。
+
+健康日汇总算法更新为 `features.v2`：无样本的睡眠、活动指标返回 null，有明确零值样本才返回 0。后台全量 373 项测试通过。仅改变新计算或重新物化的汇总，旧 `features.v1` 缓存尚未批量重算；正式接入时须处理旧缓存并验证来源去重与授权过滤，不可把此改动当作 HealthKit 完整分析已完成。
+
+WeChat DevTools 2.02.2608070 is installed at `/Applications/wechatwebdevtools.app`, with the official installer SHA-256 verified. The CLI started, but `islogin` returned false and project import returned code 10 requiring user QR login. Temporary QR credentials stay in the Git-excluded local sandbox. No official mini-program compile or device preview is verified. CI 34159571316 passed for `a269eb8`.
+
+Daily health aggregation now uses `features.v2`: absent sleep/activity samples yield null, while an explicitly measured zero remains zero. All 373 backend tests pass. This affects newly computed/rematerialized aggregates; old `features.v1` caches have not been batch-recomputed. Production integration must address legacy caches, source deduplication and consent filtering. Full HealthKit analysis remains incomplete.

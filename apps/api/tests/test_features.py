@@ -65,3 +65,21 @@ def test_daily_features_cover_apple_health_and_fitness_aggregates() -> None:
     assert features["recovery"]["hrv_ms_mean"] == pytest.approx(45.0)
     assert features["recovery"]["resting_heart_rate_bpm_mean"] == pytest.approx(60.0)
     assert "raw_values" not in features
+
+
+def test_absent_health_categories_are_unknown_not_zero():
+    features = compute_daily_features([])
+    assert features["algorithm_version"] == "features.v2"
+    assert all(value is None for value in features["sleep"].values())
+    assert all(value is None for value in features["activity"].values())
+    assert all(value is None for value in features["recovery"].values())
+    assert features["data_quality"]["sample_counts"] == {}
+
+
+def test_measured_zero_is_distinct_from_missing_category():
+    instant = datetime(2026, 8, 1, tzinfo=UTC)
+    features = compute_daily_features([DecryptedSample("step_count", instant, instant, 0.0)])
+    assert features["activity"]["steps"] == 0
+    assert features["activity"]["active_energy_kcal"] is None
+    assert features["sleep"]["total_hours"] is None
+    assert features["data_quality"]["sample_counts"] == {"step_count": 1}

@@ -69,14 +69,14 @@ def materialize_daily_feature(
             feature_date=date_text,
             feature_set=FEATURE_SET,
             quality_status="partial",
-            algorithm_version="features.v1",
+            algorithm_version=payload["algorithm_version"],
             payload_nonce=encrypted.nonce,
             payload_ciphertext=encrypted.ciphertext,
         )
         session.add(feature)
     else:
         feature.quality_status = "partial"
-        feature.algorithm_version = "features.v1"
+        feature.algorithm_version = payload["algorithm_version"]
         feature.payload_nonce = encrypted.nonce
         feature.payload_ciphertext = encrypted.ciphertext
     session.flush()

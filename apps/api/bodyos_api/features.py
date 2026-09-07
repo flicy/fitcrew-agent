@@ -20,6 +20,10 @@ def _mean_or_none(values: list[float]) -> float | None:
     return mean(values) if values else None
 
 
+def _sum_or_none(values: list[float], divisor: float = 1) -> float | None:
+    return sum(values) / divisor if values else None
+
+
 def compute_daily_features(
     samples: list[DecryptedSample], *, expected_glucose_interval_minutes: int = 5
 ) -> dict[str, Any]:
@@ -54,24 +58,24 @@ def compute_daily_features(
     sleep_rem = _values(samples, "sleep_rem")
     sleep_core = _values(samples, "sleep_core")
     sleep_unspecified = _values(samples, "sleep_asleep")
-    sleep_total_seconds = sum(sleep_deep + sleep_rem + sleep_core + sleep_unspecified)
+    sleep_values = sleep_deep + sleep_rem + sleep_core + sleep_unspecified
     workouts = _values(samples, "workout")
 
     return {
-        "algorithm_version": "features.v1",
+        "algorithm_version": "features.v2",
         "glucose": glucose,
         "sleep": {
-            "total_hours": sleep_total_seconds / 3600,
-            "deep_hours": sum(sleep_deep) / 3600,
-            "rem_hours": sum(sleep_rem) / 3600,
-            "core_hours": sum(sleep_core) / 3600,
+            "total_hours": _sum_or_none(sleep_values, 3600),
+            "deep_hours": _sum_or_none(sleep_deep, 3600),
+            "rem_hours": _sum_or_none(sleep_rem, 3600),
+            "core_hours": _sum_or_none(sleep_core, 3600),
         },
         "activity": {
-            "steps": sum(_values(samples, "step_count")),
-            "active_energy_kcal": sum(_values(samples, "active_energy")),
-            "stand_hours": sum(_values(samples, "stand_hours")),
-            "workout_count": len(workouts),
-            "workout_minutes": sum(workouts) / 60,
+            "steps": _sum_or_none(_values(samples, "step_count")),
+            "active_energy_kcal": _sum_or_none(_values(samples, "active_energy")),
+            "stand_hours": _sum_or_none(_values(samples, "stand_hours")),
+            "workout_count": len(workouts) if workouts else None,
+            "workout_minutes": _sum_or_none(workouts, 60),
         },
         "recovery": {
             "hrv_ms_mean": _mean_or_none(_values(samples, "heart_rate_variability")),
