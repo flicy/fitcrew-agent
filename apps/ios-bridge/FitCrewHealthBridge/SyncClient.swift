@@ -162,6 +162,10 @@ final class BridgeViewModel: ObservableObject {
                 fullReconciliation: fullReconciliation,
                 samples: samples
             )
+            guard !batches.isEmpty else {
+                statusMessage = "本次没有可上传样本，可能尚无记录或读取受限。未推进同步游标；可先手动记录，或检查权限后重试。"
+                return false
+            }
             for batch in batches {
                 guard identity.isCurrent(in: consentStore), consentStore.configuration == configuration else { return false }
                 try await syncClient.upload(batch, to: configuration.baseURL, deviceToken: token)

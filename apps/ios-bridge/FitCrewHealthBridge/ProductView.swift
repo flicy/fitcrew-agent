@@ -164,8 +164,15 @@ struct ContentView: View {
             case 5:
                 Text("确认首次同步").font(.title2.bold())
                 Text("授权不等于有样本。可以查看同步状态并重试，也可以先用手动记录。")
-                Button("查看授权与同步") { showHealthConsent = true }
-                if progress.route == "health" { Button("检查同步并继续") { advanceOnboarding(progress) } }
+                Button("查看健康授权") { showHealthConsent = true }
+                Text(model.statusMessage).font(.footnote)
+                Text("最近同步：\(model.lastSyncText)").font(.footnote)
+                if progress.route == "health" {
+                    Button(model.isSyncing ? "正在同步…" : "开始或重试首次同步") {
+                        Task { if await model.sync(fullReconciliation: true) { await store.refresh() } }
+                    }
+                    Button("检查同步并继续") { advanceOnboarding(progress) }
+                }
                 Button("暂用手动记录，继续") { advanceOnboarding(progress, route: "manual") }
             default:
                 Text("做一次 Body Check").font(.title2.bold())
@@ -173,7 +180,7 @@ struct ContentView: View {
                 Button("已保存记录，完成引导") { advanceOnboarding(progress) }.disabled(store.state?.logs.isEmpty ?? true)
             }
             Text("确认后的进度保存在你的账号中，中断后可继续。").font(.footnote)
-        }.disabled(store.busy)
+        }.disabled(store.busy || model.isSyncing)
     }
     private func advanceOnboarding(_ progress: ProductOnboarding, route: String? = nil) {
         var body: [String: Any] = ["step": progress.step]
