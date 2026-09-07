@@ -169,3 +169,22 @@ private final class ProductHarness {
     #expect(!FileManager.default.fileExists(atPath: exported.path))
     #expect(store.error?.contains("刷新失败") == true)
 }
+
+@Test @MainActor func failedRefreshDoesNotLeaveOldHealthOrTrendStateVisible() async throws {
+    let harness = ProductHarness()
+    harness.delayNext = false
+    let store = try harness.makeStore()
+    defer { try? FileManager.default.removeItem(at: harness.directory) }
+    await store.refresh()
+    #expect(store.state != nil)
+    harness.failRefresh = true
+    await store.refresh()
+    #expect(store.state == nil)
+    #expect(store.capabilities == nil)
+    #expect(store.error != nil)
+    #expect(!store.busy)
+    harness.failRefresh = false
+    await store.refresh()
+    #expect(store.state != nil)
+    #expect(store.error == nil)
+}

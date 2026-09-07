@@ -118,7 +118,13 @@ final class ProductStore: ObservableObject {
             capabilities = newCapabilities
             error = nil
         }
-        catch { if isCurrent(operation) { self.error = error.localizedDescription } }
+        catch {
+            if isCurrent(operation) {
+                state = nil
+                capabilities = nil
+                self.error = error.localizedDescription
+            }
+        }
     }
 
     @discardableResult
