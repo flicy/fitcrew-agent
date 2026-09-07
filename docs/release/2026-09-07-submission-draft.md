@@ -49,3 +49,33 @@ Reviewers can inspect the five tabs before connecting; full review requires work
 Privacy verification must cover encrypted platform identity, manual records and health ingestion; actual retention, backup expiry and hosting; AI provider, agreements, processing location and eligibility; server-side deletion and Apple token revocation; and on-device export cleanup. Do not promise unverified immediate permanent deletion of backups or copies already saved by the user.
 
 Acceptance requires real platform login and cancellation/expiry tests; persistent records and two-account isolation; idempotent experiment transitions and insufficient-data states; real-device HealthKit reads plus denial/revocation; explicit AI recipient consent and honest failure states; export and deletion that invalidate dependent results and prevent stale-request resurrection; then platform builds, signing, truthful privacy/filing forms and formal review submission receipts.
+
+## 2026-09-08 更新：当前候选范围 / Current candidate scope update
+
+本节补充前述草稿，以当前发布分支源码为准。尚无生产部署、真机验收或平台正式提交回执。最终截图和构建号需在设计合入与完整验证后取得，不能使用合成数据预览冒充真实健康记录。
+
+This section updates the draft from the current release branch. Production deployment, device acceptance and formal submission receipts remain absent. Capture final screenshots and build identifiers after design integration and complete verification; synthetic previews are not real health records.
+
+### 可供审核的功能描述候选 / Candidate feature description
+
+在六步引导中了解用途并选择记录方式，设定 90 天生活方式方向；记录精力、压力、整体感受及可选睡醒感受、运动感受、压力来源和笔记。查看 30/60/90 天手动记录趋势、缺口和按日期详情，理解旅程日历阶段。每周实验由本人确认开始，可暂停或停止；记录足够时展示描述性比较。观察里程碑可撤回，实验主观反馈可单独确认为私人记忆，来源删除会使依赖证据失效。以上描述是代码候选范围，仍需真实端到端验收。
+
+A six-step onboarding explains purposes and record modes. Users choose a 90-day lifestyle direction; record energy, stress, general feelings and optional sleep/training feelings, stress sources and notes; and view manual 30/60/90-day trends, gaps, date details and calendar phases. Weekly experiments require explicit acceptance and can be paused or stopped. Sufficient records support descriptive comparisons. Observation milestones are withdrawable; subjective feedback can separately become a private confirmed memory. Source erasure invalidates dependent evidence. This is the implemented candidate scope, pending real end-to-end acceptance.
+
+### 导出和删除核验路径 / Export and deletion acceptance
+
+1. 分别导出全部、手动记录与实验、Apple 健康数据，检查文件 `export_metadata.scope` 与选择一致；回执只证明服务器生成，不证明本机保存或已发送。
+2. 切换范围再次生成，确认旧文件清理；模拟清理失败，iOS 应阻止新生成并显示重试，不能仍分享旧文件。已另存或发出的副本不在应用控制范围内。
+3. 仅删除全部手动记录，核对健康授权与同步位置、账号及实验历史保留；依赖记录的结果、确认记忆及里程碑失效，旧请求不可恢复记录。
+4. 删除全部私有数据与注销分别测试，核对授权撤回、账号保留或会话撤销的差异及服务回执。查看本机清理错误是否与服务器成功分别呈现。
+
+1. Export all, product/manual and Apple Health scopes separately and verify `export_metadata.scope`. A receipt establishes server generation, not local saving or delivery.
+2. Regenerate with a different scope and check old-file removal. Simulated iOS cleanup failure must block regeneration and offer retry without exposing an old share link. Previously saved/shared external copies are outside app control.
+3. Delete all manual records only: health consent/cursors, account and experiment history must remain; dependent results, confirmed memories and milestones must invalidate, and stale requests must not restore records.
+4. Test full private-data deletion and account deletion separately, including their different consent/session effects, server receipts and independent local-cleanup errors.
+
+### 不可据此宣称的能力 / Claims not established
+
+当前趋势和实验比较基于手动记录，不能写成已验证的 HealthKit 长期趋势或个性化医学建议。确认记忆未自动送给 AI；不能宣传已读到微信聊天上下文、已获得左侧微信 AI 入口或已具备主动通知。iOS 与微信账号仍未自动关联。真实 HealthKit 同步、首次权限分支、生产 AI 提供方及资格均需继续验证。
+
+Current trends/comparisons use manual records and do not establish verified longitudinal HealthKit analytics or personalized medical advice. Confirmed memories are not automatically sent to AI. Access to WeChat chat context, the developer AI entry or proactive notifications is not established. iOS and WeChat accounts are not automatically linked. Real HealthKit sync, initial permission branches and production AI provider/eligibility still require validation.

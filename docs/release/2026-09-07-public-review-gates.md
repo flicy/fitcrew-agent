@@ -66,3 +66,9 @@ Do not run the legacy all-service deployment script: it starts the historical ga
 - [WeChat privacy authorization](https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html)
 - [WeChat filing guidance](https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html)
 - [Apple mainland China app information](https://developer.apple.com/cn/help/app-store-connect/reference/app-information/app-information)
+
+## 2026-09-08 工程状态更正 / Engineering status correction
+
+以上早期快照中的“未提供 AppID / 未安装开发者工具 / 无 iPhone 确认”已过时：用户已提供测试 AppID，已确认有 iPhone；微信开发者工具已安装，官方离线 WXML/WXSS 编译通过。测试号仅用于隔离测试配置，生产 AppID 与备案域名仍未核实，DevTools 最近实测尚未登录。385 项后端、18 项小程序测试通过；`68ea503` 的 CI 34161612971 全部通过。之后的新提交仍待完整云端验证；查询 34161964649 遇 TLS 超时，不能据此声称失败、成功或任务终止。设计任务在独立工作树进行，未合入发布分支。详细范围和待验证项见同目录 `2026-09-08-scope-audit.md`。
+
+The earlier snapshot is outdated regarding AppID, Developer Tools and iPhone availability: the user supplied a test AppID and confirmed an iPhone; DevTools is installed and official offline WXML/WXSS compilation passes. The test ID is isolated from production configuration. Production AppID/filing/domain remain unverified; the latest DevTools login check was false. Backend tests: 385 passing; mini-program tests: 18 passing. CI 34161612971 passed for `68ea503`. Subsequent commits still need full cloud verification. Queries for run 34161964649 timed out during TLS; this establishes neither success, failure nor termination. Design work remains in a separate worktree and is not yet integrated. See `2026-09-08-scope-audit.md` for detailed current scope and gaps.
