@@ -244,9 +244,38 @@ def test_trends_keep_missing_days_and_recompute_after_erasure(session, field_cip
     first = client.post("/v3/logs", json=rid(energy=1, stress=1, feeling="正常")).json()
     second = client.post("/v3/logs", json=rid(energy=5, stress=3, feeling="正常")).json()
     points = client.get("/v3/state").json()["trends"]["points"]
-    assert points[-1] == {"date": first["date"], "count": 2, "energy": 3, "stress": 2}
+    assert points[-1] == {"date": first["date"], "count": 2, "energy": 3, "stress": 2, "events": []}
     assert points[-2]["energy"] is None
     assert client.delete("/v3/logs/" + second["id"]).status_code == 200
     assert client.get("/v3/state").json()["trends"]["points"][-1]["energy"] == 1
     assert client.delete("/v3/logs/" + first["id"]).status_code == 200
     assert client.get("/v3/state").json()["trends"] == empty
+
+
+def test_trend_window_uses_account_timezone_and_excludes_outside_days(
+    session, field_cipher, monkeypatch
+):
+    from datetime import UTC, datetime, timedelta
+
+    from bodyos_api.product import ProductService
+
+    _, uid = client_for(session, field_cipher)
+    session.get(User, uid).timezone = "Asia/Shanghai"
+    session.commit()
+    monkeypatch.setattr(ProductService, "now", lambda self: datetime(2026, 1, 1, 18, tzinfo=UTC))
+    svc = ProductService(session, field_cipher, uid)
+    start = (datetime(2026, 1, 2) - timedelta(days=89)).date().isoformat()
+    logs = [
+        {"date": start, "energy": 1, "stress": 2},
+        {"date": "2026-01-02", "energy": 5, "stress": 1},
+        {"date": "2026-01-03", "energy": 2, "stress": 1},
+        {"date": "2025-01-01", "energy": 3, "stress": 1},
+    ]
+    result = svc.trends(
+        logs, [{"title": "Synthetic observation", "accepted_at": "2026-01-01T18:00:00+00:00"}]
+    )
+    assert result["window_end"] == "2026-01-02"
+    assert result["points"][0]["date"] == start
+    assert sum(p["count"] for p in result["points"]) == 2
+    assert result["points"][-1]["events"] == ["开始实验：Synthetic observation"]
+    assert all(p["events"] == [] for p in result["points"][:-1])

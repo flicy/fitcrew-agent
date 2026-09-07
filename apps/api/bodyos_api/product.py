@@ -138,11 +138,21 @@ class ProductService:
         self.session.commit()
         return result
 
-    def trends(self, logs):
+    def trends(self, logs, experiments=()):
         end = datetime.fromisoformat(self.today()).date()
         grouped = {}
         for item in logs:
             grouped.setdefault(item["date"], []).append(item)
+        events = {}
+        for experiment in experiments:
+            if experiment.get("accepted_at"):
+                day = (
+                    datetime.fromisoformat(experiment["accepted_at"])
+                    .astimezone(ZoneInfo(self.session.get(User, self.user_id).timezone))
+                    .date()
+                    .isoformat()
+                )
+                events.setdefault(day, []).append("开始实验：" + experiment["title"])
         points = []
         for offset in range(89, -1, -1):
             day = (end - timedelta(days=offset)).isoformat()
@@ -151,6 +161,7 @@ class ProductService:
                 {
                     "date": day,
                     "count": len(records),
+                    "events": events.get(day, []),
                     "energy": round(sum(r["energy"] for r in records) / len(records), 2)
                     if records
                     else None,
@@ -172,11 +183,12 @@ class ProductService:
             select(func.count(HealthSample.id)).where(HealthSample.fitcrew_user_id == self.user_id)
         )
         logs = [self.read(row) for row in self.rows("log")]
+        experiments = [self.read(row) for row in self.rows("experiment")]
         return {
             "journey": journey,
-            "experiments": [self.read(row) for row in self.rows("experiment")],
+            "experiments": experiments,
             "logs": logs,
-            "trends": self.trends(logs),
+            "trends": self.trends(logs, experiments),
             "mission": self.mission(journey) if journey else None,
             "health": {
                 "sample_count": count or 0,

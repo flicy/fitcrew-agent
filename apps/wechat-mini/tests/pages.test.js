@@ -79,5 +79,6 @@ test('trend windows retain gaps and clear on failed refresh',async()=>{
  assert.equal(page.data.trendPoints.length,30);assert.equal(page.data.observedDays,1);assert.equal(page.data.trendPoints[0].energy,null);
  page.selectTrend({currentTarget:{dataset:{days:60}}});assert.equal(page.data.trendPoints.length,60);
  page.selectTrend({currentTarget:{dataset:{days:90}}});assert.equal(page.data.trendPoints.length,90);
- h.setRequest(async()=>{throw new Error('offline');});await page.refresh();assert.deepEqual(page.data.trendPoints,[]);assert.equal(page.data.observedDays,0);
+ page.openTrendPoint({currentTarget:{dataset:{date:'89'}}});assert.equal(page.data.selectedTrend.energy,4);
+ h.setRequest(async()=>{throw new Error('offline');});await page.refresh();assert.deepEqual(page.data.trendPoints,[]);assert.equal(page.data.observedDays,0);assert.equal(page.data.selectedTrend,null);
 });

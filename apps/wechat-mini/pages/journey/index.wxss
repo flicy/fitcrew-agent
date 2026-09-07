@@ -2,3 +2,6 @@
 .trend-day { width: 150rpx; flex-shrink: 0; text-align: center; }
 .trend-column { height: 100px; display: flex; align-items: flex-end; justify-content: center; }
 .trend-bar { width: 36rpx; background: #7757a5; border-radius: 8rpx 8rpx 0 0; }
+
+.trend-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; }
+.trend-details { width: 100%; margin: 0; padding-bottom: calc(32rpx + env(safe-area-inset-bottom)); }

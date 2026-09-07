@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var store = ProductStore()
     @State private var tab = 0
     @State private var trendDays = 30
+    @State private var selectedTrend: ProductTrendPoint?
     @State private var showLighten = false
     @State private var lightenMission: ProductMission?
     @State private var goal = "sleep"
@@ -36,11 +37,24 @@ struct ContentView: View {
         .sheet(isPresented: $showHealthConsent) { HealthConsentView(model: model) }
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
-            showLighten = false; lightenMission = nil
+            showLighten = false; lightenMission = nil; selectedTrend = nil
             note = ""; saved = false; experiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
+        }
+        .sheet(item: $selectedTrend) { point in
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let energy = point.energy, let stress = point.stress {
+                        Text("\(point.count) 条手动记录 · 精力均值 \(energy.formatted()) / 5 · 压力均值 \(stress.formatted()) / 3")
+                    } else { Text("当天没有记录，不能推断当天状态。") }
+                    ForEach(point.events ?? [], id: \.self) { Text($0) }
+                    if (point.events ?? []).isEmpty { Text("当天无已记录的实验开始事件。") }
+                    Text("实验事件仅作背景，不说明变化的原因。").font(.footnote)
+                    Button("关闭") { selectedTrend = nil }
+                }.padding(24).navigationTitle(point.date)
+            }.presentationDetents([.medium])
         }
         .sheet(isPresented: $showLighten) {
             NavigationStack {
@@ -128,7 +142,8 @@ struct ContentView: View {
             Picker("观察窗口", selection: $trendDays) {
                 Text("30 天").tag(30); Text("60 天").tag(60); Text("90 天").tag(90)
             }.pickerStyle(.segmented)
-            Text("近 \(trendDays) 天 · \(points.filter { $0.count > 0 }.count) 天有记录")
+            Text("近 \(trendDays) 天 · \(points.filter { $0.count > 0 }.count) 天有记录 · \(points.filter { $0.count == 0 }.count) 天缺失")
+            Text("范围 \(points.first?.date ?? trends.windowEnd) — \(trends.windowEnd) · 点击一天查看详情").font(.footnote)
             Text("来源：手动身体记录。同日取均值，精力 1–5 档；空缺表示未记录，不代表零分。不能据此判断行动效果。").font(.footnote)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .bottom, spacing: 12) {
@@ -140,7 +155,7 @@ struct ContentView: View {
                             }.frame(height: 100)
                             Text(point.energy.map { $0.formatted() } ?? "缺失").font(.caption)
                             Text(point.date).font(.caption2)
-                        }.frame(width: 82).accessibilityElement(children: .combine)
+                        }.frame(width: 82).contentShape(Rectangle()).onTapGesture { selectedTrend = point }.accessibilityElement(children: .combine).accessibilityAddTraits(.isButton).accessibilityAction { selectedTrend = point }
                     }
                 }.padding(.vertical, 8)
             }

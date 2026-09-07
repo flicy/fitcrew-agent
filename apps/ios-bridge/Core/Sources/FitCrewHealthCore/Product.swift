@@ -92,4 +92,5 @@ public struct ProductTrendPoint: Decodable, Identifiable, Sendable {
     public let date: String
     public let count: Int
     public let energy, stress: Double?
+    public let events: [String]?
 }
