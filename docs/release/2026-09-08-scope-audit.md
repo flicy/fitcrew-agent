@@ -133,3 +133,9 @@ CI 34161612971 passed for `68ea503`, including iOS simulator build/tests. New mi
 两端新增全部、手动记录与实验、Apple 健康数据三种导出范围。服务器验证范围并附生成时间、范围和审计回执；只证明生成，不证明保存或分享。手动范围不含健康样本与健康状态元数据；健康范围不含手动记录。重新生成前清理旧文件，避免失败后分享上次不同范围的文件。383 项后端测试与18项小程序测试通过，Swift 新请求使用独立查询参数，页面语法通过，尚待完整构建。删除范围选择仍待实现。
 
 Both clients now offer all, manual/product and Apple Health export scopes. Server validation and metadata record scope, generation time and an audit receipt, proving generation only. Product-only export excludes health samples and health-status metadata; health-only excludes manual records. Old exports are removed before regeneration to prevent sharing a previous scope after failure. The backend has 383 passing tests and the mini-program 18. Swift uses separate URL query items and passed syntax parsing; full build validation remains pending. Scoped deletion is still incomplete.
+
+### 删除范围 / Deletion scopes
+
+新增全部私有数据与仅全部手动身体记录两种删除范围。后者使用同一事务删除记录、作废依赖结果/确认记忆/里程碑并生成回执，保留健康授权、同步位置、账号及实验历史。两端在确认前说明影响，删除成功后清除页面草稿与导出，重新读取状态。385 项后端、18 项小程序测试通过，新 iOS 代码仅语法检查；完整构建及设备验证仍待完成。此范围不提供按日期或单独健康类别批量删除，不将其描述为任意范围删除。
+
+Deletion now supports all private data or all manual body records. The latter removes records and invalidates dependent results/memories/milestones in one transaction, issues a receipt, and preserves health consent, sync cursors, identity and experiment history. Both clients explain impact before confirmation, clear drafts/exports after success and refresh state. Backend tests: 385 passing; mini-program tests: 18 passing. New iOS changes have syntax validation only and await full build/device checks. Date-range and individual health-category bulk deletion are not offered.

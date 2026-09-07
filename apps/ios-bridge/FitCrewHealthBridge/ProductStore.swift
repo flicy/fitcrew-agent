@@ -181,11 +181,12 @@ final class ProductStore: ObservableObject {
     }
 
     @discardableResult
-    func delete(_ kind: String) async -> Bool {
+    func delete(_ kind: String, scope: String = "all") async -> Bool {
+        guard ["all", "logs"].contains(scope), kind != "account" || scope == "all" else { return false }
         guard let operation = beginOperation() else { return false }
         defer { finish(operation) }
         do {
-            let data = try await request("/v3/\(kind)", operation: operation, method: "DELETE", body: ["confirmation": "DELETE"])
+            let data = try await request("/v3/\(kind)", operation: operation, method: "DELETE", body: kind == "account" ? ["confirmation": "DELETE"] : ["confirmation": "DELETE", "scope": scope])
             guard isCurrent(operation) else { return false }
             let result = try JSONDecoder().decode(DeletionReceipt.self, from: data)
             guard result.deleted else { throw ProductError.message("服务器未确认删除，请重试。") }
@@ -193,7 +194,7 @@ final class ProductStore: ObservableObject {
             state = nil
             capabilities = nil
             clearExports()
-            if let old = ConsentStore().configuration {
+            if scope == "all", let old = ConsentStore().configuration {
                 ConsentStore().configuration = BridgeConfiguration(baseURL: old.baseURL, deviceBindingID: old.deviceBindingID, consentIDs: [:])
                 ConsentStore().lastSync = nil
                 ConsentStore().lastFullReconciliation = nil

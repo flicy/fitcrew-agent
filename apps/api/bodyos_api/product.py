@@ -715,7 +715,7 @@ class ProductService:
         )
         return {"deleted": True, "receipt_id": receipt}
 
-    def delete_log(self, key):
+    def delete_log(self, key, *, commit=True):
         self.lock()
         row = self.row("log", key)
         if not row:
@@ -759,6 +759,20 @@ class ProductService:
                     {"digest": self.read(cached)["digest"], "erased": True},
                 )
         result = self.receipt("product.log.deleted")
+        if commit:
+            self.session.commit()
+        return result
+
+    def erase_logs(self):
+        self.lock()
+        keys = [r.resource_key for r in self.rows("log")]
+        for key in keys:
+            self.delete_log(key, commit=False)
+        result = {
+            **self.receipt("product.logs.deleted"),
+            "scope": "logs",
+            "deleted_count": len(keys),
+        }
         self.session.commit()
         return result
 

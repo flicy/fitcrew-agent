@@ -4,7 +4,7 @@ const {validBase}=require('../../lib/client');
 const config=require('../../config');
 Page(base({
  async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
- data:{exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
+ data:{deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
  async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn)await this.capabilities();},
  async capabilities(){const epoch=lifecycle.epoch(wx);try{const caps=await getApp().api.request('/v3/capabilities');if(lifecycle.current(wx,epoch))this.setData({caps});}catch(e){if(lifecycle.current(wx,epoch))this.setData({caps:null,error:e.message});}},
  openPrivacy(){if(wx.openPrivacyContract)wx.openPrivacyContract({fail:()=>this.setData({error:'平台隐私保护指引尚未配置，请由运营者在小程序后台补全后再登录。'})});},
@@ -57,13 +57,14 @@ Page(base({
   else this.setData({error:'当前微信不支持发送文件，请升级微信；文件仍保留在本机沙箱。'});
  },
  clearExport(){try{lifecycle.cleanExport(wx);this.setData({exportPath:''});}catch(e){this.setData({error:'本机导出文件未确认清除，请重试。'});}},
+ selectDeleteScope(e){if(!this.data.busy)this.setData({deleteScopeIndex:Number(e.detail.value)});},
  async erase(e){
   this.syncBoundary();let epoch=lifecycle.epoch(wx);
-  const account=e.currentTarget.dataset.kind==='account';
-  if(this.data.busy||!await confirm(account?'永久注销账户？':'永久删除私有数据？',account?'删除全部私有记录、健康数据和账户，并撤销登录凭据。无法撤销。':'删除旅程、实验、身体记录及健康数据；账户保留。无法撤销。'))return;
+  const account=e.currentTarget.dataset.kind==='account',scope=account?'all':['all','logs'][this.data.deleteScopeIndex];if(!scope)return;
+  if(this.data.busy||!await confirm(account?'永久注销账户？':'永久删除私有数据？',account?'删除全部私有记录、健康数据和账户，并撤销登录凭据。无法撤销。':scope==='logs'?'删除全部手动身体记录，保留账号、健康数据和实验历史；依赖记录的结果、确认记忆与里程碑会失效。无法撤销。':'删除旅程、实验、身体记录及健康数据；账户保留。无法撤销。'))return;
   if(!lifecycle.current(wx,epoch))return;this.setData({busy:true,error:''});
   try{
-   const result=await getApp().api.request(account?'/v3/account':'/v3/data','DELETE',{confirmation:'DELETE'});
+   const result=await getApp().api.request(account?'/v3/account':'/v3/data','DELETE',account?{confirmation:'DELETE'}:{confirmation:'DELETE',scope});
    if(!lifecycle.current(wx,epoch))return;
    if(!result.deleted||!result.receipt_id)throw new Error('服务未确认删除完成。');
    const cleanupError=lifecycle.boundary(wx,!account);epoch=lifecycle.epoch(wx);

@@ -67,6 +67,10 @@ class DeleteInput(BaseModel):
     confirmation: Literal["DELETE"]
 
 
+class DataDeleteInput(DeleteInput):
+    scope: Literal["all", "logs"] = "all"
+
+
 class AIConsentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     granted: bool
@@ -220,8 +224,8 @@ def export(svc: Service, scope: Literal["all", "product", "health"] = "all"):
 
 
 @router.delete("/data")
-def erase_data(body: DeleteInput, svc: Service):
-    return svc.erase()
+def erase_data(body: DataDeleteInput, svc: Service):
+    return svc.erase_logs() if body.scope == "logs" else svc.erase()
 
 
 @router.delete("/account")

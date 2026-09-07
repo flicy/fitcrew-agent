@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var store = ProductStore()
     @State private var tab = 0
     @State private var exportScope = "all"
+    @State private var deleteScope = "all"
     @State private var trendDays = 30
     @State private var selectedTrend: ProductTrendPoint?
     @State private var showLighten = false
@@ -93,9 +94,22 @@ struct ContentView: View {
                 stoppingExperiment = nil
             }
         } message: { Text("保留已有记录和实验历史，不再继续观察。") }
-        .confirmationDialog(deletion?.hasPrefix("milestones/") == true ? "撤回里程碑展示？原实验和记录仍保留。" : "永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
+        .confirmationDialog(deletion?.hasPrefix("milestones/") == true ? "撤回里程碑展示？原实验和记录仍保留。" : deletion == "data" && deleteScope == "logs" ? "删除全部手动身体记录？健康数据、账号及实验历史保留；相关结果、记忆与里程碑会失效。无法撤销。" : "永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
             Button(deletion?.hasPrefix("milestones/") == true ? "确认撤回展示" : "确认永久删除", role: .destructive) {
-                if let value = deletion { Task { if value.hasPrefix("logs/") || value.hasPrefix("memories/") || value.hasPrefix("milestones/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
+                if let value = deletion {
+                    let scope = value == "data" ? deleteScope : "all"
+                    Task {
+                        if value.hasPrefix("logs/") || value.hasPrefix("memories/") || value.hasPrefix("milestones/") {
+                            await store.mutate("/v3/\(value)", method: "DELETE")
+                        } else if await store.delete(value, scope: scope) {
+                            note = ""; saved = false; energy = 3; stress = 1; feeling = "正常"
+                            sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
+                            experiment = nil; feedbackExperiment = nil; selectedTrend = nil
+                            model.refreshSyncState()
+                            if model.isConfigured { await store.refresh() }
+                        }
+                    }
+                }; deletion = nil
             }
         }
     }
@@ -376,7 +390,12 @@ struct ContentView: View {
                 Text("文件包含所选范围的私人数据及生成回执，仅在本机保存；分享由你主动选择。").font(.footnote)
                 Button("导出所选范围") { Task { await store.exportData(scope: exportScope) } }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
                 if let url = store.exportURL { ShareLink("保存或分享导出文件", item: url).frame(minHeight: 44) }
-                Button("删除全部数据", role: .destructive) { deletion = "data" }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
+                Picker("删除范围", selection: $deleteScope) {
+                    Text("全部私有数据").tag("all")
+                    Text("仅全部手动身体记录").tag("logs")
+                }.disabled(store.busy)
+                Text(deleteScope == "logs" ? "保留账号、健康数据与实验历史；依赖记录的结果、确认记忆与里程碑会失效。" : "删除全部私有数据并撤回健康上传授权，账号保留。")
+                Button("删除所选范围", role: .destructive) { deletion = "data" }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
                 Button("注销账号", role: .destructive) { deletion = "account" }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
                 if let receipt = store.receipt { Text("删除已确认\n回执：\(receipt)").textSelection(.enabled) }
             }
