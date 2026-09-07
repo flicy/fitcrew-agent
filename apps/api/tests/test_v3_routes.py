@@ -218,3 +218,18 @@ def test_lighten_alternative_persists_once_and_rejects_unknown_choice(session, f
         client.post("/v3/mission", json=rid(action="lighten", alternative="unknown")).status_code
         == 422
     )
+
+
+def test_stale_mission_choice_cannot_replace_another_device_or_day(session, field_cipher):
+    client, _ = client_for(session, field_cipher)
+    assert client.put("/v3/journey", json=rid(goal="sleep")).status_code == 200
+    original = client.get("/v3/state").json()["mission"]
+    body = rid(action="lighten", mission_id=original["id"], revision=0)
+    accepted = client.post("/v3/mission", json=body)
+    assert accepted.status_code == 200
+    assert client.post("/v3/mission", json=body).json() == accepted.json()
+    stale = rid(action="lighten", alternative="quiet_minute", mission_id=original["id"], revision=0)
+    assert client.post("/v3/mission", json=stale).status_code == 409
+    stale_day = rid(action="done", mission_id="2000-01-01", revision=1)
+    assert client.post("/v3/mission", json=stale_day).status_code == 409
+    assert client.get("/v3/state").json()["mission"] == accepted.json()

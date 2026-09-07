@@ -47,6 +47,8 @@ class TransitionInput(Mutation):
 class MissionInput(Mutation):
     action: Literal["done", "lighten", "skip"]
     alternative: Literal["brief_check", "quiet_minute"] = "brief_check"
+    mission_id: str | None = Field(default=None, max_length=10)
+    revision: int | None = Field(default=None, ge=0)
 
 
 class DeleteInput(BaseModel):
@@ -144,7 +146,9 @@ def delete_log(resource_id: UUID, svc: Service):
 @router.post("/mission")
 def mission(body: MissionInput, svc: Service):
     return svc.mutate(
-        "mission", body.model_dump(mode="json"), lambda: svc.act(body.action, body.alternative)
+        "mission",
+        body.model_dump(mode="json"),
+        lambda: svc.act(body.action, body.alternative, body.mission_id, body.revision),
     )
 
 

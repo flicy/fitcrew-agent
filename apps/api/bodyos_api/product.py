@@ -322,11 +322,15 @@ class ProductService:
             "revision": 0,
         }
 
-    def act(self, action, alternative="brief_check"):
+    def act(self, action, alternative="brief_check", mission_id=None, revision=None):
         journey = self.read(self.row("journey", "current"))
         if not journey:
             raise HTTPException(409, "choose a journey first")
         mission = self.mission(journey)
+        if (mission_id is not None and mission_id != mission["id"]) or (
+            revision is not None and revision != mission["revision"]
+        ):
+            raise HTTPException(409, "mission changed; refresh and choose again")
         if mission["status"] in {"done", "skipped"}:
             raise HTTPException(409, "today's action is already recorded")
         if action == "lighten":

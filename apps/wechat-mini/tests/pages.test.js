@@ -65,8 +65,10 @@ test('lighten selection and cancel never write; confirmed choice retries unchang
  const sent=[];h.setRequest(async(path,method,body)=>{sent.push(body);throw new Error('offline');});
  await page.mission({currentTarget:{dataset:{action:'lighten'}}});assert.equal(page.data.choosing,true);assert.equal(sent.length,0);
  page.cancelLighten();assert.equal(page.data.choosing,false);assert.equal(sent.length,0);
+ page.setData({state:{mission:{id:'2026-09-08',revision:2}}});
  await page.mission({currentTarget:{dataset:{action:'lighten'}}});
+ page.setData({state:{mission:{id:'2026-09-09',revision:0}}});
  const choice={currentTarget:{dataset:{id:'quiet_minute'}}};await page.chooseLighten(choice);assert.equal(page.data.choosing,true);
  h.setRequest(async(path,method,body)=>{if(path==='/v3/mission'){sent.push(body);return {id:'saved'};}return {logs:[],experiments:[]};});
- await page.chooseLighten(choice);assert.equal(page.data.choosing,false);assert.equal(sent[0].alternative,'quiet_minute');assert.equal(sent[0].request_id,sent[1].request_id);
+ await page.chooseLighten(choice);assert.equal(page.data.choosing,false);assert.equal(sent[0].alternative,'quiet_minute');assert.equal(sent[0].mission_id,'2026-09-08');assert.equal(sent[0].revision,2);assert.equal(sent[0].request_id,sent[1].request_id);
 });

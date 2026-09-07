@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var store = ProductStore()
     @State private var tab = 0
     @State private var showLighten = false
+    @State private var lightenMission: ProductMission?
     @State private var goal = "sleep"
     @State private var energy = 3
     @State private var stress = 1
@@ -34,7 +35,7 @@ struct ContentView: View {
         .sheet(isPresented: $showHealthConsent) { HealthConsentView(model: model) }
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
-            showLighten = false
+            showLighten = false; lightenMission = nil
             note = ""; saved = false; experiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
@@ -98,8 +99,8 @@ struct ContentView: View {
                     Text("今天的一小步").font(.headline); Text(mission.title).font(.title.bold()); Text(mission.why).foregroundStyle(.secondary); Text("状态：\(status(mission.status))")
                     if let adjustedAt = mission.adjustedAt { Text("调整已保存：\(adjustedAt) · 版本 \(mission.revision)").font(.footnote) }
                     if ["proposed", "pending", "accepted", "lightened"].contains(mission.status) {
-                        Button("我做到了") { Task { await store.mutate("/v3/mission", body: ["action": "done"]) } }.buttonStyle(.borderedProminent)
-                        HStack { Button("轻一点") { showLighten = true }; Spacer(); Button("今天跳过") { Task { await store.mutate("/v3/mission", body: ["action": "skip"]) } } }.frame(minHeight: 44)
+                        Button("我做到了") { Task { await store.mutate("/v3/mission", body: ["action": "done", "mission_id": mission.id, "revision": mission.revision]) } }.buttonStyle(.borderedProminent)
+                        HStack { Button("轻一点") { lightenMission = mission; showLighten = true }; Spacer(); Button("今天跳过") { Task { await store.mutate("/v3/mission", body: ["action": "skip", "mission_id": mission.id, "revision": mission.revision]) } } }.frame(minHeight: 44)
                     }
                 }.disabled(store.busy)
             } else { card { Text("从一个方向开始").font(.title2.bold()); Text("选择你的 90 天目标，开启今天的小行动。"); Button("选择旅程") { tab = 1 }.frame(minHeight: 44) } }
@@ -205,7 +206,8 @@ struct ContentView: View {
         }
     }
     private func lighten(_ alternative: String) {
-        Task { if await store.mutate("/v3/mission", body: ["action": "lighten", "alternative": alternative]) { showLighten = false } }
+        guard let mission = lightenMission else { return }
+        Task { if await store.mutate("/v3/mission", body: ["action": "lighten", "alternative": alternative, "mission_id": mission.id, "revision": mission.revision]) { showLighten = false } }
     }
     private func transition(_ e: ProductExperiment, _ action: String) async -> Bool { await store.mutate("/v3/experiments/\(e.id)/transition", body: ["action": action, "revision": e.revision]) }
     private func sourceLabel(_ e: ProductExperiment) -> String { e.source == "ai_selected" ? "AI 选择的实验" : "规则建议（非 AI）" }
