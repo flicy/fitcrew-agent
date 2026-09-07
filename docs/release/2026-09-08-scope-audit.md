@@ -139,3 +139,9 @@ Both clients now offer all, manual/product and Apple Health export scopes. Serve
 新增全部私有数据与仅全部手动身体记录两种删除范围。后者使用同一事务删除记录、作废依赖结果/确认记忆/里程碑并生成回执，保留健康授权、同步位置、账号及实验历史。两端在确认前说明影响，删除成功后清除页面草稿与导出，重新读取状态。385 项后端、18 项小程序测试通过，新 iOS 代码仅语法检查；完整构建及设备验证仍待完成。此范围不提供按日期或单独健康类别批量删除，不将其描述为任意范围删除。
 
 Deletion now supports all private data or all manual body records. The latter removes records and invalidates dependent results/memories/milestones in one transaction, issues a receipt, and preserves health consent, sync cursors, identity and experiment history. Both clients explain impact before confirmation, clear drafts/exports after success and refresh state. Backend tests: 385 passing; mini-program tests: 18 passing. New iOS changes have syntax validation only and await full build/device checks. Date-range and individual health-category bulk deletion are not offered.
+
+### 官方离线编译 / Official offline compilation
+
+主发布分支用已安装微信开发者工具的 wcc 复现了表达式转义错误（unexpected `;`），已仅修复 Today、Experiments、Profile 的绑定表达式。运行 `python3 scripts/verify_wechat_compilation.py` 已成功编译 6 个 WXML 模板与 3 个 WXSS 样式文件，输出在临时目录验证后清除；18 项 Node 测试通过。脚本找不到官方编译器时会失败，不假装通过。此证据不包含真实登录、设备渲染、后台联调或正式提审。
+
+The release branch reproduced an official wcc expression-escaping failure (unexpected `;`) and corrected bindings in Today, Experiments and Profile only. `python3 scripts/verify_wechat_compilation.py` successfully compiled six WXML templates and three WXSS files, verified nonempty output and removed temporary artifacts. All 18 Node tests passed. The script fails if official compilers are unavailable. This does not prove authentication, device rendering, backend integration or formal review submission.
