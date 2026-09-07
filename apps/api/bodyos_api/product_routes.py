@@ -196,7 +196,7 @@ def export(svc: Service, scope: Literal["all", "product", "health"] = "all"):
     if scope in {"all", "product"}:
         result = svc.state()
         if scope == "product":
-            for key in ("health", "today_context"):
+            for key in ("health", "today_context", "health_trends"):
                 result.pop(key, None)
     if scope in {"all", "health"}:
         result["health_export"] = HealthIngestionService(

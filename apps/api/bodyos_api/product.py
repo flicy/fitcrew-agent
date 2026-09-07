@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from bodyos_api.crypto import EncryptedValue, FieldCipher
+from bodyos_api.health_trends import health_trends
 from bodyos_api.models import (
     AuditEvent,
     Consent,
@@ -412,6 +413,14 @@ class ProductService:
             "milestones": self.milestones(experiments),
             "logs": logs,
             "trends": self.trends(logs, experiments),
+            "health_trends": health_trends(
+                self.session,
+                self.cipher,
+                self.user_id,
+                categories,
+                self.today(),
+                self.session.get(User, self.user_id).timezone,
+            ),
             "next_check": self.next_check(journey, experiments, logs),
             "onboarding": self.onboarding(),
             "confirmed_memories": [self.read(r) for r in self.rows("confirmed_memory")],

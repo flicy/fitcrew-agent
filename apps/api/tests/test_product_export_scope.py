@@ -9,6 +9,7 @@ def test_exports_enforce_scope_and_issue_generation_receipts(session, field_ciph
     product = client.get("/v3/export?scope=product").json()
     assert product["logs"][0]["note"] == "private note"
     assert "health_export" not in product
+    assert "health_trends" not in product
     assert "health" not in product and "today_context" not in product
     health = client.get("/v3/export?scope=health").json()
     assert set(health) == {"health_export", "export_metadata"}
