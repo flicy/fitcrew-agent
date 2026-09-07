@@ -202,6 +202,15 @@ struct ContentView: View {
     private var journey: some View {
         Group {
             if let j = store.state?.journey { card { Text("90 DAY JOURNEY").font(.headline); Text(j.title).font(.largeTitle.bold()); Text("开始于 \(j.startDate.prefix(10)) · \(j.days) 天"); Text("持续记录感受、完成小行动，再用实验结果判断变化。") } }
+            if let progress = store.state?.journeyProgress {
+                card {
+                    Text(progress.title).font(.headline)
+                    Text("已进入第 \(progress.day) / \(progress.totalDays) 天 · 窗口截至 \(progress.windowEnd)")
+                    ProgressView(value: Double(progress.day), total: Double(progress.totalDays))
+                    Text("\(progress.observedDays) 天有记录 · \(progress.missingDays) 天缺失")
+                    Text(progress.notice).font(.footnote)
+                }
+            }
             card {
                 Text("接下来，想先改善什么？").font(.title2.bold())
                 Picker("目标", selection: $goal) { Text("睡得更好").tag("sleep"); Text("更有精力").tag("energy"); Text("动得更多").tag("activity") }.pickerStyle(.segmented)

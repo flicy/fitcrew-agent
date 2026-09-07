@@ -172,6 +172,37 @@ class ProductService:
             )
         return {"source": "manual_logs", "window_end": end.isoformat(), "points": points}
 
+    def journey_progress(self, journey, logs):
+        if not journey:
+            return None
+        start = datetime.fromisoformat(journey["start_date"]).date()
+        today = datetime.fromisoformat(self.today()).date()
+        duration = journey["days"]
+        elapsed = max(0, (today - start).days + 1)
+        day = min(duration, elapsed)
+        end = start + timedelta(days=duration - 1)
+        observed = len(
+            {
+                r["date"]
+                for r in logs
+                if start.isoformat() <= r["date"] <= min(today, end).isoformat()
+            }
+        )
+        phase = min(3, max(1, (day - 1) // 30 + 1))
+        return {
+            "day": day,
+            "total_days": duration,
+            "phase": phase,
+            "title": "90 天窗口已结束"
+            if elapsed > duration
+            else f"第 {phase} 段 · 第 {(phase - 1) * 30 + 1}–{phase * 30} 天",
+            "window_end": end.isoformat(),
+            "observed_days": observed,
+            "missing_days": max(0, day - observed),
+            "notice": ("阶段只表示日历时间；记录天数仅统计旅程窗口内的手动记录，"
+                       "不代表身体改善或行动完成。"),
+        }
+
     def next_check(self, journey, experiments, logs):
         active = next(
             (e for e in experiments if e["status"] in {"running", "paused", "proposed"}), None
@@ -331,6 +362,7 @@ class ProductService:
         experiments = [self.read(row) for row in self.rows("experiment")]
         return {
             "journey": journey,
+            "journey_progress": self.journey_progress(journey, logs),
             "experiments": experiments,
             "logs": logs,
             "trends": self.trends(logs, experiments),

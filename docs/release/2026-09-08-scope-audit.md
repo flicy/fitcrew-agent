@@ -105,3 +105,13 @@ Both clients now expose O1–O6 onboarding. Encrypted account records retain the
 Today 增加近七天手动记录来源、窗口、有效记录天数和缺口。restricted 表示当前无健康上传授权，仍可手动记录；baseline_building/ready 仅对应已说明的手动记录比较门槛，不代表健康评分、完整 HealthKit 覆盖或因果结论。服务器样本计数仅覆盖当前有效授权类别，撤回后隐藏同步时间。测试覆盖授权撤回与过期手动数据不计入窗口。完整设备侧权限分支和 HealthKit 指标质量仍待验收。
 
 Today now shows the seven-day manual-record source, window, observed days and gaps. Restricted means no current health upload consent while manual records remain available. Baseline-building/ready refer only to the disclosed manual-record comparison threshold, not a health score, complete HealthKit coverage or causality. Server sample counts include only currently consented categories and hide sync timestamps after withdrawal. Tests cover consent withdrawal and stale records outside the window. Device permission branches and HealthKit metric-quality acceptance remain outstanding.
+
+### 反馈、记忆与旅程时间 / Feedback, memory and journey time
+
+`9949f50` 的 CI 34161190320 已全部通过。`68ea503` 加入实验主观反馈、独立确认记忆及撤回入口；379 项后端、18 项小程序测试通过，新完整 CI 34161612971 尚待结果。删除来源记录会使相关结果和确认记忆失效，旧幂等请求不能恢复删除内容。确认记忆尚未自动送入 AI，不能当作完整上下文能力。
+
+旅程页补充方向之后、趋势之前的日历阶段：1–30、31–60、61–90 天及窗口结束状态。仅统计该旅程窗口内的手动记录日期，同日多条不重复计天，删除后重新计算；不表示改善、行动完成或实验有效。里程碑、HealthKit 趋势及真机验收仍未完成。
+
+CI 34161190320 passed for `9949f50`. Commit `68ea503` adds subjective experiment feedback, separately confirmed memories and withdrawal, with 379 backend and 18 mini-program tests passing; full CI 34161612971 remains pending. Source erasure invalidates dependent results and memories, and old idempotent requests cannot restore deleted content. Confirmed memories are not automatically supplied to AI and do not establish full contextual assistance.
+
+The journey now presents calendar stages after its direction and before trends: days 1–30, 31–60, 61–90 and an ended-window state. It counts distinct manually recorded dates within that journey window, recalculates after deletion, and makes no claim of improvement, completed actions or experimental validity. Milestones, HealthKit trends and real-device acceptance remain incomplete.
