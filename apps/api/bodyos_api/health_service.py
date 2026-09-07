@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -118,8 +118,8 @@ class HealthIngestionService:
                     sync_batch_id=sync_batch.id,
                     sample_id=str(sample.sample_id),
                     kind=sample.kind.value,
-                    start_at=sample.start_at,
-                    end_at=sample.end_at,
+                    start_at=sample.start_at.astimezone(UTC),
+                    end_at=sample.end_at.astimezone(UTC),
                     original_unit=sample.unit,
                     normalized_unit=normalized_unit,
                     source=sample.source,

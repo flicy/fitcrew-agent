@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 
 class HealthKind(StrEnum):
@@ -25,8 +25,8 @@ class HealthSampleIn(BaseModel):
 
     sample_id: UUID
     kind: HealthKind
-    start_at: datetime
-    end_at: datetime
+    start_at: AwareDatetime
+    end_at: AwareDatetime
     value: float
     unit: str = Field(min_length=1, max_length=32)
     source: str = Field(min_length=1, max_length=200)
