@@ -87,3 +87,9 @@ All three jobs in CI 34159297298 passed for `afeac8b`, including iOS simulator b
 WeChat DevTools 2.02.2608070 is installed at `/Applications/wechatwebdevtools.app`, with the official installer SHA-256 verified. The CLI started, but `islogin` returned false and project import returned code 10 requiring user QR login. Temporary QR credentials stay in the Git-excluded local sandbox. No official mini-program compile or device preview is verified. CI 34159571316 passed for `a269eb8`.
 
 Daily health aggregation now uses `features.v2`: absent sleep/activity samples yield null, while an explicitly measured zero remains zero. All 373 backend tests pass. This affects newly computed/rematerialized aggregates; old `features.v1` caches have not been batch-recomputed. Production integration must address legacy caches, source deduplication and consent filtering. Full HealthKit analysis remains incomplete.
+
+### 旧汇总读取兼容 / Legacy aggregate read compatibility
+
+私人上下文读取旧缓存时，现按 sample_counts 将没有样本依据的睡眠、活动与恢复值置为 null，保留有明确样本的零值。此修正不写回历史密文、不冒充重算，保留原 algorithm_version 并标记 read_policy_version。已通过加密数据库读取测试与缺失/零值单测。CI 34159896202 已验证 `4478a9b` 的 iOS 删除/刷新修复，三项均通过；本次汇总修正另待新一轮 CI。
+
+Private-context reads now mask unsupported legacy sleep, activity and recovery values using sample_counts while preserving measured zeros. The compatibility path does not rewrite encrypted history or claim recomputation; it preserves algorithm_version and marks read_policy_version. Encrypted database read tests and missing-versus-zero tests pass. CI 34159896202 passed all three jobs for the iOS deletion/refresh fixes at `4478a9b`; aggregate changes await a separate CI run.

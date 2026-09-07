@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from bodyos_api.features import DecryptedSample, compute_daily_features
+from bodyos_api.features import DecryptedSample, compute_daily_features, normalize_cached_features
 
 
 def test_daily_features_are_aggregates_without_raw_series() -> None:
@@ -83,3 +83,20 @@ def test_measured_zero_is_distinct_from_missing_category():
     assert features["activity"]["active_energy_kcal"] is None
     assert features["sleep"]["total_hours"] is None
     assert features["data_quality"]["sample_counts"] == {"step_count": 1}
+
+
+def test_legacy_normalization_masks_unproven_values_without_rewriting_original():
+    legacy = {
+        "algorithm_version": "features.v1",
+        "sleep": {"total_hours": 0, "deep_hours": 0},
+        "activity": {"steps": 0, "active_energy_kcal": 0},
+        "data_quality": {"sample_counts": {"step_count": 1}},
+    }
+    normalized = normalize_cached_features(legacy)
+    assert normalized["sleep"]["total_hours"] is None
+    assert normalized["activity"]["steps"] == 0
+    assert normalized["activity"]["active_energy_kcal"] is None
+    assert normalized["algorithm_version"] == "features.v1"
+    assert legacy["sleep"]["total_hours"] == 0
+    assert "read_policy_version" not in legacy
+    assert normalize_cached_features({"sleep": {"total_hours": 8}})["sleep"]["total_hours"] is None

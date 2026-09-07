@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from statistics import mean, stdev
@@ -79,9 +80,7 @@ def compute_daily_features(
         },
         "recovery": {
             "hrv_ms_mean": _mean_or_none(_values(samples, "heart_rate_variability")),
-            "resting_heart_rate_bpm_mean": _mean_or_none(
-                _values(samples, "resting_heart_rate")
-            ),
+            "resting_heart_rate_bpm_mean": _mean_or_none(_values(samples, "resting_heart_rate")),
         },
         "data_quality": {
             "duplicate_count": duplicate_count,
@@ -93,3 +92,36 @@ def compute_daily_features(
             },
         },
     }
+
+
+def normalize_cached_features(payload: dict[str, Any]) -> dict[str, Any]:
+    """Mask unsupported legacy values without mutating stored historical evidence."""
+    result = deepcopy(payload)
+    counts = result.get("data_quality", {}).get("sample_counts", {})
+    fields = {
+        "sleep": {
+            "total_hours": ("sleep_deep", "sleep_rem", "sleep_core", "sleep_asleep"),
+            "deep_hours": ("sleep_deep",),
+            "rem_hours": ("sleep_rem",),
+            "core_hours": ("sleep_core",),
+        },
+        "activity": {
+            "steps": ("step_count",),
+            "active_energy_kcal": ("active_energy",),
+            "stand_hours": ("stand_hours",),
+            "workout_count": ("workout",),
+            "workout_minutes": ("workout",),
+        },
+        "recovery": {
+            "hrv_ms_mean": ("heart_rate_variability",),
+            "resting_heart_rate_bpm_mean": ("resting_heart_rate",),
+        },
+    }
+    for group, metrics in fields.items():
+        for metric, kinds in metrics.items():
+            if metric in result.get(group, {}) and not any(
+                counts.get(kind, 0) > 0 for kind in kinds
+            ):
+                result[group][metric] = None
+    result["read_policy_version"] = "missing-values.v1"
+    return result
