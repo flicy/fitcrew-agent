@@ -336,6 +336,7 @@ class ProductService:
             "trends": self.trends(logs, experiments),
             "next_check": self.next_check(journey, experiments, logs),
             "onboarding": self.onboarding(),
+            "confirmed_memories": [self.read(r) for r in self.rows("confirmed_memory")],
             "today_context": self.today_context(logs, categories),
             "mission": self.mission(journey) if journey else None,
             "health": {
@@ -515,6 +516,64 @@ class ProductService:
         item["status"] = target
         return self.write("experiment", key, item)
 
+    def forget_cached_results(self, ids):
+        for row in self.rows("request"):
+            cached = self.read(row)
+            if cached.get("response", {}).get("id") in ids:
+                self.write(
+                    "request", row.resource_key, {"digest": cached["digest"], "erased": True}
+                )
+
+    def feedback(self, key, revision, assessment, confirm_memory):
+        item = self.read(self.row("experiment", key))
+        if not item or item["status"] != "completed" or not item.get("result"):
+            raise HTTPException(409, "evaluate the experiment before giving feedback")
+        if item["revision"] != revision or item["result"]["status"] == "invalidated":
+            raise HTTPException(409, "result changed; refresh before giving feedback")
+        if confirm_memory and assessment == "uncertain":
+            raise HTTPException(422, "uncertain feedback cannot become confirmed memory")
+        old = self.row("confirmed_memory", key)
+        if old:
+            self.session.delete(old)
+            self.session.flush()
+        self.forget_cached_results({key})
+        item["user_feedback"] = {
+            "assessment": assessment,
+            "memory_confirmed": confirm_memory,
+            "recorded_at": self.now().isoformat(),
+        }
+        if confirm_memory:
+            self.write(
+                "confirmed_memory",
+                key,
+                {
+                    "experiment_id": key,
+                    "assessment": assessment,
+                    "text": "用户主观反馈："
+                    + ("这次行动适合我" if assessment == "fits" else "这次行动不适合我"),
+                    "experiment_title": item["title"],
+                    "confirmed_at": self.now().isoformat(),
+                    "evidence_type": "user_report",
+                    "notice": "主观感受，不是疗效或因果结论。",
+                },
+            )
+        return self.write("experiment", key, item)
+
+    def delete_memory(self, key):
+        self.lock()
+        memory = self.row("confirmed_memory", key)
+        if not memory:
+            raise HTTPException(404, "memory not found")
+        self.session.delete(memory)
+        item = self.read(self.row("experiment", key))
+        if item and item.get("user_feedback"):
+            item["user_feedback"]["memory_confirmed"] = False
+            self.write("experiment", key, item)
+        self.forget_cached_results({key})
+        result = self.receipt("product.memory.deleted")
+        self.session.commit()
+        return result
+
     def add_log(self, values):
         return self.write(
             "log",
@@ -591,6 +650,8 @@ class ProductService:
             if item.get("result") and item.get("result", {}).get(
                 "baseline_window_start", item.get("accepted_at", "")
             ) <= removed["created_at"] <= item.get("ends_at", ""):
+                if item.get("user_feedback"):
+                    item["user_feedback"]["memory_confirmed"] = False
                 item["result"] = {
                     "status": "invalidated",
                     "observed_days": 0,
@@ -601,6 +662,9 @@ class ProductService:
                 }
                 self.write("experiment", experiment.resource_key, item)
                 invalidated.add(experiment.resource_key)
+        for memory in self.rows("confirmed_memory"):
+            if self.read(memory)["experiment_id"] in invalidated:
+                self.session.delete(memory)
         # Remove cached request responses containing the withdrawn private record.
         for cached in self.rows("request"):
             if self.read(cached).get("response", {}).get("id") in invalidated:

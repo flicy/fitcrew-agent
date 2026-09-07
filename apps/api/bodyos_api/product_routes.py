@@ -49,6 +49,12 @@ class TransitionInput(Mutation):
     revision: int = Field(ge=1)
 
 
+class FeedbackInput(Mutation):
+    revision: int = Field(ge=1)
+    assessment: Literal["fits", "not_fit", "uncertain"]
+    confirm_memory: bool = False
+
+
 class MissionInput(Mutation):
     action: Literal["done", "lighten", "skip"]
     alternative: Literal["brief_check", "quiet_minute"] = "brief_check"
@@ -132,6 +138,20 @@ def ai_consent(
     body: AIConsentInput, svc: Service, settings: Annotated[Settings, Depends(get_settings)]
 ):
     return set_ai_consent(svc, settings, body.granted, body.provider_notice_version)
+
+
+@router.post("/experiments/{resource_id}/feedback")
+def feedback(resource_id: UUID, body: FeedbackInput, svc: Service):
+    return svc.mutate(
+        f"feedback:{resource_id}",
+        body.model_dump(mode="json"),
+        lambda: svc.feedback(str(resource_id), body.revision, body.assessment, body.confirm_memory),
+    )
+
+
+@router.delete("/memories/{resource_id}")
+def delete_memory(resource_id: UUID, svc: Service):
+    return svc.delete_memory(str(resource_id))
 
 
 @router.post("/experiments/{resource_id}/transition")

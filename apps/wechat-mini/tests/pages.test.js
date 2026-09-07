@@ -82,3 +82,10 @@ test('trend windows retain gaps and clear on failed refresh',async()=>{
  page.openTrendPoint({currentTarget:{dataset:{date:'89'}}});assert.equal(page.data.selectedTrend.energy,4);
  h.setRequest(async()=>{throw new Error('offline');});await page.refresh();assert.deepEqual(page.data.trendPoints,[]);assert.equal(page.data.observedDays,0);assert.equal(page.data.selectedTrend,null);
 });
+test('experiment feedback cancel does not write and feedback-only does not confirm memory',async()=>{
+ const h=setup();let definition;global.Page=d=>definition=d;delete require.cache[require.resolve('../pages/experiments/index')];require('../pages/experiments/index');const page=mount(definition);page.onLoad();
+ page.setData({experiments:[{id:'experiment',revision:3,status:'completed'}]});
+ const sent=[];h.setRequest(async(path,method,body)=>{if(method==='POST'){sent.push(body);return {id:'experiment'};}return {logs:[],experiments:[]};});
+ h.wx.showActionSheet=o=>o.fail();const event={currentTarget:{dataset:{id:'experiment',assessment:'fits'}}};await page.feedback(event);assert.equal(sent.length,0);
+ h.wx.showActionSheet=o=>o.success({tapIndex:0});await page.feedback(event);assert.equal(sent.length,1);assert.equal(sent[0].confirm_memory,false);assert.equal(sent[0].assessment,'fits');
+});

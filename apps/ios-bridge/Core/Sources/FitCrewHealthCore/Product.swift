@@ -11,6 +11,7 @@ public struct ProductState: Decodable, Sendable {
     public let nextCheck: ProductNextCheck?
     public let onboarding: ProductOnboarding?
     public let todayContext: ProductTodayContext?
+    public let confirmedMemories: [ProductConfirmedMemory]?
 
     public static func decode(_ data: Data) throws -> ProductState {
         let decoder = JSONDecoder()
@@ -64,6 +65,7 @@ public struct ProductExperiment: Decodable, Identifiable, Sendable {
     public let durationDays, revision: Int
     public let purpose, baselineStart, acceptedAt, endsAt: String?
     public let result: JSONValue?
+    public let userFeedback: ProductFeedback?
     public var actions: [String] {
         switch status {
         case "proposed": return ["accept"]
@@ -112,4 +114,12 @@ public struct ProductTodayContext: Decodable, Sendable {
     public let status, title, detail, windowStart, windowEnd, source: String
     public let observedDays: Int
     public let healthCategories: [String]
+}
+
+public struct ProductFeedback: Decodable, Sendable {
+    public let assessment: String
+    public let memoryConfirmed: Bool
+}
+public struct ProductConfirmedMemory: Decodable, Identifiable, Sendable {
+    public let id, text, experimentTitle, confirmedAt, notice: String
 }

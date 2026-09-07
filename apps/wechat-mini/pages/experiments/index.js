@@ -1,6 +1,15 @@
 const lifecycle=require('../../lib/session');
 const {base,confirm}=require('../../lib/page');
 Page(base({
+ async feedback(e){
+  this.syncBoundary();if(this.data.busy)return;const epoch=lifecycle.epoch(wx);
+  const item=this.data.experiments.find(x=>x.id===e.currentTarget.dataset.id),assessment=e.currentTarget.dataset.assessment;if(!item)return;
+  const choice=await new Promise(resolve=>wx.showActionSheet({itemList:assessment==='uncertain'?['仅保存反馈']:['仅保存反馈','保存并确认为记忆'],success:r=>resolve(r.tapIndex),fail:()=>resolve(-1)}));
+  if(choice<0||!lifecycle.current(wx,epoch))return;
+  if(choice===1&&!await confirm('确认这条主观记忆？','保存到私人账号，可在我的页面撤回；不是疗效结论，不会自动发送给 AI。'))return;
+  if(!lifecycle.current(wx,epoch))return;
+  await this.write('feedback.'+item.id,'/v3/experiments/'+item.id+'/feedback',{revision:item.revision,assessment,confirm_memory:choice===1});
+ },
  async propose(){await this.write('propose','/v3/experiments/propose',{});},
  async transition(e){
   this.syncBoundary();const epoch=lifecycle.epoch(wx);

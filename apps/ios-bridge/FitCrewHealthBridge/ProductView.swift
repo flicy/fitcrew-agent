@@ -20,6 +20,8 @@ struct ContentView: View {
     @State private var pairing = ""
     @State private var experiment: ProductExperiment?
     @State private var stoppingExperiment: ProductExperiment?
+    @State private var feedbackExperiment: ProductExperiment?
+    @State private var feedbackAssessment = "uncertain"
     @State private var deletion: String?
     @State private var saved = false
     @State private var showHealthConsent = false
@@ -39,7 +41,7 @@ struct ContentView: View {
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
             showLighten = false; lightenMission = nil; selectedTrend = nil
-            note = ""; saved = false; experiment = nil; stoppingExperiment = nil; deletion = nil; showHealthConsent = false
+            note = ""; saved = false; experiment = nil; stoppingExperiment = nil; feedbackExperiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
@@ -80,6 +82,10 @@ struct ContentView: View {
                 }.padding(24) }.toolbar { Button("关闭") { experiment = nil } }
             }.presentationDragIndicator(.visible)
         }
+        .confirmationDialog("如何保存这条主观反馈？", isPresented: Binding(get: { feedbackExperiment != nil }, set: { if !$0 { feedbackExperiment = nil } }), titleVisibility: .visible) {
+            Button("仅保存反馈") { saveFeedback(remember: false) }
+            if feedbackAssessment != "uncertain" { Button("保存并确认为记忆") { saveFeedback(remember: true) } }
+        } message: { Text("确认记忆后会存入你的私人账号，可在下方撤回。这是主观感受，不是疗效结论；不会自动发送给 AI。") }
         .confirmationDialog("停止这次实验？", isPresented: Binding(get: { stoppingExperiment != nil }, set: { if !$0 { stoppingExperiment = nil } }), titleVisibility: .visible) {
             Button("停止实验", role: .destructive) {
                 if let value = stoppingExperiment { Task { await transition(value, "stop") } }
@@ -88,7 +94,7 @@ struct ContentView: View {
         } message: { Text("保留已有记录和实验历史，不再继续观察。") }
         .confirmationDialog("永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
             Button("确认永久删除", role: .destructive) {
-                if let value = deletion { Task { if value.hasPrefix("logs/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
+                if let value = deletion { Task { if value.hasPrefix("logs/") || value.hasPrefix("memories/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
             }
         }
     }
@@ -237,9 +243,24 @@ struct ContentView: View {
             ForEach(store.state?.experiments ?? []) { e in card {
                 Text(e.title).font(.title2.bold()); Text("\(status(e.status)) · \(e.durationDays) 天 · \(sourceLabel(e))").font(.subheadline); details(e)
                 if let result = e.result { Text("实验结果").font(.headline); Text(result.display) }
+                if e.status == "completed" {
+                    Text("你的感受比结论更重要").font(.headline)
+                    if let feedback = e.userFeedback { Text("已保存反馈：\(feedback.assessment == "fits" ? "适合我" : feedback.assessment == "not_fit" ? "不适合我" : "暂不确定")") }
+                    ForEach(["fits", "not_fit", "uncertain"], id: \.self) { assessment in
+                        Button(assessment == "fits" ? "这次行动适合我" : assessment == "not_fit" ? "这次行动不适合我" : "暂不确定") {
+                            feedbackAssessment = assessment; feedbackExperiment = e
+                        }.disabled(store.busy)
+                    }
+                }
                 ForEach(e.actions, id: \.self) { action in Button(actionLabel(action)) { if action == "accept" { experiment = e } else if action == "stop" { stoppingExperiment = e } else { Task { await transition(e, action) } } }.frame(minHeight: 44).disabled(store.busy) }
             } }
         }
+    }
+    private func saveFeedback(remember: Bool) {
+        guard let experiment = feedbackExperiment else { return }
+        let body: [String: Any] = ["revision": experiment.revision, "assessment": feedbackAssessment, "confirm_memory": remember]
+        feedbackExperiment = nil
+        Task { await store.mutate("/v3/experiments/\(experiment.id)/feedback", body: body) }
     }
     private func details(_ e: ProductExperiment) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -283,6 +304,16 @@ struct ContentView: View {
     }
     private var profile: some View {
         Group {
+            card {
+                Text("我确认的记忆").font(.title2.bold())
+                Text("仅包含你明确确认的主观反馈，不自动发送给 AI。撤回记忆会保留实验里的反馈记录。").font(.footnote)
+                if (store.state?.confirmedMemories ?? []).isEmpty { Text("尚无确认记忆。") }
+                ForEach(store.state?.confirmedMemories ?? []) { memory in
+                    Text(memory.text); Text(memory.experimentTitle).font(.subheadline)
+                    Text(memory.confirmedAt).font(.footnote)
+                    Button("撤回这条记忆", role: .destructive) { deletion = "memories/\(memory.id)" }.disabled(store.busy)
+                }
+            }
             card {
                 Text(model.isConfigured ? "已连接 FitCrew" : "连接你的 FitCrew").font(.title2.bold())
                 if !model.isConfigured || store.requiresReauthentication { AppleAccountView(model: model).id(model.identityRevision) }

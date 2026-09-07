@@ -143,3 +143,33 @@ def test_today_quality_uses_recent_manual_days_and_current_consent(session, fiel
     assert state["health"]["last_sync_at"] is None
     svc.now = lambda: start + timedelta(days=8)
     assert svc.state()["today_context"]["observed_days"] == 0
+
+
+def test_feedback_requires_confirmation_and_erased_memory_cannot_replay(session, field_cipher):
+    import pytest
+    from fastapi import HTTPException
+
+    svc, exp, start = fixture_experiment(session, field_cipher)
+    record = svc.add_log({"energy": 3, "stress": 1, "feeling": "正常", "note": ""})
+    svc.now = lambda: start + timedelta(days=8)
+    completed = svc.transition(exp["id"], "evaluate", exp["revision"])
+    feedback = svc.feedback(exp["id"], completed["revision"], "fits", False)
+    assert svc.state()["confirmed_memories"] == []
+    body = {"request_id": str(uuid4()), "assessment": "fits", "confirm_memory": True}
+    confirmed = svc.mutate(
+        "feedback", body, lambda: svc.feedback(exp["id"], feedback["revision"], "fits", True)
+    )
+    assert svc.state()["confirmed_memories"][0]["evidence_type"] == "user_report"
+    assert svc.mutate("feedback", body, lambda: None) == confirmed
+    svc.delete_memory(exp["id"])
+    assert svc.state()["confirmed_memories"] == []
+    with pytest.raises(HTTPException) as error:
+        svc.mutate("feedback", body, lambda: None)
+    assert error.value.status_code == 410
+    current = svc.read(svc.row("experiment", exp["id"]))
+    svc.feedback(exp["id"], current["revision"], "not_fit", True)
+    svc.delete_log(record["id"])
+    assert svc.state()["confirmed_memories"] == []
+    with pytest.raises(HTTPException):
+        latest = svc.read(svc.row("experiment", exp["id"]))
+        svc.feedback(exp["id"], latest["revision"], "fits", True)

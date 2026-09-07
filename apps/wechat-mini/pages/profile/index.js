@@ -3,6 +3,7 @@ const lifecycle=require('../../lib/session');
 const {validBase}=require('../../lib/client');
 const config=require('../../config');
 Page(base({
+ async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
  data:{signedIn:false,caps:null,receipt:'',exportPath:''},
  async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn)await this.capabilities();},
  async capabilities(){const epoch=lifecycle.epoch(wx);try{const caps=await getApp().api.request('/v3/capabilities');if(lifecycle.current(wx,epoch))this.setData({caps});}catch(e){if(lifecycle.current(wx,epoch))this.setData({caps:null,error:e.message});}},

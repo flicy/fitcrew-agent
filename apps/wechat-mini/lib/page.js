@@ -16,7 +16,7 @@ function base(extra={}) {
   },
   async write(key,path,body,method='POST'){
    this.syncBoundary();const epoch=session.epoch(wx);if(this.data.busy)return false;this.setData({busy:true,error:''});
-   try{await getApp().api.request(path,method,mutation(wx,key,body));if(!session.current(wx,epoch))return false;finish(wx,key);await this.refresh();return session.current(wx,epoch);}
+   try{const result=await getApp().api.request(path,method,mutation(wx,key,body));if(!session.current(wx,epoch))return false;if(method==='DELETE'){if(!result.deleted)throw new Error('服务器未确认删除，请重试');this.setData({receipt:result.receipt_id});}finish(wx,key);await this.refresh();return session.current(wx,epoch);}
    catch(e){if(session.current(wx,epoch))this.setData({error:e.message});return false;}finally{if(session.current(wx,epoch))this.setData({busy:false});}
   },
   updateTrends(){const points=this.data.state&&this.data.state.trends?this.data.state.trends.points.slice(-this.data.trendDays):[];this.setData({selectedTrend:null,trendPoints:points.map(p=>({...p,barHeight:p.energy===null?0:p.energy*20})),observedDays:points.filter(p=>p.count>0).length});},
