@@ -172,6 +172,54 @@ class ProductService:
             )
         return {"source": "manual_logs", "window_end": end.isoformat(), "points": points}
 
+    def next_check(self, journey, experiments, logs):
+        active = next(
+            (e for e in experiments if e["status"] in {"running", "paused", "proposed"}), None
+        )
+        if not journey:
+            return {
+                "title": "先选择旅程方向",
+                "detail": "选定方向后，才能确认观察什么。",
+                "action": "journey",
+            }
+        if not active:
+            return {
+                "title": "准备下一次观察",
+                "detail": "先记录此刻感受，再在实验页查看提案与结果。",
+                "action": "experiments",
+            }
+        if active["status"] == "proposed":
+            return {
+                "title": "等待你确认实验",
+                "detail": "阅读用途、时间窗与停止条件后再开始；尚未开始观察。",
+                "action": "experiments",
+            }
+        if active["status"] == "paused":
+            return {
+                "title": "实验已暂停",
+                "detail": "暂停期间的记录不计入观察；继续后会延长观察期限。",
+                "action": "experiments",
+            }
+        observed = {
+            r["date"]
+            for r in logs
+            if active["accepted_at"] <= r["created_at"] <= active["ends_at"]
+            and not any(a <= r["created_at"] < b for a, b in active.get("pause_intervals", []))
+        }
+        ended = self.now() >= datetime.fromisoformat(active["ends_at"])
+        detail = (
+            f"观察期已有 {len(observed)} 个有效记录日，比较至少需要四天；基线也需四天才能比较两窗。"
+        )
+        if ended:
+            detail += "观察期已结束，可以查看评估；记录不足时会显示无法比较。"
+        else:
+            detail += "观察期结束后才能评估；现在可按自己的节奏记录。"
+        return {
+            "title": "可以查看评估" if ended else "等待观察条件",
+            "detail": detail,
+            "action": "experiments" if ended else "log",
+        }
+
     def state(self):
         journey = self.read(self.row("journey", "current"))
         last = self.session.scalar(
@@ -189,6 +237,7 @@ class ProductService:
             "experiments": experiments,
             "logs": logs,
             "trends": self.trends(logs, experiments),
+            "next_check": self.next_check(journey, experiments, logs),
             "mission": self.mission(journey) if journey else None,
             "health": {
                 "sample_count": count or 0,

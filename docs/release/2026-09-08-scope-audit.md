@@ -71,3 +71,9 @@ CI 34159001171 passed for commit `1cfbc9e`, including iOS simulator build/tests,
 已加入开始前七天基线、开始后七天观察期及用途说明；暂停时段仍从观察记录排除。两窗各至少四个不同日期才计算按日均值差，缺失基线不推断；既有观察期内部比较与基线比较分别标明。删除基线来源记录会使结果和缓存失效。新增基线比较/撤回测试通过，仍只验证合成手动记录，不代表真实 HealthKit 聚合已接入实验。两端显示窗口与开始前用途说明，新代码仍待完整 iOS 构建验证。
 
 Added a seven-day pre-start baseline, seven-day observation window and purpose disclosure; paused periods remain excluded. Both windows require four distinct recorded dates before comparing day-weighted means. Missing baseline data yields no between-window estimate. Within-window and baseline comparisons remain separately labeled. Deleting baseline source records invalidates results and cached responses. Synthetic manual-record tests cover comparison and withdrawal; real HealthKit aggregates are not yet integrated into experiment evaluation. Both clients disclose the windows before acceptance; current changes still await full iOS build validation.
+
+### 条件提示与构建 / Conditions and build verification
+
+`afeac8b` 的 CI 34159297298 三项已全部通过，包含 iOS 模拟器构建与测试。后续本地补充趋势详情、实验基线和 Today 下一次检查条件，尚需新一轮完整构建。Next Check 根据目标、提案、暂停、期限及有效记录日数显示后续动作；时间到不等于样本充足。iOS 停止实验增加确认，保留历史与记录。目标仍未完成，不能将此进展当作完整 Today 四态、真实 HealthKit 评价或正式提审的证明。
+
+All three jobs in CI 34159297298 passed for `afeac8b`, including iOS simulator build/tests. Later local changes add trend details, experiment baselines and conditional Next Check guidance and need a new full build. Guidance distinguishes missing goals, proposals, pauses, elapsed windows and valid recorded days; elapsed time does not establish sufficient evidence. iOS now confirms stopping while retaining history and records. The full goal remains incomplete, including full Today states, real HealthKit evaluation and formal submission.

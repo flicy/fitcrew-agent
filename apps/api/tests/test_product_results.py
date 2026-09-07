@@ -84,3 +84,27 @@ def test_baseline_comparison_requires_both_windows_and_invalidates_on_withdrawal
     assert result["energy_change"] == 0  # within-window and baseline comparisons differ
     svc.delete_log(baseline_records[0]["id"])
     assert svc.read(svc.row("experiment", exp["id"]))["result"]["status"] == "invalidated"
+
+
+def test_next_check_tracks_pause_and_completion_without_pretending_data_is_ready(
+    session, field_cipher
+):
+    svc, exp, start = fixture_experiment(session, field_cipher)
+    check = svc.state()["next_check"]
+    assert check["action"] == "log"
+    assert "0 个有效记录日" in check["detail"]
+    paused = svc.transition(exp["id"], "pause", exp["revision"])
+    assert svc.state()["next_check"]["title"] == "实验已暂停"
+    svc.now = lambda: start + timedelta(days=1)
+    svc.add_log({"energy": 3, "stress": 1, "feeling": "正常", "note": ""})
+    svc.now = lambda: start + timedelta(days=2)
+    resumed = svc.transition(exp["id"], "resume", paused["revision"])
+    assert "0 个有效记录日" in svc.state()["next_check"]["detail"]
+    svc.now = lambda: start + timedelta(days=10)
+    check = svc.state()["next_check"]
+    assert check["action"] == "experiments"
+    assert "记录不足" in check["detail"]
+    assert (
+        svc.transition(exp["id"], "evaluate", resumed["revision"])["result"]["status"]
+        == "insufficient_data"
+    )

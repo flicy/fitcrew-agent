@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var stressSource = ""
     @State private var pairing = ""
     @State private var experiment: ProductExperiment?
+    @State private var stoppingExperiment: ProductExperiment?
     @State private var deletion: String?
     @State private var saved = false
     @State private var showHealthConsent = false
@@ -38,7 +39,7 @@ struct ContentView: View {
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
             showLighten = false; lightenMission = nil; selectedTrend = nil
-            note = ""; saved = false; experiment = nil; deletion = nil; showHealthConsent = false
+            note = ""; saved = false; experiment = nil; stoppingExperiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
@@ -78,6 +79,12 @@ struct ContentView: View {
                 }.padding(24) }.toolbar { Button("关闭") { experiment = nil } }
             }.presentationDragIndicator(.visible)
         }
+        .confirmationDialog("停止这次实验？", isPresented: Binding(get: { stoppingExperiment != nil }, set: { if !$0 { stoppingExperiment = nil } }), titleVisibility: .visible) {
+            Button("停止实验", role: .destructive) {
+                if let value = stoppingExperiment { Task { await transition(value, "stop") } }
+                stoppingExperiment = nil
+            }
+        } message: { Text("保留已有记录和实验历史，不再继续观察。") }
         .confirmationDialog("永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
             Button("确认永久删除", role: .destructive) {
                 if let value = deletion { Task { if value.hasPrefix("logs/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
@@ -120,6 +127,13 @@ struct ContentView: View {
                 }.disabled(store.busy)
             } else { card { Text("从一个方向开始").font(.title2.bold()); Text("选择你的 90 天目标，开启今天的小行动。"); Button("选择旅程") { tab = 1 }.frame(minHeight: 44) } }
             if let active = store.state?.experiments.first(where: { $0.status == "running" }) { card { Text("正在验证").font(.headline); Text(active.title).font(.title2.bold()); Text(active.intervention); Button("查看实验与下一次检查") { tab = 2 }.frame(minHeight: 44) } }
+            if let next = store.state?.nextCheck { card {
+                Text("下一次检查：\(next.title)").font(.headline)
+                Text(next.detail)
+                Button(next.action == "log" ? "记录此刻感受" : next.action == "journey" ? "选择旅程" : "查看实验") {
+                    tab = next.action == "log" ? 3 : next.action == "journey" ? 1 : 2
+                }.frame(minHeight: 44)
+            } }
             card { Text("Apple 健康").font(.headline); Text(store.state?.health.sampleCount ?? 0 == 0 ? "暂无同步数据" : "已同步 \(store.state!.health.sampleCount) 条样本"); Text("只展示实际同步状态；未授权或没有样本时，不推测身体指标。").font(.footnote).foregroundStyle(.secondary) }
         }
     }
@@ -167,7 +181,7 @@ struct ContentView: View {
             ForEach(store.state?.experiments ?? []) { e in card {
                 Text(e.title).font(.title2.bold()); Text("\(status(e.status)) · \(e.durationDays) 天 · \(sourceLabel(e))").font(.subheadline); details(e)
                 if let result = e.result { Text("实验结果").font(.headline); Text(result.display) }
-                ForEach(e.actions, id: \.self) { action in Button(actionLabel(action)) { if action == "accept" { experiment = e } else { Task { await transition(e, action) } } }.frame(minHeight: 44).disabled(store.busy) }
+                ForEach(e.actions, id: \.self) { action in Button(actionLabel(action)) { if action == "accept" { experiment = e } else if action == "stop" { stoppingExperiment = e } else { Task { await transition(e, action) } } }.frame(minHeight: 44).disabled(store.busy) }
             } }
         }
     }

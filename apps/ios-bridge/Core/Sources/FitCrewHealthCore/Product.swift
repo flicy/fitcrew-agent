@@ -8,6 +8,7 @@ public struct ProductState: Decodable, Sendable {
     public let health: ProductHealth
     public let privacyVersion: String
     public let trends: ProductTrends?
+    public let nextCheck: ProductNextCheck?
 
     public static func decode(_ data: Data) throws -> ProductState {
         let decoder = JSONDecoder()
@@ -94,4 +95,8 @@ public struct ProductTrendPoint: Decodable, Identifiable, Sendable {
     public let count: Int
     public let energy, stress: Double?
     public let events: [String]?
+}
+
+public struct ProductNextCheck: Decodable, Sendable {
+    public let title, detail, action: String
 }
