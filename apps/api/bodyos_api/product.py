@@ -242,25 +242,24 @@ class ProductService:
                 progress["route"] = "manual"
             if progress.get("route") == "health":
                 synced = self.session.scalar(
-                    select(DeviceBinding.id)
+                    select(SyncBatch.id)
+                    .join(Consent, Consent.id == SyncBatch.consent_id)
+                    .join(DeviceBinding, DeviceBinding.id == SyncBatch.device_binding_id)
                     .where(
-                        DeviceBinding.fitcrew_user_id == self.user_id,
-                        DeviceBinding.revoked_at.is_(None),
-                        DeviceBinding.last_sync_at.is_not(None),
-                    )
-                    .limit(1)
-                )
-                consent = self.session.scalar(
-                    select(Consent.id)
-                    .where(
+                        SyncBatch.fitcrew_user_id == self.user_id,
+                        SyncBatch.status == "accepted",
                         Consent.fitcrew_user_id == self.user_id,
                         Consent.granted.is_(True),
                         Consent.withdrawn_at.is_(None),
                         Consent.purpose == "private_coaching",
+                        Consent.granted_at.is_not(None),
+                        SyncBatch.created_at >= Consent.granted_at,
+                        DeviceBinding.fitcrew_user_id == self.user_id,
+                        DeviceBinding.revoked_at.is_(None),
                     )
                     .limit(1)
                 )
-                if not synced or not consent:
+                if not synced:
                     raise HTTPException(
                         409, "no confirmed sync; retry sync or choose manual records"
                     )

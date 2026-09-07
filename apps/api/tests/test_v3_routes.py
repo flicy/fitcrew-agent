@@ -308,3 +308,47 @@ def test_onboarding_resumes_and_cannot_skip_missing_prerequisites(session, field
     assert client.get("/v3/state").json()["health"]["last_sync_at"] is None
     assert client.request("DELETE", "/v3/data", json={"confirmation": "DELETE"}).status_code == 200
     assert client.get("/v3/state").json()["onboarding"]["step"] == 1
+
+
+def test_onboarding_health_needs_current_consent_batch_and_persisted_progress(
+    session, field_cipher
+):
+    from datetime import UTC, datetime, timedelta
+
+    from bodyos_api.models import Consent, SyncBatch
+    from bodyos_api.product import ProductService
+
+    client, uid = client_for(session, field_cipher)
+    svc = ProductService(session, field_cipher, uid)
+    svc.write("onboarding", "current", {"step": 5, "route": "health"})
+    now = datetime.now(UTC)
+    device = session.query(DeviceBinding).filter_by(fitcrew_user_id=uid).one()
+    device.last_sync_at = now - timedelta(days=1)
+    consent = Consent(
+        fitcrew_user_id=uid,
+        category="step_count",
+        purpose="private_coaching",
+        granted=True,
+        granted_at=now,
+        receipt_version="test",
+    )
+    session.add(consent)
+    session.flush()
+    batch = SyncBatch(
+        fitcrew_user_id=uid,
+        batch_id=str(uuid4()),
+        device_binding_id=device.id,
+        consent_id=consent.id,
+        source="synthetic",
+        timezone="UTC",
+        status="accepted",
+        created_at=now - timedelta(days=1),
+    )
+    session.add(batch)
+    session.commit()
+    assert client.post("/v3/onboarding", json=rid(step=5)).status_code == 409
+    batch.created_at = now + timedelta(seconds=1)
+    session.commit()
+    assert client.post("/v3/onboarding", json=rid(step=5)).status_code == 200
+    # A separately constructed service reads encrypted persisted progress, not UI memory.
+    assert ProductService(session, field_cipher, uid).onboarding()["step"] == 6
