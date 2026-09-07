@@ -25,6 +25,11 @@ class Mutation(BaseModel):
     request_id: UUID
 
 
+class OnboardingInput(Mutation):
+    step: Literal[1, 2, 3, 4, 5, 6]
+    route: Literal["manual", "health"] | None = None
+
+
 class JourneyInput(Mutation):
     goal: Literal["sleep", "energy", "activity"]
 
@@ -87,6 +92,15 @@ Service = Annotated[ProductService, Depends(service)]
 @router.get("/state")
 def state(svc: Service):
     return svc.state()
+
+
+@router.post("/onboarding")
+def onboarding(body: OnboardingInput, svc: Service):
+    return svc.mutate(
+        "onboarding",
+        body.model_dump(mode="json"),
+        lambda: svc.advance_onboarding(body.step, body.route),
+    )
 
 
 @router.put("/journey")

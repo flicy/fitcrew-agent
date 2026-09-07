@@ -279,3 +279,32 @@ def test_trend_window_uses_account_timezone_and_excludes_outside_days(
     assert sum(p["count"] for p in result["points"]) == 2
     assert result["points"][-1]["events"] == ["开始实验：Synthetic observation"]
     assert all(p["events"] == [] for p in result["points"][:-1])
+
+
+def test_onboarding_resumes_and_cannot_skip_missing_prerequisites(session, field_cipher):
+    client, _ = client_for(session, field_cipher)
+    assert client.get("/v3/state").json()["onboarding"]["step"] == 1
+    assert client.post("/v3/onboarding", json=rid(step=6)).status_code == 409
+    first = rid(step=1)
+    response = client.post("/v3/onboarding", json=first)
+    assert response.status_code == 200
+    assert client.post("/v3/onboarding", json=first).json() == response.json()
+    assert client.get("/v3/state").json()["onboarding"]["step"] == 2
+    assert client.post("/v3/onboarding", json=rid(step=2)).status_code == 409
+    client.put("/v3/journey", json=rid(goal="sleep"))
+    assert client.post("/v3/onboarding", json=rid(step=2)).status_code == 200
+    assert client.post("/v3/onboarding", json=rid(step=3)).status_code == 200
+    assert client.post("/v3/onboarding", json=rid(step=4)).status_code == 422
+    assert client.post("/v3/onboarding", json=rid(step=4, route="health")).status_code == 200
+    assert client.post("/v3/onboarding", json=rid(step=5)).status_code == 409
+    assert client.post("/v3/onboarding", json=rid(step=5, route="manual")).status_code == 200
+    assert client.post("/v3/onboarding", json=rid(step=6)).status_code == 409
+    client.post("/v3/logs", json=rid(energy=3, stress=1, feeling="正常"))
+    assert client.post("/v3/onboarding", json=rid(step=6)).status_code == 200
+    progress = client.get("/v3/state").json()["onboarding"]
+    assert progress["step"] == 7
+    assert progress["route"] == "manual"
+    assert progress["disclosure_1"] and progress["disclosure_3"]
+    assert client.get("/v3/state").json()["health"]["last_sync_at"] is None
+    assert client.request("DELETE", "/v3/data", json={"confirmation": "DELETE"}).status_code == 200
+    assert client.get("/v3/state").json()["onboarding"]["step"] == 1

@@ -220,6 +220,58 @@ class ProductService:
             "action": "experiments" if ended else "log",
         }
 
+    def onboarding(self):
+        return self.read(self.row("onboarding", "current")) or {
+            "step": 1,
+            "revision": 0,
+            "route": None,
+        }
+
+    def advance_onboarding(self, step, route=None):
+        progress = self.onboarding()
+        if progress["step"] != step:
+            raise HTTPException(409, "onboarding changed; refresh before continuing")
+        if step == 2 and not self.row("journey", "current"):
+            raise HTTPException(409, "save a journey direction first")
+        if step == 4:
+            if route not in {"manual", "health"}:
+                raise HTTPException(422, "choose a data route")
+            progress["route"] = route
+        if step == 5:
+            if route == "manual":
+                progress["route"] = "manual"
+            if progress.get("route") == "health":
+                synced = self.session.scalar(
+                    select(DeviceBinding.id)
+                    .where(
+                        DeviceBinding.fitcrew_user_id == self.user_id,
+                        DeviceBinding.revoked_at.is_(None),
+                        DeviceBinding.last_sync_at.is_not(None),
+                    )
+                    .limit(1)
+                )
+                consent = self.session.scalar(
+                    select(Consent.id)
+                    .where(
+                        Consent.fitcrew_user_id == self.user_id,
+                        Consent.granted.is_(True),
+                        Consent.withdrawn_at.is_(None),
+                        Consent.purpose == "private_coaching",
+                    )
+                    .limit(1)
+                )
+                if not synced or not consent:
+                    raise HTTPException(
+                        409, "no confirmed sync; retry sync or choose manual records"
+                    )
+        if step == 6 and not self.rows("log"):
+            raise HTTPException(409, "save a body check first")
+        progress["step"] = step + 1
+        progress["updated_at"] = self.now().isoformat()
+        if step in {1, 3}:
+            progress[f"disclosure_{step}"] = PRIVACY_VERSION
+        return self.write("onboarding", "current", progress)
+
     def state(self):
         journey = self.read(self.row("journey", "current"))
         last = self.session.scalar(
@@ -238,6 +290,7 @@ class ProductService:
             "logs": logs,
             "trends": self.trends(logs, experiments),
             "next_check": self.next_check(journey, experiments, logs),
+            "onboarding": self.onboarding(),
             "mission": self.mission(journey) if journey else None,
             "health": {
                 "sample_count": count or 0,

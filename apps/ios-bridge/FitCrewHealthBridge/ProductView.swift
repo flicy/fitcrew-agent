@@ -111,6 +111,7 @@ struct ContentView: View {
     }
     private var today: some View {
         Group {
+            if let progress = store.state?.onboarding, progress.step < 7 { onboardingCard(progress) }
             card(accent: true) {
                 Label("此刻的你", systemImage: "leaf").font(.headline)
                 Text(store.state?.logs.last?.feeling ?? "先听听身体的声音").font(.largeTitle.bold())
@@ -137,6 +138,47 @@ struct ContentView: View {
             } }
             card { Text("Apple 健康").font(.headline); Text(store.state?.health.sampleCount ?? 0 == 0 ? "暂无同步数据" : "已同步 \(store.state!.health.sampleCount) 条样本"); Text("只展示实际同步状态；未授权或没有样本时，不推测身体指标。").font(.footnote).foregroundStyle(.secondary) }
         }
+    }
+    private func onboardingCard(_ progress: ProductOnboarding) -> some View {
+        card {
+            Text("开始前 · \(progress.step) / 6").font(.headline)
+            switch progress.step {
+            case 1:
+                Text("慢慢认识自己的节律").font(.title2.bold())
+                Text("FitCrew 帮你记录生活方式与感受，不作医疗诊断。你可以随时停止实验、撤回记录或删除账号。")
+                Button("我已了解，继续") { advanceOnboarding(progress) }
+            case 2:
+                Text("选一个 90 天方向").font(.title2.bold())
+                Button("前往旅程选择") { tab = 1 }
+                Button("已保存方向，继续") { advanceOnboarding(progress) }.disabled(store.state?.journey == nil)
+            case 3:
+                Text("先了解数据用途").font(.title2.bold())
+                Text("手动记录用于你的私人趋势和实验比较。Apple 健康按类别另行授权。AI 需要单独同意，不会自动读取笔记或原始健康样本；记录不会自动分享到群聊。")
+                Button("已阅读用途，继续") { advanceOnboarding(progress) }
+            case 4:
+                Text("选择记录方式").font(.title2.bold())
+                Button("查看 Apple 健康授权") {
+                    Task { if await store.mutate("/v3/onboarding", body: ["step": progress.step, "route": "health"]) { showHealthConsent = true } }
+                }
+                Button("先用手动记录") { advanceOnboarding(progress, route: "manual") }
+            case 5:
+                Text("确认首次同步").font(.title2.bold())
+                Text("授权不等于有样本。可以查看同步状态并重试，也可以先用手动记录。")
+                Button("查看授权与同步") { showHealthConsent = true }
+                if progress.route == "health" { Button("检查同步并继续") { advanceOnboarding(progress) } }
+                Button("暂用手动记录，继续") { advanceOnboarding(progress, route: "manual") }
+            default:
+                Text("做一次 Body Check").font(.title2.bold())
+                Button("记录此刻感受") { tab = 3 }
+                Button("已保存记录，完成引导") { advanceOnboarding(progress) }.disabled(store.state?.logs.isEmpty ?? true)
+            }
+            Text("确认后的进度保存在你的账号中，中断后可继续。").font(.footnote)
+        }.disabled(store.busy)
+    }
+    private func advanceOnboarding(_ progress: ProductOnboarding, route: String? = nil) {
+        var body: [String: Any] = ["step": progress.step]
+        if let route { body["route"] = route }
+        Task { await store.mutate("/v3/onboarding", body: body) }
     }
     private var journey: some View {
         Group {

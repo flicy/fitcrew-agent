@@ -9,6 +9,7 @@ public struct ProductState: Decodable, Sendable {
     public let privacyVersion: String
     public let trends: ProductTrends?
     public let nextCheck: ProductNextCheck?
+    public let onboarding: ProductOnboarding?
 
     public static func decode(_ data: Data) throws -> ProductState {
         let decoder = JSONDecoder()
@@ -99,4 +100,9 @@ public struct ProductTrendPoint: Decodable, Identifiable, Sendable, Equatable {
 
 public struct ProductNextCheck: Decodable, Sendable {
     public let title, detail, action: String
+}
+
+public struct ProductOnboarding: Decodable, Sendable {
+    public let step, revision: Int
+    public let route: String?
 }

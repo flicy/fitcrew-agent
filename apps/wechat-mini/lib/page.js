@@ -23,6 +23,7 @@ function base(extra={}) {
   openTrendPoint(e){this.syncBoundary();const point=this.data.trendPoints.find(p=>p.date===e.currentTarget.dataset.date);if(point)this.setData({selectedTrend:point});},
   closeTrendPoint(){this.setData({selectedTrend:null});},
   selectTrend(e){this.setData({trendDays:Number(e.currentTarget.dataset.days)});this.updateTrends();},
+  async advanceOnboarding(e){const progress=this.data.state&&this.data.state.onboarding;if(!progress)return;const route=e.currentTarget.dataset.route;await this.write('onboarding','/v3/onboarding',{step:progress.step,...(route?{route}:{})});},
   openNextCheck(){const next=this.data.state&&this.data.state.next_check;if(!next)return;if(next.action==='log')this.openLog();else if(next.action==='journey')this.openJourney();else this.openExperiments();},
   openJourney(){wx.switchTab({url:'/pages/journey/index'});},
   openLog(){wx.switchTab({url:'/pages/log/index'});},

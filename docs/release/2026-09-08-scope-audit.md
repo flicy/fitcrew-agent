@@ -93,3 +93,9 @@ Daily health aggregation now uses `features.v2`: absent sleep/activity samples y
 私人上下文读取旧缓存时，现按 sample_counts 将没有样本依据的睡眠、活动与恢复值置为 null，保留有明确样本的零值。此修正不写回历史密文、不冒充重算，保留原 algorithm_version 并标记 read_policy_version。已通过加密数据库读取测试与缺失/零值单测。CI 34159896202 已验证 `4478a9b` 的 iOS 删除/刷新修复，三项均通过；本次汇总修正另待新一轮 CI。
 
 Private-context reads now mask unsupported legacy sleep, activity and recovery values using sample_counts while preserving measured zeros. The compatibility path does not rewrite encrypted history or claim recomputation; it preserves algorithm_version and marks read_policy_version. Encrypted database read tests and missing-versus-zero tests pass. CI 34159896202 passed all three jobs for the iOS deletion/refresh fixes at `4478a9b`; aggregate changes await a separate CI run.
+
+### 六步引导进展 / Six-step onboarding progress
+
+两端加入 O1–O6 引导，账号内加密保存步骤、阅读确认版本和数据路径，写入使用原有幂等机制。服务端拒绝跳步、未设方向、未记录 Body Check 的完成请求。健康路径第五步要求有效用途授权及已确认同步；用户可明确切到手动路径，不伪造健康授权或样本。删除全部数据重置引导。后端流程测试通过；真机杀进程恢复、部分授权及首次同步 UI 验收仍待执行，不能仅凭持久化代码声称完成整条 onboarding 验收。
+
+Both clients now expose O1–O6 onboarding. Encrypted account records retain the current step, disclosure versions and selected data route, using existing idempotent mutations. The server rejects skipped steps and completion without a direction or Body Check. The health route requires active purpose consent and a confirmed sync at step five; users can explicitly choose manual records without fabricated health authorization or samples. Full erasure resets onboarding. Backend flow tests pass; real-device process-restart recovery, partial consent and initial-sync UI acceptance remain outstanding.
