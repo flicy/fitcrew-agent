@@ -99,3 +99,9 @@ Private-context reads now mask unsupported legacy sleep, activity and recovery v
 两端加入 O1–O6 引导，账号内加密保存步骤、阅读确认版本和数据路径，写入使用原有幂等机制。服务端拒绝跳步、未设方向、未记录 Body Check 的完成请求。健康路径第五步要求有效用途授权及已确认同步；用户可明确切到手动路径，不伪造健康授权或样本。删除全部数据重置引导。后端流程测试通过；真机杀进程恢复、部分授权及首次同步 UI 验收仍待执行，不能仅凭持久化代码声称完成整条 onboarding 验收。
 
 Both clients now expose O1–O6 onboarding. Encrypted account records retain the current step, disclosure versions and selected data route, using existing idempotent mutations. The server rejects skipped steps and completion without a direction or Body Check. The health route requires active purpose consent and a confirmed sync at step five; users can explicitly choose manual records without fabricated health authorization or samples. Full erasure resets onboarding. Backend flow tests pass; real-device process-restart recovery, partial consent and initial-sync UI acceptance remain outstanding.
+
+### Today 来源与缺口 / Today provenance and gaps
+
+Today 增加近七天手动记录来源、窗口、有效记录天数和缺口。restricted 表示当前无健康上传授权，仍可手动记录；baseline_building/ready 仅对应已说明的手动记录比较门槛，不代表健康评分、完整 HealthKit 覆盖或因果结论。服务器样本计数仅覆盖当前有效授权类别，撤回后隐藏同步时间。测试覆盖授权撤回与过期手动数据不计入窗口。完整设备侧权限分支和 HealthKit 指标质量仍待验收。
+
+Today now shows the seven-day manual-record source, window, observed days and gaps. Restricted means no current health upload consent while manual records remain available. Baseline-building/ready refer only to the disclosed manual-record comparison threshold, not a health score, complete HealthKit coverage or causality. Server sample counts include only currently consented categories and hide sync timestamps after withdrawal. Tests cover consent withdrawal and stale records outside the window. Device permission branches and HealthKit metric-quality acceptance remain outstanding.

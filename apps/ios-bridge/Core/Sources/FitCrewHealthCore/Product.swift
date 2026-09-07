@@ -10,6 +10,7 @@ public struct ProductState: Decodable, Sendable {
     public let trends: ProductTrends?
     public let nextCheck: ProductNextCheck?
     public let onboarding: ProductOnboarding?
+    public let todayContext: ProductTodayContext?
 
     public static func decode(_ data: Data) throws -> ProductState {
         let decoder = JSONDecoder()
@@ -105,4 +106,10 @@ public struct ProductNextCheck: Decodable, Sendable {
 public struct ProductOnboarding: Decodable, Sendable {
     public let step, revision: Int
     public let route: String?
+}
+
+public struct ProductTodayContext: Decodable, Sendable {
+    public let status, title, detail, windowStart, windowEnd, source: String
+    public let observedDays: Int
+    public let healthCategories: [String]
 }

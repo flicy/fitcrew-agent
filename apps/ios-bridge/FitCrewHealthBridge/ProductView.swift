@@ -112,8 +112,14 @@ struct ContentView: View {
     private var today: some View {
         Group {
             if let progress = store.state?.onboarding, progress.step < 7 { onboardingCard(progress) }
+            if let context = store.state?.todayContext { card {
+                Text(context.title).font(.title2.bold())
+                Text(context.detail)
+                Text("来源：\(context.source) · \(context.windowStart) — \(context.windowEnd)").font(.footnote)
+                Button("查看数据用途与授权") { tab = 4 }
+            } }
             card(accent: true) {
-                Label("此刻的你", systemImage: "leaf").font(.headline)
+                Label("最近一次记录", systemImage: "leaf").font(.headline)
                 Text(store.state?.logs.last?.feeling ?? "先听听身体的声音").font(.largeTitle.bold())
                 if let log = store.state?.logs.last { Text("最近记录 · 精力 \(log.energy)/5 · 压力 \(log.stress)/3") } else { Text("今天感觉怎么样？留下你的第一条记录。") }
                 Button("做一次 Body Check") { tab = 3 }.frame(minHeight: 44)

@@ -271,15 +271,61 @@ class ProductService:
             progress[f"disclosure_{step}"] = PRIVACY_VERSION
         return self.write("onboarding", "current", progress)
 
+    def active_health_categories(self):
+        return sorted(
+            set(
+                self.session.scalars(
+                    select(Consent.category).where(
+                        Consent.fitcrew_user_id == self.user_id,
+                        Consent.granted.is_(True),
+                        Consent.withdrawn_at.is_(None),
+                        Consent.purpose == "private_coaching",
+                    )
+                ).all()
+            )
+        )
+
+    def today_context(self, logs, categories):
+        end = self.today()
+        start = (datetime.fromisoformat(end) - timedelta(days=6)).date().isoformat()
+        observed = len({r["date"] for r in logs if start <= r["date"] <= end})
+        status = (
+            "restricted" if not categories else "baseline_building" if observed < 4 else "ready"
+        )
+        titles = {
+            "restricted": "手动记录模式",
+            "baseline_building": "正在积累记录",
+            "ready": "可以查看记录变化",
+        }
+        detail = f"近七天有 {observed} 个手动记录日，缺少 {7 - observed} 天。"
+        detail += "四个记录日是当前实验比较的最低要求，不是健康评分。"
+        if not categories:
+            detail += "尚无有效健康上传授权，可以继续手动记录。"
+        else:
+            detail += "已选择健康上传范围；这不代表设备已允许全部读取，也不代表样本完整。"
+        return {
+            "status": status,
+            "title": titles[status],
+            "detail": detail,
+            "window_start": start,
+            "window_end": end,
+            "observed_days": observed,
+            "source": "手动身体记录",
+            "health_categories": categories,
+        }
+
     def state(self):
         journey = self.read(self.row("journey", "current"))
+        categories = self.active_health_categories()
         last = self.session.scalar(
             select(func.max(DeviceBinding.last_sync_at)).where(
                 DeviceBinding.fitcrew_user_id == self.user_id, DeviceBinding.revoked_at.is_(None)
             )
         )
         count = self.session.scalar(
-            select(func.count(HealthSample.id)).where(HealthSample.fitcrew_user_id == self.user_id)
+            select(func.count(HealthSample.id)).where(
+                HealthSample.fitcrew_user_id == self.user_id, HealthSample.kind.in_(categories)
+            )
         )
         logs = [self.read(row) for row in self.rows("log")]
         experiments = [self.read(row) for row in self.rows("experiment")]
@@ -290,10 +336,11 @@ class ProductService:
             "trends": self.trends(logs, experiments),
             "next_check": self.next_check(journey, experiments, logs),
             "onboarding": self.onboarding(),
+            "today_context": self.today_context(logs, categories),
             "mission": self.mission(journey) if journey else None,
             "health": {
                 "sample_count": count or 0,
-                "last_sync_at": last.isoformat() if last else None,
+                "last_sync_at": last.isoformat() if last and categories else None,
             },
             "privacy_version": PRIVACY_VERSION,
         }

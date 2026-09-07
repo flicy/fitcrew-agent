@@ -108,3 +108,38 @@ def test_next_check_tracks_pause_and_completion_without_pretending_data_is_ready
         svc.transition(exp["id"], "evaluate", resumed["revision"])["result"]["status"]
         == "insufficient_data"
     )
+
+
+def test_today_quality_uses_recent_manual_days_and_current_consent(session, field_cipher):
+    from bodyos_api.models import Consent
+
+    svc, _, start = fixture_experiment(session, field_cipher)
+    assert svc.state()["today_context"]["status"] == "restricted"
+    consent = Consent(
+        fitcrew_user_id=svc.user_id,
+        category="step_count",
+        purpose="private_coaching",
+        granted=True,
+        granted_at=start,
+        receipt_version="test",
+    )
+    session.add(consent)
+    session.flush()
+    assert svc.state()["today_context"]["status"] == "baseline_building"
+    for day in range(4):
+        svc.now = lambda day=day: start - timedelta(days=day)
+        svc.add_log({"energy": 3, "stress": 1, "feeling": "正常", "note": ""})
+    svc.now = lambda: start
+    context = svc.state()["today_context"]
+    assert context["status"] == "ready"
+    assert context["observed_days"] == 4
+    assert context["source"] == "手动身体记录"
+    consent.withdrawn_at = start
+    consent.granted = False
+    session.flush()
+    state = svc.state()
+    assert state["today_context"]["status"] == "restricted"
+    assert state["today_context"]["health_categories"] == []
+    assert state["health"]["last_sync_at"] is None
+    svc.now = lambda: start + timedelta(days=8)
+    assert svc.state()["today_context"]["observed_days"] == 0
