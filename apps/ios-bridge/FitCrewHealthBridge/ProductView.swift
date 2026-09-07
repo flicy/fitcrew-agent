@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject var model: BridgeViewModel
     @StateObject private var store = ProductStore()
     @State private var tab = 0
+    @State private var exportScope = "all"
     @State private var trendDays = 30
     @State private var selectedTrend: ProductTrendPoint?
     @State private var showLighten = false
@@ -367,7 +368,13 @@ struct ContentView: View {
                 if let policyURL = ReleaseConfiguration.privacyPolicyURL {
                     Link("阅读完整隐私政策", destination: policyURL).frame(minHeight: 44)
                 } else { Text("公开隐私政策尚未配置，正式登录暂不可用。").font(.footnote) }
-                Button("导出我的数据") { Task { await store.exportData() } }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
+                Picker("导出范围", selection: $exportScope) {
+                    Text("全部数据").tag("all")
+                    Text("手动记录与实验").tag("product")
+                    Text("Apple 健康数据").tag("health")
+                }.disabled(store.busy)
+                Text("文件包含所选范围的私人数据及生成回执，仅在本机保存；分享由你主动选择。").font(.footnote)
+                Button("导出所选范围") { Task { await store.exportData(scope: exportScope) } }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
                 if let url = store.exportURL { ShareLink("保存或分享导出文件", item: url).frame(minHeight: 44) }
                 Button("删除全部数据", role: .destructive) { deletion = "data" }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)
                 Button("注销账号", role: .destructive) { deletion = "account" }.frame(minHeight: 44).disabled(!model.isConfigured || store.busy)

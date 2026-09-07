@@ -127,3 +127,9 @@ Deleting excluded pause-period records no longer invalidates unrelated experimen
 CI 34161612971 已验证 `68ea503`，全部通过，含 iOS 模拟器构建测试。新里程碑由已评估实验派生，显示观察窗口日期、行动和证据；不足数据仍如实显示，不命名为改善。撤回保留状态但移除该卡的行动与证据展示，原实验与记录保留；来源删除自动失效。后端测试覆盖来源删除、重复撤回回执、跨账号拒绝及全部删除。两端新页面仍待新完整构建及真机验证。
 
 CI 34161612971 passed for `68ea503`, including iOS simulator build/tests. New milestones derive from evaluated experiments and show observation dates, actions and evidence without claiming improvement when evidence is insufficient. Explicit withdrawal retains a status marker but removes the card's action/evidence; original experiments and records remain. Source deletion invalidates derived milestones. Backend tests cover source erasure, repeat withdrawal receipts, cross-account rejection and full deletion. New client changes still need full build and real-device validation.
+
+### 导出范围 / Export scopes
+
+两端新增全部、手动记录与实验、Apple 健康数据三种导出范围。服务器验证范围并附生成时间、范围和审计回执；只证明生成，不证明保存或分享。手动范围不含健康样本与健康状态元数据；健康范围不含手动记录。重新生成前清理旧文件，避免失败后分享上次不同范围的文件。383 项后端测试与18项小程序测试通过，Swift 新请求使用独立查询参数，页面语法通过，尚待完整构建。删除范围选择仍待实现。
+
+Both clients now offer all, manual/product and Apple Health export scopes. Server validation and metadata record scope, generation time and an audit receipt, proving generation only. Product-only export excludes health samples and health-status metadata; health-only excludes manual records. Old exports are removed before regeneration to prevent sharing a previous scope after failure. The backend has 383 passing tests and the mini-program 18. Swift uses separate URL query items and passed syntax parsing; full build validation remains pending. Scoped deletion is still incomplete.

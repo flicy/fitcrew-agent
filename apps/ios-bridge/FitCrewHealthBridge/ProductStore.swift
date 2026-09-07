@@ -74,12 +74,15 @@ final class ProductStore: ObservableObject {
         if activeOperation == operation { activeOperation = nil; busy = false }
     }
 
-    private func request(_ path: String, operation: UUID, method: String = "GET", body: [String: Any]? = nil) async throws -> Data {
+    private func request(_ path: String, operation: UUID, method: String = "GET", body: [String: Any]? = nil, query: [URLQueryItem] = []) async throws -> Data {
         guard isCurrent(operation) else { throw CancellationError() }
         guard let configuration = configurationProvider(), let token = tokenProvider() else {
             throw ProductError.message("请先在我的页面连接账号。")
         }
-        var request = URLRequest(url: configuration.baseURL.appending(path: path))
+        guard var components = URLComponents(url: configuration.baseURL.appending(path: path), resolvingAgainstBaseURL: false) else { throw ProductError.message("服务地址无效。") }
+        if !query.isEmpty { components.queryItems = query }
+        guard let url = components.url else { throw ProductError.message("服务地址无效。") }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 30
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -162,11 +165,13 @@ final class ProductStore: ObservableObject {
         } catch { if isCurrent(operation) { self.error = error.localizedDescription }; return false }
     }
 
-    func exportData() async {
+    func exportData(scope: String = "all") async {
+        guard ["all", "product", "health"].contains(scope) else { return }
         guard let operation = beginOperation() else { return }
         defer { finish(operation) }
         do {
-            let data = try await request("/v3/export", operation: operation)
+            clearExports()
+            let data = try await request("/v3/export", operation: operation, query: [URLQueryItem(name: "scope", value: scope)])
             guard isCurrent(operation) else { return }
             clearExports()
             let url = exportDirectory.appending(path: "FitCrew-export-\(UUID().uuidString).json")

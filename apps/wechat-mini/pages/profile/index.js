@@ -4,7 +4,7 @@ const {validBase}=require('../../lib/client');
 const config=require('../../config');
 Page(base({
  async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
- data:{signedIn:false,caps:null,receipt:'',exportPath:''},
+ data:{exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
  async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn)await this.capabilities();},
  async capabilities(){const epoch=lifecycle.epoch(wx);try{const caps=await getApp().api.request('/v3/capabilities');if(lifecycle.current(wx,epoch))this.setData({caps});}catch(e){if(lifecycle.current(wx,epoch))this.setData({caps:null,error:e.message});}},
  openPrivacy(){if(wx.openPrivacyContract)wx.openPrivacyContract({fail:()=>this.setData({error:'平台隐私保护指引尚未配置，请由运营者在小程序后台补全后再登录。'})});},
@@ -35,12 +35,15 @@ Page(base({
   if(!lifecycle.current(wx,epoch))return;this.setData({busy:true,error:''});
   try{const result=await getApp().api.request('/v3/ai-consent','POST',{granted,provider_notice_version:caps.ai_notice_version});if(lifecycle.current(wx,epoch))this.setData({caps:result});}catch(e){if(lifecycle.current(wx,epoch))this.setData({error:e.message});}finally{if(lifecycle.current(wx,epoch))this.setData({busy:false});}
  },
+ selectExportScope(e){if(!this.data.busy)this.setData({exportScopeIndex:Number(e.detail.value)});},
  async exportData(){
   this.syncBoundary();const epoch=lifecycle.epoch(wx);
-  if(this.data.busy||!await confirm('导出私有数据？','将把账户记录和健康数据写入本机小程序沙箱。文件包含敏感信息，请妥善保管；不会自动发送给他人。'))return;
+  const scope=['all','product','health'][this.data.exportScopeIndex];if(!scope)return;
+  if(this.data.busy||!await confirm('导出'+this.data.exportScopes[this.data.exportScopeIndex]+'？','将把所选范围的数据写入本机小程序沙箱。文件包含敏感信息，请妥善保管；不会自动发送给他人。'))return;
   if(!lifecycle.current(wx,epoch))return;this.setData({busy:true,error:''});
   try{
-   const data=await getApp().api.request('/v3/export'),filePath=wx.env.USER_DATA_PATH+'/fitcrew-private-export.json';
+   lifecycle.cleanExport(wx);this.setData({exportPath:''});
+   const data=await getApp().api.request('/v3/export?scope='+scope),filePath=wx.env.USER_DATA_PATH+'/fitcrew-private-export.json';
    if(!lifecycle.current(wx,epoch))return;
    wx.getFileSystemManager().writeFileSync(filePath,JSON.stringify(data,null,2),'utf8');
    this.setData({exportPath:filePath});

@@ -1,5 +1,5 @@
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,7 +11,7 @@ from bodyos_api.crypto import FieldCipher
 from bodyos_api.db import get_session
 from bodyos_api.health_service import HealthIngestionService
 from bodyos_api.model_gateway import RoutedModelGateway
-from bodyos_api.models import User
+from bodyos_api.models import AuditEvent, User
 from bodyos_api.product import ProductService
 from bodyos_api.product_ai import capabilities, select_action, set_ai_consent
 from bodyos_api.public_auth import revoke_apple_identity
@@ -187,13 +187,36 @@ def mission(body: MissionInput, svc: Service):
 
 
 @router.get("/export")
-def export(svc: Service):
-    return {
-        **svc.state(),
-        "health_export": HealthIngestionService(svc.session, svc.cipher).export_user_health(
-            svc.user_id
-        ),
+def export(svc: Service, scope: Literal["all", "product", "health"] = "all"):
+    result = {}
+    if scope in {"all", "product"}:
+        result = svc.state()
+        if scope == "product":
+            for key in ("health", "today_context"):
+                result.pop(key, None)
+    if scope in {"all", "health"}:
+        result["health_export"] = HealthIngestionService(
+            svc.session, svc.cipher
+        ).export_user_health(svc.user_id)
+    receipt = str(uuid4())
+    svc.session.add(
+        AuditEvent(
+            id=receipt,
+            fitcrew_user_id=svc.user_id,
+            event_type="product.export.generated",
+            resource_type="private_data",
+            policy_result="allowed",
+            trace_id=receipt,
+        )
+    )
+    svc.session.commit()
+    result["export_metadata"] = {
+        "scope": scope,
+        "generated_at": svc.now().isoformat(),
+        "receipt_id": receipt,
+        "notice": "仅证明服务器生成此范围的数据，不证明文件已保存或发送。",
     }
+    return result
 
 
 @router.delete("/data")
