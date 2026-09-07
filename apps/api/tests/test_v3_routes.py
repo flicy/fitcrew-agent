@@ -28,6 +28,35 @@ def rid(**values):
     return {"request_id": str(uuid4()), **values}
 
 
+def test_structured_subjective_signals_round_trip_and_erase(session, field_cipher):
+    client, _ = client_for(session, field_cipher)
+    body = rid(
+        energy=2,
+        stress=3,
+        feeling="不适",
+        sleep_feeling="醒后疲惫",
+        training_feeling="偏累",
+        stress_source="工作",
+    )
+    response = client.post("/v3/logs", json=body)
+    assert response.status_code == 200
+    record = response.json()
+    for key in ("sleep_feeling", "training_feeling", "stress_source"):
+        assert record[key] == body[key]
+        assert client.get("/v3/export").json()["logs"][0][key] == body[key]
+    assert client.post("/v3/logs", json=body).json() == record
+    assert (
+        client.post(
+            "/v3/logs",
+            json=rid(energy=3, stress=1, feeling="正常", sleep_feeling="unverified diagnosis"),
+        ).status_code
+        == 422
+    )
+    assert client.delete("/v3/logs/" + record["id"]).status_code == 200
+    assert client.get("/v3/state").json()["logs"] == []
+    assert client.post("/v3/logs", json=body).status_code == 410
+
+
 def test_new_user_has_no_invented_health_or_experiments(session, field_cipher):
     client, _ = client_for(session, field_cipher)
     response = client.get("/v3/state")
@@ -168,4 +197,24 @@ def test_changing_goal_invalidates_unaccepted_proposal(session, field_cipher):
             json=rid(action="accept", revision=before["revision"]),
         ).status_code
         == 409
+    )
+
+
+def test_lighten_alternative_persists_once_and_rejects_unknown_choice(session, field_cipher):
+    client, _ = client_for(session, field_cipher)
+    assert client.put("/v3/journey", json=rid(goal="sleep")).status_code == 200
+    before = client.get("/v3/state").json()["mission"]
+    assert client.get("/v3/state").json()["mission"] == before
+    body = rid(action="lighten", alternative="quiet_minute")
+    response = client.post("/v3/mission", json=body)
+    assert response.status_code == 200
+    adjusted = response.json()
+    assert adjusted["alternative"] == "quiet_minute"
+    assert adjusted["adjusted_at"]
+    assert adjusted["title"] != before["title"]
+    assert client.post("/v3/mission", json=body).json() == adjusted
+    assert client.get("/v3/state").json()["mission"] == adjusted
+    assert (
+        client.post("/v3/mission", json=rid(action="lighten", alternative="unknown")).status_code
+        == 422
     )

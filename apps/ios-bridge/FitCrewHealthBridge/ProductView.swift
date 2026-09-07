@@ -5,11 +5,15 @@ struct ContentView: View {
     @ObservedObject var model: BridgeViewModel
     @StateObject private var store = ProductStore()
     @State private var tab = 0
+    @State private var showLighten = false
     @State private var goal = "sleep"
     @State private var energy = 3
     @State private var stress = 1
     @State private var feeling = "正常"
     @State private var note = ""
+    @State private var sleepFeeling = ""
+    @State private var trainingFeeling = ""
+    @State private var stressSource = ""
     @State private var pairing = ""
     @State private var experiment: ProductExperiment?
     @State private var deletion: String?
@@ -30,9 +34,22 @@ struct ContentView: View {
         .sheet(isPresented: $showHealthConsent) { HealthConsentView(model: model) }
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
+            showLighten = false
             note = ""; saved = false; experiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
+            sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
+        }
+        .sheet(isPresented: $showLighten) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("选择后保存；取消会保留原任务。")
+                    Button("只记录此刻的感受") { lighten("brief_check") }
+                    Button("留一分钟安静休息") { lighten("quiet_minute") }
+                    if let error = store.error { Text(error).foregroundStyle(.red) }
+                    Button("取消") { showLighten = false }
+                }.padding(24).disabled(store.busy).navigationTitle("今天可以轻一点")
+            }.presentationDetents([.medium]).interactiveDismissDisabled(store.busy)
         }
         .sheet(item: $experiment) { e in
             NavigationStack {
@@ -79,9 +96,10 @@ struct ContentView: View {
             if let mission = store.state?.mission {
                 card {
                     Text("今天的一小步").font(.headline); Text(mission.title).font(.title.bold()); Text(mission.why).foregroundStyle(.secondary); Text("状态：\(status(mission.status))")
+                    if let adjustedAt = mission.adjustedAt { Text("调整已保存：\(adjustedAt) · 版本 \(mission.revision)").font(.footnote) }
                     if ["proposed", "pending", "accepted", "lightened"].contains(mission.status) {
                         Button("我做到了") { Task { await store.mutate("/v3/mission", body: ["action": "done"]) } }.buttonStyle(.borderedProminent)
-                        HStack { Button("轻一点") { Task { await store.mutate("/v3/mission", body: ["action": "lighten"]) } }; Spacer(); Button("今天跳过") { Task { await store.mutate("/v3/mission", body: ["action": "skip"]) } } }.frame(minHeight: 44)
+                        HStack { Button("轻一点") { showLighten = true }; Spacer(); Button("今天跳过") { Task { await store.mutate("/v3/mission", body: ["action": "skip"]) } } }.frame(minHeight: 44)
                     }
                 }.disabled(store.busy)
             } else { card { Text("从一个方向开始").font(.title2.bold()); Text("选择你的 90 天目标，开启今天的小行动。"); Button("选择旅程") { tab = 1 }.frame(minHeight: 44) } }
@@ -118,19 +136,31 @@ struct ContentView: View {
             card {
                 Text("Body Check").font(.title2.bold()); Stepper("精力 \(energy)/5", value: $energy, in: 1...5).frame(minHeight: 44); Stepper("压力 \(stress)/3", value: $stress, in: 1...3).frame(minHeight: 44)
                 Picker("整体感受", selection: $feeling) { ForEach(["充沛", "正常", "有点累", "很累", "不适"], id: \.self) { Text($0) } }
+                Picker("睡醒感受（可选）", selection: $sleepFeeling) { Text("暂不记录").tag(""); ForEach(["醒后清爽", "一般", "醒后疲惫"], id: \.self) { Text($0).tag($0) } }
+                Picker("运动感受（可选）", selection: $trainingFeeling) { Text("暂不记录").tag(""); ForEach(["完成", "偏累", "恢复良好"], id: \.self) { Text($0).tag($0) } }
+                Picker("压力来源（可选）", selection: $stressSource) { Text("暂不记录").tag(""); ForEach(["工作", "学习", "人际", "其他"], id: \.self) { Text($0).tag($0) } }
+                if feeling == "不适" { Text("感到不适时，请先停止当前实验，必要时寻求专业帮助。"); Button("前往实验，选择停止") { tab = 2 } }
                 TextField("还有什么想记下？（可选）", text: $note, axis: .vertical).lineLimit(3...6).padding(12).background(background, in: RoundedRectangle(cornerRadius: 12)); Text("\(note.count) / 500 字").font(.footnote)
                 Button("保存身体记录") {
                     let submittedNote = note
+                    let submittedSleep = sleepFeeling, submittedTraining = trainingFeeling, submittedSource = stressSource
+                    var payload: [String: Any] = ["energy": energy, "stress": stress, "feeling": feeling, "note": submittedNote]
+                    if !submittedSleep.isEmpty { payload["sleep_feeling"] = submittedSleep }
+                    if !submittedTraining.isEmpty { payload["training_feeling"] = submittedTraining }
+                    if !submittedSource.isEmpty { payload["stress_source"] = submittedSource }
                     Task {
-                        if await store.mutate("/v3/logs", body: ["energy": energy, "stress": stress, "feeling": feeling, "note": submittedNote]) {
+                        if await store.mutate("/v3/logs", body: payload) {
                             if note == submittedNote { note = "" }
+                            if sleepFeeling == submittedSleep { sleepFeeling = "" }
+                            if trainingFeeling == submittedTraining { trainingFeeling = "" }
+                            if stressSource == submittedSource { stressSource = "" }
                             saved = true
                         }
                     }
                 }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy || !BodyCheckInput.isValid(energy: energy, stress: stress, note: note))
                 if saved { Text("记录已保存").foregroundStyle(green) }
-            }
-            ForEach(Array((store.state?.logs ?? []).reversed())) { log in card { Text(log.feeling).font(.headline); Text("精力 \(log.energy)/5 · 压力 \(log.stress)/3"); if !log.note.isEmpty { Text(log.note) }; Text(log.createdAt).font(.footnote); Button("删除记录", role: .destructive) { deletion = "logs/\(log.id)" }.frame(minHeight: 44) } }
+            }.disabled(store.busy)
+            ForEach(Array((store.state?.logs ?? []).reversed())) { log in card { Text(log.feeling).font(.headline); Text("精力 \(log.energy)/5 · 压力 \(log.stress)/3"); if let value = log.sleepFeeling { Text("睡醒：\(value)") }; if let value = log.trainingFeeling { Text("运动：\(value)") }; if let value = log.stressSource { Text("压力来源：\(value)") }; if !log.note.isEmpty { Text(log.note) }; Text(log.createdAt).font(.footnote); Button("删除记录", role: .destructive) { deletion = "logs/\(log.id)" }.frame(minHeight: 44) } }
         }
     }
     private var profile: some View {
@@ -173,6 +203,9 @@ struct ContentView: View {
                 if let receipt = store.receipt { Text("删除已确认\n回执：\(receipt)").textSelection(.enabled) }
             }
         }
+    }
+    private func lighten(_ alternative: String) {
+        Task { if await store.mutate("/v3/mission", body: ["action": "lighten", "alternative": alternative]) { showLighten = false } }
     }
     private func transition(_ e: ProductExperiment, _ action: String) async -> Bool { await store.mutate("/v3/experiments/\(e.id)/transition", body: ["action": action, "revision": e.revision]) }
     private func sourceLabel(_ e: ProductExperiment) -> String { e.source == "ai_selected" ? "AI 选择的实验" : "规则建议（非 AI）" }

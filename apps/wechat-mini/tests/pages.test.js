@@ -46,3 +46,27 @@ test('pending log save locks edits so a newer draft cannot be silently discarded
  page.edit({currentTarget:{dataset:{field:'note'}},detail:{value:'draft B'}});
  assert.equal(page.data.note,'draft B');assert.equal(h.storage['fitcrew.draft'].note,'draft B');
 });
+test('optional signals survive offline retry and clear only after acknowledgment',async()=>{
+ const h=setup();let definition;global.Page=d=>definition=d;
+ delete require.cache[require.resolve('../pages/log/index')];require('../pages/log/index');
+ const page=mount(definition);page.onLoad();
+ for(const [field,value] of Object.entries({sleepIndex:3,trainingIndex:2,sourceIndex:1,feelingIndex:4}))page.edit({currentTarget:{dataset:{field}},detail:{value}});
+ const sent=[];h.setRequest(async(path,method,body)=>{sent.push(body);throw new Error('offline');});
+ await page.save();assert.equal(page.data.sleepIndex,3);assert.equal(h.storage['fitcrew.draft'].trainingIndex,2);
+ h.setRequest(async(path,method,body)=>{if(path==='/v3/logs'){sent.push(body);return {id:'saved'};}return {logs:[],experiments:[]};});
+ await page.save();assert.equal(sent[0].request_id,sent[1].request_id);
+ assert.equal(sent[1].sleep_feeling,'醒后疲惫');assert.equal(sent[1].training_feeling,'偏累');assert.equal(sent[1].stress_source,'工作');assert.equal(sent[1].feeling,'不适');
+ assert.equal(page.data.sleepIndex,0);assert.equal(page.data.trainingIndex,0);assert.equal(page.data.sourceIndex,0);assert.equal(h.storage['fitcrew.draft'],undefined);
+ await page.save();assert.equal(sent[2].sleep_feeling,null);assert.equal(sent[2].training_feeling,null);assert.equal(sent[2].stress_source,null);
+ let destination;h.wx.switchTab=({url})=>destination=url;page.openExperiments();assert.equal(destination,'/pages/experiments/index');
+});
+test('lighten selection and cancel never write; confirmed choice retries unchanged',async()=>{
+ const h=setup();let definition;global.Page=d=>definition=d;require('../pages/today/index');const page=mount(definition);page.onLoad();
+ const sent=[];h.setRequest(async(path,method,body)=>{sent.push(body);throw new Error('offline');});
+ await page.mission({currentTarget:{dataset:{action:'lighten'}}});assert.equal(page.data.choosing,true);assert.equal(sent.length,0);
+ page.cancelLighten();assert.equal(page.data.choosing,false);assert.equal(sent.length,0);
+ await page.mission({currentTarget:{dataset:{action:'lighten'}}});
+ const choice={currentTarget:{dataset:{id:'quiet_minute'}}};await page.chooseLighten(choice);assert.equal(page.data.choosing,true);
+ h.setRequest(async(path,method,body)=>{if(path==='/v3/mission'){sent.push(body);return {id:'saved'};}return {logs:[],experiments:[]};});
+ await page.chooseLighten(choice);assert.equal(page.data.choosing,false);assert.equal(sent[0].alternative,'quiet_minute');assert.equal(sent[0].request_id,sent[1].request_id);
+});

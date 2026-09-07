@@ -34,6 +34,9 @@ class LogInput(Mutation):
     stress: int = Field(ge=1, le=3)
     feeling: Literal["充沛", "正常", "有点累", "很累", "不适"]
     note: str = Field(default="", max_length=500)
+    sleep_feeling: Literal["醒后清爽", "一般", "醒后疲惫"] | None = None
+    training_feeling: Literal["完成", "偏累", "恢复良好"] | None = None
+    stress_source: Literal["工作", "学习", "人际", "其他"] | None = None
 
 
 class TransitionInput(Mutation):
@@ -43,6 +46,7 @@ class TransitionInput(Mutation):
 
 class MissionInput(Mutation):
     action: Literal["done", "lighten", "skip"]
+    alternative: Literal["brief_check", "quiet_minute"] = "brief_check"
 
 
 class DeleteInput(BaseModel):
@@ -139,7 +143,9 @@ def delete_log(resource_id: UUID, svc: Service):
 
 @router.post("/mission")
 def mission(body: MissionInput, svc: Service):
-    return svc.mutate("mission", body.model_dump(mode="json"), lambda: svc.act(body.action))
+    return svc.mutate(
+        "mission", body.model_dump(mode="json"), lambda: svc.act(body.action, body.alternative)
+    )
 
 
 @router.get("/export")

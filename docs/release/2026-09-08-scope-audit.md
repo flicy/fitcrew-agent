@@ -53,3 +53,9 @@ The isolated `.sandbox/wechat-test/` copy contains the user-supplied test AppID,
 Official Homebrew cask metadata points to Tencent's Apple Silicon stable DevTools 2.02.2608070 installer. Its HEAD response is 254414826 bytes, exceeding the currently available approximately 150 MiB before installation even begins. No download or installation occurred. Owner-provided storage or cleanup is needed; do not remove unrelated user files or caches.
 
 Continue by completing confirmed specification gaps, confirming the newer proactive-context design, installing DevTools when storage permits, running isolated real-account integration, and obtaining actual Apple/WeChat membership/configuration/filing/privacy and device evidence. Preserve the existing Feishu ingress, original workspace and demos. Only each platform's formal submission receipt proves the requested final state.
+
+## 代码进展补记 / Implementation update
+
+2026-09-08：两端补齐可选睡醒/训练感受与压力来源，不适时提供前往停止实验的入口。Today 增加两个调轻方案的选择面板，取消不写入；确认后保存所选方案、调整时间与记录版本。小程序测试覆盖离线保留、取消零写入与同一请求重试。后端覆盖字段保存/导出/删除、方案校验与幂等。此补记更新上述两行的代码状态，不代表真机验收或提审完成。iOS 当前修改只做语法检查，尚待完整构建及设备验证。
+
+2026-09-08: Both clients now include optional sleep/training feelings and stress source, with a discomfort link to experiment stop controls. Today offers two lighter alternatives in a choice panel; cancellation performs no write. Confirmation persists the selected alternative, adjustment timestamp and record revision. Mini-program tests cover offline preservation, zero-write cancellation and idempotent retries; backend tests cover persistence/export/deletion and alternative validation. This updates the corresponding implementation statuses above, but does not establish device acceptance or formal submission. Current iOS edits have syntax validation only; full build and device verification remain outstanding.

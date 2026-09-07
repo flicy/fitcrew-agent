@@ -27,6 +27,7 @@ public struct ProductHealth: Decodable, Sendable {
 
 public struct ProductMission: Decodable, Sendable {
     public let id, title, status, date, why: String
+    public let adjustedAt: String?
     public let revision: Int
 }
 
@@ -71,6 +72,7 @@ public struct ProductExperiment: Decodable, Identifiable, Sendable {
 public struct ProductLog: Decodable, Identifiable, Sendable {
     public let id, feeling, note, createdAt: String
     public let energy, stress, revision: Int
+    public let sleepFeeling, trainingFeeling, stressSource: String?
 }
 
 public enum BodyCheckInput {

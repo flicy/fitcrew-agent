@@ -322,7 +322,7 @@ class ProductService:
             "revision": 0,
         }
 
-    def act(self, action):
+    def act(self, action, alternative="brief_check"):
         journey = self.read(self.row("journey", "current"))
         if not journey:
             raise HTTPException(409, "choose a journey first")
@@ -330,7 +330,12 @@ class ProductService:
         if mission["status"] in {"done", "skipped"}:
             raise HTTPException(409, "today's action is already recorded")
         if action == "lighten":
-            mission["title"] = "只记录此刻的感受，今天先照顾自己"
+            mission["title"] = {
+                "brief_check": "只记录此刻的感受，今天先照顾自己",
+                "quiet_minute": "留一分钟安静休息，不要求完成其他行动",
+            }[alternative]
+            mission["alternative"] = alternative
+            mission["adjusted_at"] = self.now().isoformat()
         else:
             mission["status"] = "done" if action == "done" else "skipped"
             mission["recorded_at"] = self.now().isoformat()
