@@ -208,3 +208,8 @@ def erase_account(
     svc.lock()
     revoke_apple_identity(svc.session, svc.cipher, svc.user_id, settings)
     return svc.erase(account=True)
+
+
+@router.delete("/milestones/{resource_id}")
+def withdraw_milestone(resource_id: UUID, svc: Service):
+    return svc.withdraw_milestone(str(resource_id))

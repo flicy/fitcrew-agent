@@ -92,9 +92,9 @@ struct ContentView: View {
                 stoppingExperiment = nil
             }
         } message: { Text("保留已有记录和实验历史，不再继续观察。") }
-        .confirmationDialog("永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
-            Button("确认永久删除", role: .destructive) {
-                if let value = deletion { Task { if value.hasPrefix("logs/") || value.hasPrefix("memories/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
+        .confirmationDialog(deletion?.hasPrefix("milestones/") == true ? "撤回里程碑展示？原实验和记录仍保留。" : "永久删除？此操作无法撤销。", isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), titleVisibility: .visible) {
+            Button(deletion?.hasPrefix("milestones/") == true ? "确认撤回展示" : "确认永久删除", role: .destructive) {
+                if let value = deletion { Task { if value.hasPrefix("logs/") || value.hasPrefix("memories/") || value.hasPrefix("milestones/") { await store.mutate("/v3/\(value)", method: "DELETE") } else if await store.delete(value) { model.refreshSyncState() } } }; deletion = nil
             }
         }
     }
@@ -217,6 +217,19 @@ struct ContentView: View {
                 Button(store.state?.journey == nil ? "开启 90 天旅程" : "更新目标") { Task { await store.mutate("/v3/journey", method: "PUT", body: ["goal": goal]) } }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy)
             }
             if let trends = store.state?.trends { trendCard(trends) }
+            card {
+                Text("观察里程碑").font(.title2.bold())
+                Text("记录观察过程，不代表健康改善。撤回仅移除此处的行动与证据展示，保留原实验和记录。").font(.footnote)
+                if (store.state?.milestones ?? []).isEmpty { Text("尚无已结束并评估的观察。") }
+                ForEach(store.state?.milestones ?? []) { item in
+                    Text(item.title).font(.headline); Text(item.date).font(.footnote)
+                    if let action = item.action { Text("相关行动：\(action)") }
+                    Text(item.evidence)
+                    if item.status == "available" {
+                        Button("撤回里程碑", role: .destructive) { deletion = "milestones/\(item.id)" }.disabled(store.busy)
+                    }
+                }
+            }
             card { Text("旅程足迹").font(.title2.bold()); Text("\(store.state?.logs.count ?? 0) 次身体记录"); ForEach(store.state?.experiments ?? []) { e in Text("\(e.title) · \(status(e.status))") }; Text("通过观察积累证据，暂不推断因果关系。").font(.footnote) }
         }
     }

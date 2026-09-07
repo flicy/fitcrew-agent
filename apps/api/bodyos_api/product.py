@@ -172,6 +172,50 @@ class ProductService:
             )
         return {"source": "manual_logs", "window_end": end.isoformat(), "points": points}
 
+    def milestones(self, experiments):
+        items = []
+        hidden = {r.resource_key for r in self.rows("milestone_withdrawal")}
+        for experiment in experiments:
+            result = experiment.get("result")
+            if experiment["status"] != "completed" or not result:
+                continue
+            key = experiment["id"]
+            state = (
+                "withdrawn"
+                if key in hidden
+                else ("source_withdrawn" if result["status"] == "invalidated" else "available")
+            )
+            items.append(
+                {
+                    "id": key,
+                    "date": result["window_end"],
+                    "status": state,
+                    "title": "观察窗口已结束" if state == "available" else "里程碑已撤回",
+                    "action": experiment["intervention"] if state == "available" else None,
+                    "evidence": result["summary"]
+                    if state == "available"
+                    else (
+                        "来源记录已删除，证据失效。"
+                        if state == "source_withdrawn"
+                        else "你已撤回此展示，原实验和身体记录仍保留。"
+                    ),
+                }
+            )
+        return sorted(items, key=lambda item: item["date"], reverse=True)
+
+    def withdraw_milestone(self, key):
+        self.lock()
+        item = self.read(self.row("experiment", key))
+        if not item or item["status"] != "completed" or not item.get("result"):
+            raise HTTPException(404, "milestone not found")
+        old = self.read(self.row("milestone_withdrawal", key))
+        if old:
+            return old["receipt"]
+        receipt = self.receipt("product.milestone.withdrawn")
+        self.write("milestone_withdrawal", key, {"receipt": receipt})
+        self.session.commit()
+        return receipt
+
     def journey_progress(self, journey, logs):
         if not journey:
             return None
@@ -365,6 +409,7 @@ class ProductService:
             "journey": journey,
             "journey_progress": self.journey_progress(journey, logs),
             "experiments": experiments,
+            "milestones": self.milestones(experiments),
             "logs": logs,
             "trends": self.trends(logs, experiments),
             "next_check": self.next_check(journey, experiments, logs),

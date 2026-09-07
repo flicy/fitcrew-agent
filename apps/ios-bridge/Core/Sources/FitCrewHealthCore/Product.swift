@@ -3,6 +3,7 @@ import Foundation
 public struct ProductState: Decodable, Sendable {
     public let journey: ProductJourney?
     public let journeyProgress: ProductJourneyProgress?
+    public let milestones: [ProductMilestone]?
     public let experiments: [ProductExperiment]
     public let logs: [ProductLog]
     public let mission: ProductMission?
@@ -133,4 +134,9 @@ public struct ProductConfirmedMemory: Decodable, Identifiable, Sendable {
 public struct ProductJourneyProgress: Decodable, Sendable {
     public let day, totalDays, phase, observedDays, missingDays: Int
     public let title, windowEnd, notice: String
+}
+
+public struct ProductMilestone: Decodable, Identifiable, Sendable {
+    public let id, date, status, title, evidence: String
+    public let action: String?
 }

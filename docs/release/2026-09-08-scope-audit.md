@@ -121,3 +121,9 @@ The journey now presents calendar stages after its direction and before trends: 
 删除暂停期内未参与评估的记录，不再错误作废实验结果和确认记忆；删除真正参与基线或观察的记录仍会作废。两端失效结果关闭反馈与确认记忆入口。相关后端回归通过。本地 Swift 完整测试因磁盘写满中断，已清理本任务构建缓存及已安装的下载包，后续使用云端完整构建，不将此次中断当作测试通过。
 
 Deleting excluded pause-period records no longer invalidates unrelated experiment results or confirmed memories. Removing actual baseline or observation sources still invalidates them. Both clients hide feedback and memory confirmation for invalidated results. Targeted backend regression tests pass. Local Swift testing stopped because the disk filled; task build caches and the already-installed download were removed. Full verification continues in cloud CI; the interrupted run is not a pass.
+
+### 里程碑实现 / Milestone implementation
+
+CI 34161612971 已验证 `68ea503`，全部通过，含 iOS 模拟器构建测试。新里程碑由已评估实验派生，显示观察窗口日期、行动和证据；不足数据仍如实显示，不命名为改善。撤回保留状态但移除该卡的行动与证据展示，原实验与记录保留；来源删除自动失效。后端测试覆盖来源删除、重复撤回回执、跨账号拒绝及全部删除。两端新页面仍待新完整构建及真机验证。
+
+CI 34161612971 passed for `68ea503`, including iOS simulator build/tests. New milestones derive from evaluated experiments and show observation dates, actions and evidence without claiming improvement when evidence is insufficient. Explicit withdrawal retains a status marker but removes the card's action/evidence; original experiments and records remain. Source deletion invalidates derived milestones. Backend tests cover source erasure, repeat withdrawal receipts, cross-account rejection and full deletion. New client changes still need full build and real-device validation.
