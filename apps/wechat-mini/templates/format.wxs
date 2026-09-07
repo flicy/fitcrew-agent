@@ -1,0 +1,4 @@
+function day(value) { return value ? value.slice(5, 10).replace('-', '/') : ''; }
+function time(value) { return value ? value.replace('T', ' ').slice(0, 16) : '尚无记录'; }
+function mean(value) { return value === null || value === undefined ? '—' : Math.round(value * 10) / 10; }
+module.exports = { day: day, time: time, mean: mean };

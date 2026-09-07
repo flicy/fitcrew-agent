@@ -8,36 +8,47 @@
   ],
   "window": {
     "navigationBarTitleText": "FitCrew",
-    "navigationBarBackgroundColor": "#F5F1FA",
+    "navigationBarBackgroundColor": "#F8F7FA",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#F5F1FA"
+    "backgroundColor": "#F8F7FA"
   },
   "tabBar": {
-    "color": "#777181",
-    "selectedColor": "#7757A5",
+    "color": "#756A81",
+    "selectedColor": "#6544A3",
     "backgroundColor": "#FFFFFF",
     "list": [
       {
         "pagePath": "pages/today/index",
-        "text": "今日"
+        "text": "今日",
+        "iconPath": "assets/tabs/today.png",
+        "selectedIconPath": "assets/tabs/today-active.png"
       },
       {
         "pagePath": "pages/journey/index",
-        "text": "旅程"
+        "text": "旅程",
+        "iconPath": "assets/tabs/journey.png",
+        "selectedIconPath": "assets/tabs/journey-active.png"
       },
       {
         "pagePath": "pages/experiments/index",
-        "text": "实验"
+        "text": "实验",
+        "iconPath": "assets/tabs/experiments.png",
+        "selectedIconPath": "assets/tabs/experiments-active.png"
       },
       {
         "pagePath": "pages/log/index",
-        "text": "记录"
+        "text": "记录",
+        "iconPath": "assets/tabs/log.png",
+        "selectedIconPath": "assets/tabs/log-active.png"
       },
       {
         "pagePath": "pages/profile/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "assets/tabs/profile.png",
+        "selectedIconPath": "assets/tabs/profile-active.png"
       }
-    ]
+    ],
+    "borderStyle": "white"
   },
   "__usePrivacyCheck__": true,
   "sitemapLocation": "sitemap.json"

@@ -1,1 +1,52 @@
-<import src="../../templates/status.wxml"/><view class="page"><view class="eyebrow">FITCREW · JOURNEY</view><view class="title">给改变一点时间</view><view class="subtitle">一段 90 天的旅程，由每天真实的记录组成。</view><template is="status" data="{{loading,error,busy}}"/><view class="card hero" wx:if="{{state.journey}}"><view class="pill">{{state.journey.days}} 天旅程</view><view class="h2">{{state.journey.title}}</view><view class="body">起点 {{state.journey.start_date}}</view></view><view class="card" wx:if="{{state.journey_progress}}"><view class="h2">{{state.journey_progress.title}}</view><view class="body">第 {{state.journey_progress.day}} / {{state.journey_progress.total_days}} 天 · 窗口截至 {{state.journey_progress.window_end}}</view><view class="body">{{state.journey_progress.observed_days}} 天有记录 · {{state.journey_progress.missing_days}} 天缺失</view><view class="small muted">{{state.journey_progress.notice}}</view></view><view class="card"><view class="h2">{{state.journey ? '调整旅程方向' : '你最想先照顾什么？'}}</view><picker range="{{goals}}" value="{{goalIndex}}" bindchange="select"><view class="input">{{goals[goalIndex]}} · 点击选择</view></picker><button class="primary" bindtap="save" disabled="{{busy || !state}}">保存方向</button><view class="small muted">进行中的实验需先停止，才能改变方向。</view></view><view class="card" wx:if="{{state.trends}}"><view class="h2">精力记录趋势</view><view class="row"><button data-days="30" bindtap="selectTrend">30 天</button><button data-days="60" bindtap="selectTrend">60 天</button><button data-days="90" bindtap="selectTrend">90 天</button></view><view class="body">近 {{trendDays}} 天 · {{observedDays}} 天有记录 · {{trendDays - observedDays}} 天缺失</view><view class="small muted">来源：手动身体记录。同日取均值，精力 1–5 档；空缺表示未记录，不代表零分。不能据此判断行动效果。</view><view class="small muted">范围 {{trendPoints[0].date}} — {{state.trends.window_end}} · 点击一天查看详情</view><scroll-view scroll-x><view class="trend-chart"><view wx:for="{{trendPoints}}" wx:key="date" class="trend-day" data-date="{{item.date}}" bindtap="openTrendPoint"><view class="trend-column"><view wx:if="{{item.count}}" class="trend-bar" style="height:{{item.barHeight}}px"/><view wx:else class="muted">—</view></view><view class="small">{{item.count ? item.energy : '缺失'}}</view><view class="small">{{item.date}}</view></view></view></scroll-view></view><view wx:if="{{selectedTrend}}" class="trend-backdrop"><view class="card trend-details"><view class="h2">{{selectedTrend.date}}</view><view wx:if="{{selectedTrend.count}}">{{selectedTrend.count}} 条手动记录 · 精力均值 {{selectedTrend.energy}} / 5 · 压力均值 {{selectedTrend.stress}} / 3</view><view wx:else>当天没有记录，不能推断当天状态。</view><view wx:for="{{selectedTrend.events}}" wx:key="*this">{{item}}</view><view wx:if="{{!selectedTrend.events.length}}">当天无已记录的实验开始事件。</view><view class="small muted">实验事件仅作背景，不说明变化的原因。</view><button bindtap="closeTrendPoint">关闭</button></view></view><view class="card" wx:if="{{state}}"><view class="h2">观察里程碑</view><view class="small muted">记录观察过程，不代表健康改善。</view><view wx:if="{{!state.milestones.length}}">尚无已结束并评估的观察。</view><view wx:for="{{state.milestones}}" wx:key="id"><view class="divider"/><view class="h2">{{item.title}}</view><view class="small">{{item.date}}</view><view wx:if="{{item.action}}">相关行动：{{item.action}}</view><view class="body">{{item.evidence}}</view><button wx:if="{{item.status === 'available'}}" bindtap="withdrawMilestone" data-id="{{item.id}}" disabled="{{busy}}">撤回里程碑</button></view><view wx:if="{{receipt}}">撤回回执：{{receipt}}</view></view><view class="card" wx:if="{{state}}"><view class="h2">旅程中的真实记录</view><view wx:if="{{!logs.length}}" class="muted">还没有记录，不推断趋势或进展。</view><view wx:for="{{logs}}" wx:key="id"><view class="divider"/><view class="small muted">{{item.created_at}}</view><view class="body">{{item.feeling}} · 精力 {{item.energy}} / 5</view></view></view></view>
+<import src="../../templates/status.wxml"/>
+<wxs module="fmt" src="../../templates/format.wxs"/>
+<view class="page" style="--text-scale:{{textScale}}">
+  <view class="page-header"><view class="eyebrow">JOURNEY · 我的旅程</view><view class="title">给改变一点时间</view><view class="subtitle">一段 90 天的旅程，由每天真实的记录组成。</view></view>
+  <template is="status" data="{{loading,error,busy,notice}}"/>
+  <view class="card hero journey-direction" wx:if="{{state.journey}}">
+    <view class="tag-row"><text class="pill">{{state.journey.days}} 天旅程</text></view>
+    <view class="h2">{{state.journey.title}}</view><view class="small muted">起点 {{state.journey.start_date}}</view>
+    <block wx:if="{{state.journey_progress}}">
+      <view class="divider"/><view class="section-label">日历阶段 · {{state.journey_progress.title}}</view>
+      <view class="journey-day"><text class="value">{{state.journey_progress.day}}</text><text class="muted"> / {{state.journey_progress.total_days}} 天</text></view>
+      <view class="calendar-progress"><view style="width:{{state.journey_progress.day / state.journey_progress.total_days * 100}}%"/></view>
+      <view class="small helper">{{state.journey_progress.observed_days}} 天有记录 · {{state.journey_progress.missing_days}} 天缺失</view>
+      <view class="small muted">窗口截至 {{state.journey_progress.window_end}}</view>
+      <view class="small muted helper">{{state.journey_progress.notice}}</view>
+    </block>
+    <button class="text-button" bindtap="toggleGoal" disabled="{{busy}}">{{editingGoal ? '收起方向设置 ↑' : '调整旅程方向 →'}}</button>
+  </view>
+  <view class="card" wx:if="{{!state.journey || editingGoal}}">
+    <view class="h2">{{state.journey ? '调整旅程方向' : '你最想先照顾什么？'}}</view>
+    <view class="goal-options"><button wx:for="{{goals}}" wx:key="*this" class="option {{goalIndex === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="chooseGoal" disabled="{{busy}}" aria-pressed="{{goalIndex === index}}">{{item}}<text>{{goalIndex === index ? '✓' : '○'}}</text></button></view>
+    <button class="primary" bindtap="save" loading="{{busy}}" disabled="{{busy || !state}}">保存方向</button>
+    <view class="small muted helper">进行中的实验需先停止，才能改变方向。</view>
+    <view wx:if="{{!state}}" class="small muted helper">连接账户后可以保存。</view>
+  </view>
+  <view class="section-head" wx:if="{{state.trends}}"><view class="h2">精力记录趋势</view><text class="small muted">手动身体记录</text></view>
+  <view class="card trend-card" wx:if="{{state.trends}}">
+    <view class="segmented" role="group" aria-label="趋势时间范围"><button wx:for="{{[30,60,90]}}" wx:key="*this" class="{{trendDays === item ? 'active' : ''}}" data-days="{{item}}" bindtap="selectTrend" aria-pressed="{{trendDays === item}}">{{item}} 天</button></view>
+    <view class="trend-summary"><text class="value">{{observedDays}}</text><text class="muted"> / {{trendDays}} 天有记录</text></view>
+    <view class="small muted">{{trendDays - observedDays}} 天缺失 · 空缺不是零分</view>
+    <view class="small muted helper">{{trendPoints[0].date}} — {{state.trends.window_end}}</view>
+    <view class="chart-legend"><text><text class="legend-dot"/>精力均值 · 1–5 档</text><text>左右滑动 →</text></view>
+    <scroll-view scroll-x scroll-left="{{trendDays * 62}}" class="trend-scroll" enhanced show-scrollbar="{{true}}">
+      <view class="trend-chart"><button wx:for="{{trendPoints}}" wx:key="date" class="trend-day" data-date="{{item.date}}" bindtap="openTrendPoint" aria-label="{{item.date}}，{{item.count ? '精力 ' + fmt.mean(item.energy) + '，点按查看详情' : '没有记录，点按查看详情'}}">
+        <view class="trend-column"><view wx:if="{{item.count}}" class="trend-bar" style="height:{{item.barHeight}}px"/><view wx:else class="trend-gap">—</view></view>
+        <view class="small chart-value">{{item.count ? fmt.mean(item.energy) : '缺失'}}</view><view class="small muted">{{fmt.day(item.date)}}</view>
+      </button></view>
+    </scroll-view>
+    <view class="small muted helper">同日取均值，空缺表示未记录。点按一天查看详情；不能据此判断行动效果。</view>
+  </view>
+  <view class="section-head" wx:if="{{state}}"><view class="h2">观察里程碑</view></view>
+  <view class="card" wx:if="{{state}}"><view class="small muted">记录观察过程，不代表健康改善。</view><view wx:if="{{!state.milestones.length}}" class="muted helper">尚无已结束并评估的观察。</view><view class="list-item" wx:for="{{state.milestones}}" wx:key="id"><view class="tag-row"><text class="pill {{item.status === 'available' ? '' : 'neutral'}}">{{item.status === 'available' ? '可查看' : item.status === 'withdrawn' ? '已撤回' : '来源已撤回'}}</text><text class="small muted">{{item.date}}</text></view><view class="h3">{{item.title}}</view><view class="body" wx:if="{{item.status === 'available' && item.action}}">相关行动：{{item.action}}</view><view class="body">{{item.evidence}}</view><button wx:if="{{item.status === 'available'}}" class="quiet" bindtap="withdrawMilestone" data-id="{{item.id}}" disabled="{{busy}}">撤回里程碑</button></view><view wx:if="{{receipt}}" class="notice success small">撤回回执：{{receipt}}</view></view>
+  <view class="section-head" wx:if="{{state}}"><view class="h2">旅程中的真实记录</view><button class="text-button" bindtap="openLog">去记录 →</button></view>
+  <view class="card" wx:if="{{state}}"><view wx:if="{{!logs.length}}" class="muted">还没有记录，不推断趋势或进展。</view><view class="list-item" wx:for="{{logs}}" wx:key="id"><view class="small muted">{{fmt.time(item.created_at)}}</view><view class="body">{{item.feeling}} · 精力 {{item.energy}} / 5</view></view></view>
+  <block wx:if="{{selectedTrend}}">
+    <view class="trend-backdrop" catchtouchmove="preventTouchMove" bindtap="closeTrendPoint"/>
+    <scroll-view scroll-y class="trend-details" role="dialog" aria-modal="true" aria-label="每日记录详情"><view class="sheet-content"><view class="sheet-handle"/><view class="sheet-head"><view><view class="eyebrow">当日记录 · 来源与背景</view><view class="h2">{{selectedTrend.date}}</view></view><button class="sheet-close quiet" bindtap="closeTrendPoint">关闭</button></view>
+      <view wx:if="{{selectedTrend.count}}" class="card hero"><view class="h3">{{selectedTrend.count}} 条手动记录</view><view class="body">精力均值 {{fmt.mean(selectedTrend.energy)}} / 5</view><view class="body">压力均值 {{fmt.mean(selectedTrend.stress)}} / 3</view></view><view wx:else class="notice">当天没有记录，不能推断当天状态。</view>
+      <view class="field">实验背景</view><view class="body" wx:for="{{selectedTrend.events}}" wx:key="*this">{{item}}</view><view wx:if="{{!selectedTrend.events.length}}" class="muted">当天无已记录的实验开始事件。</view><view class="small muted helper">实验事件仅作背景，不说明变化的原因。</view>
+    </view></scroll-view>
+  </block>
+</view>

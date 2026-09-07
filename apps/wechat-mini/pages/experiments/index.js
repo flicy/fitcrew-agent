@@ -1,6 +1,8 @@
 const lifecycle=require('../../lib/session');
 const {base,confirm}=require('../../lib/page');
 Page(base({
+ data:{expandedExperiment:''},
+ toggleDetails(e){this.syncBoundary();const id=e.currentTarget.dataset.id;this.setData({expandedExperiment:this.data.expandedExperiment===id?'':id});},
  async feedback(e){
   this.syncBoundary();if(this.data.busy)return;const epoch=lifecycle.epoch(wx);
   const item=this.data.experiments.find(x=>x.id===e.currentTarget.dataset.id),assessment=e.currentTarget.dataset.assessment;if(!item)return;

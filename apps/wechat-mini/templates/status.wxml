@@ -1,1 +1,10 @@
-<template name="status"><view wx:if="{{loading}}" class="muted">正在读取你的记录…</view><view wx:if="{{error}}" class="error">{{error}}<button bindtap="refresh" disabled="{{busy}}">重新读取</button><button bindtap="openProfile">前往登录与设置</button></view></template>
+<template name="status">
+  <view wx:if="{{loading && !busy}}" class="notice" role="status" aria-live="polite"><text class="loading-dot"/>正在读取你的记录…</view>
+  <view wx:if="{{busy}}" class="notice" role="status" aria-live="polite">正在提交，请稍候…</view>
+  <view wx:if="{{error}}" class="error" role="alert">
+    <view class="status-title">暂时遇到问题</view>
+    <view>{{error}}</view>
+    <view class="row"><button class="secondary" bindtap="refresh" disabled="{{busy}}">重新读取</button><button class="quiet" bindtap="openProfile">登录与设置</button></view>
+  </view>
+  <view wx:if="{{notice && !busy}}" class="notice success" role="status" aria-live="polite">{{notice}}</view>
+</template>

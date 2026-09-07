@@ -2,7 +2,7 @@
 
 ## 中文
 
-五个原生页面：今日、旅程、实验、记录、我的。沿用 V2 私有 API、内部身份与 consent；无模拟健康数据、支付或订阅提醒。紫色与薰衣草色沿用已确认的 iOS Demo 方向。
+五个原生页面：今日、旅程、实验、记录、我的。沿用 V2 私有 API、内部身份与 consent；无模拟健康数据、支付或订阅提醒。暖白与深紫色沿用已确认的 iOS Demo 方向；五页交互、离线编译、截图与整合边界见 [设计更新](../../docs/design/2026-09-08-wechat-refresh.md)。
 
 将已核实的 AppID 写入 project.config.json，将已备案并配置微信 request 合法域名的 HTTPS API 写入 config.js。两者默认留空，缺失时登录被阻止，发布校验失败。AppSecret 仅配置在后端；客户端只在小程序私有存储保存设备 token，不记录 code、openid 或凭据到日志。登录返回不同服务地址时拒绝，防止凭据被重定向。
 
@@ -20,7 +20,7 @@ AI 能力按服务端状态展示，服务商、披露版本及单独同意均�
 
 Session boundaries reset private state and drafts in all cached tabs. A 401 or local 30-day expiry restores login. Request and modal continuations check a session generation so old-account responses cannot populate a new account. Exports are cleaned on launch, login, data deletion and account deletion; the cleanup button remains available after restart. Cleanup failures are explicit and prevent account installation.
 
-Five native tabs implement Today, Journey, Experiments, Log and Profile on the existing private V2 identity/consent API. No mock health records, payments or subscription reminders. Lavender styling follows the approved iOS demo.
+Five native tabs implement Today, Journey, Experiments, Log and Profile on the existing private V2 identity/consent API. No mock health records, payments or subscription reminders. Warm white and deep purple follow the approved iOS demo. See the [design refresh](../../docs/design/2026-09-08-wechat-refresh.md) for interactions, compilation, screenshots and integration limits.
 
 Set the verified AppID in project.config.json and the registered production HTTPS API in config.js. Both are empty by default and block login/release validation. Keep AppSecret on the server. Only the device token is persisted in app-private storage; never log login codes or credentials. A different server-selected base URL is rejected to prevent bearer redirection.
 
