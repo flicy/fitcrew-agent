@@ -173,3 +173,24 @@ def test_feedback_requires_confirmation_and_erased_memory_cannot_replay(session,
     with pytest.raises(HTTPException):
         latest = svc.read(svc.row("experiment", exp["id"]))
         svc.feedback(exp["id"], latest["revision"], "fits", True)
+
+
+def test_erasing_excluded_pause_record_preserves_result_and_memory(session, field_cipher):
+    svc, exp, start = fixture_experiment(session, field_cipher)
+    source = svc.add_log({"energy": 3, "stress": 1, "feeling": "正常", "note": ""})
+    svc.now = lambda: start + timedelta(days=1)
+    paused = svc.transition(exp["id"], "pause", exp["revision"])
+    svc.now = lambda: start + timedelta(days=2)
+    excluded = svc.add_log({"energy": 1, "stress": 3, "feeling": "很累", "note": ""})
+    svc.now = lambda: start + timedelta(days=3)
+    resumed = svc.transition(exp["id"], "resume", paused["revision"])
+    svc.now = lambda: start + timedelta(days=10)
+    completed = svc.transition(exp["id"], "evaluate", resumed["revision"])
+    feedback = svc.feedback(exp["id"], completed["revision"], "fits", True)
+    svc.delete_log(excluded["id"])
+    preserved = svc.read(svc.row("experiment", exp["id"]))
+    assert preserved == feedback
+    assert len(svc.state()["confirmed_memories"]) == 1
+    svc.delete_log(source["id"])
+    assert svc.read(svc.row("experiment", exp["id"]))["result"]["status"] == "invalidated"
+    assert svc.state()["confirmed_memories"] == []

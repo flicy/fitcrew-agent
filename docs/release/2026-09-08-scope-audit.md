@@ -115,3 +115,9 @@ Today now shows the seven-day manual-record source, window, observed days and ga
 CI 34161190320 passed for `9949f50`. Commit `68ea503` adds subjective experiment feedback, separately confirmed memories and withdrawal, with 379 backend and 18 mini-program tests passing; full CI 34161612971 remains pending. Source erasure invalidates dependent results and memories, and old idempotent requests cannot restore deleted content. Confirmed memories are not automatically supplied to AI and do not establish full contextual assistance.
 
 The journey now presents calendar stages after its direction and before trends: days 1–30, 31–60, 61–90 and an ended-window state. It counts distinct manually recorded dates within that journey window, recalculates after deletion, and makes no claim of improvement, completed actions or experimental validity. Milestones, HealthKit trends and real-device acceptance remain incomplete.
+
+### 撤回来源修复 / Source withdrawal correction
+
+删除暂停期内未参与评估的记录，不再错误作废实验结果和确认记忆；删除真正参与基线或观察的记录仍会作废。两端失效结果关闭反馈与确认记忆入口。相关后端回归通过。本地 Swift 完整测试因磁盘写满中断，已清理本任务构建缓存及已安装的下载包，后续使用云端完整构建，不将此次中断当作测试通过。
+
+Deleting excluded pause-period records no longer invalidates unrelated experiment results or confirmed memories. Removing actual baseline or observation sources still invalidates them. Both clients hide feedback and memory confirmation for invalidated results. Targeted backend regression tests pass. Local Swift testing stopped because the disk filled; task build caches and the already-installed download were removed. Full verification continues in cloud CI; the interrupted run is not a pass.

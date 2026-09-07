@@ -67,6 +67,11 @@ public struct ProductExperiment: Decodable, Identifiable, Sendable {
     public let purpose, baselineStart, acceptedAt, endsAt: String?
     public let result: JSONValue?
     public let userFeedback: ProductFeedback?
+    public var canGiveFeedback: Bool {
+        guard status == "completed", case .object(let fields) = result,
+              case .string(let resultStatus) = fields["status"] else { return false }
+        return resultStatus == "descriptive_only" || resultStatus == "insufficient_data"
+    }
     public var actions: [String] {
         switch status {
         case "proposed": return ["accept"]

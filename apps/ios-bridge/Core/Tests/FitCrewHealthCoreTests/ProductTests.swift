@@ -19,6 +19,21 @@ final class ProductTests: XCTestCase {
         XCTAssertEqual(experiment.dataCategories, ["sleep"])
     }
 
+    func testFeedbackRejectsRetractedAndUnknownEvidence() throws {
+        for (status, permitted) in [("descriptive_only", true), ("insufficient_data", true), ("invalidated", false), ("unknown", false)] {
+            let payload: [String: Any] = [
+                "id": "e", "title": "Observe", "hypothesis": "h", "intervention": "i",
+                "metrics": [], "success_criteria": [], "stop_conditions": [], "data_categories": [],
+                "duration_days": 7, "status": "completed", "revision": 2, "source": "rule_based",
+                "result": ["status": status]
+            ]
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let experiment = try decoder.decode(ProductExperiment.self, from: JSONSerialization.data(withJSONObject: payload))
+            XCTAssertEqual(experiment.canGiveFeedback, permitted)
+        }
+    }
+
     func testCheckValidationRejectsInvalidInput() {
         XCTAssertFalse(BodyCheckInput.isValid(energy: 0, stress: 1, note: ""))
         XCTAssertFalse(BodyCheckInput.isValid(energy: 3, stress: 4, note: ""))

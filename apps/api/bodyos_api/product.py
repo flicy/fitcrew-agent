@@ -199,8 +199,9 @@ class ProductService:
             "window_end": end.isoformat(),
             "observed_days": observed,
             "missing_days": max(0, day - observed),
-            "notice": ("阶段只表示日历时间；记录天数仅统计旅程窗口内的手动记录，"
-                       "不代表身体改善或行动完成。"),
+            "notice": (
+                "阶段只表示日历时间；记录天数仅统计旅程窗口内的手动记录，不代表身体改善或行动完成。"
+            ),
         }
 
     def next_check(self, journey, experiments, logs):
@@ -679,9 +680,16 @@ class ProductService:
         invalidated = {key}
         for experiment in self.rows("experiment"):
             item = self.read(experiment)
-            if item.get("result") and item.get("result", {}).get(
-                "baseline_window_start", item.get("accepted_at", "")
-            ) <= removed["created_at"] <= item.get("ends_at", ""):
+            result = item.get("result")
+            stamp = removed["created_at"]
+            contributed = result and (
+                result.get("baseline_window_start", item.get("accepted_at", ""))
+                <= stamp
+                < item.get("accepted_at", "")
+                or item.get("accepted_at", "") <= stamp <= item.get("ends_at", "")
+                and not any(a <= stamp < b for a, b in item.get("pause_intervals", []))
+            )
+            if contributed:
                 if item.get("user_feedback"):
                     item["user_feedback"]["memory_confirmed"] = False
                 item["result"] = {

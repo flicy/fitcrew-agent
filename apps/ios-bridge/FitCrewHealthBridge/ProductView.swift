@@ -252,7 +252,7 @@ struct ContentView: View {
             ForEach(store.state?.experiments ?? []) { e in card {
                 Text(e.title).font(.title2.bold()); Text("\(status(e.status)) · \(e.durationDays) 天 · \(sourceLabel(e))").font(.subheadline); details(e)
                 if let result = e.result { Text("实验结果").font(.headline); Text(result.display) }
-                if e.status == "completed" {
+                if e.canGiveFeedback {
                     Text("你的感受比结论更重要").font(.headline)
                     if let feedback = e.userFeedback { Text("已保存反馈：\(feedback.assessment == "fits" ? "适合我" : feedback.assessment == "not_fit" ? "不适合我" : "暂不确定")") }
                     ForEach(["fits", "not_fit", "uncertain"], id: \.self) { assessment in
