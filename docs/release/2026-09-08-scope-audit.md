@@ -181,3 +181,9 @@ Account state now includes a 90-day health_trends field, computed in the account
 两端旅程页接入 sleep/steps/hrv 指标与30/60/90日窗口，区分缺失和明确零值，点按显示样本数、来源及状态。柱高按窗口最大值缩放，附单位和非评分说明。详情在刷新失败或账号边界后清除；来源冲突即使误带数值也不展示。小程序官方编译及24项Node测试通过；iOS模型、页面与新增指标状态测试仅语法检查，完整构建和真实设备尚未验证。已有设计预览服务仍指向独立设计工作树，不包含此次健康趋势新卡片，不能拿旧预览证明新卡片渲染。
 
 Both Journey clients now display sleep, steps and HRV over 30/60/90 days, preserve missing-versus-zero distinctions, and open source/count/status details. Bars scale to the current window maximum with units and a non-score notice. Details clear on failed refresh or account changes; conflicted values remain hidden even if a numeric payload is present. Official mini-program compilation and all 24 Node tests pass. New iOS models, UI and metric-state tests have syntax validation only, pending full build and device tests. The existing preview server still uses the separate design worktree and does not prove rendering of this new health card.
+
+### 16:08 验证恢复 / Verification resumed at 16:08
+
+GitHub连接恢复，`13061a6` 已推送，最新CI 34202880672正在运行。旧CI 34161964649（f8da3c2）已核实全部通过。最新Swift Core实际编译和测试通过，双语文档检查通过。`devicectl list devices` 显示用户iPhone 16 Pro为 unavailable，不能安装或执行真机健康验证；微信DevTools实测login=false。不能将配对历史或Apple Watch可见性当作iPhone可用、微信登录或提审证据。
+
+GitHub connectivity recovered and `13061a6` was pushed. CI 34202880672 is running. Earlier CI 34161964649 for f8da3c2 was verified successful. Current Swift Core compiled and passed its tests; bilingual documentation validation passed. `devicectl list devices` reports the owner's iPhone 16 Pro unavailable, preventing installation and real-device health validation. WeChat DevTools reports login=false. Pairing history or Apple Watch visibility establishes neither iPhone availability nor WeChat login or submission.
