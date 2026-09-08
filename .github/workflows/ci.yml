@@ -74,6 +74,13 @@ jobs:
           brew install xcodegen
           xcodegen generate
           python3 ../../scripts/check_ios_generated_config.py
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+          xcodebuild -showdestinations \
+            -project FitCrewHealthBridge.xcodeproj \
+            -scheme FitCrewHealthBridge
           xcodebuild test \
             -project FitCrewHealthBridge.xcodeproj \
             -scheme FitCrewHealthBridge \
