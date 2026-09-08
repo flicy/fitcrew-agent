@@ -175,3 +175,9 @@ Independent design commit `c13ca4c` was integrated as `77d42ed`. The release bra
 账号状态新增 health_trends，窗口90天，按账号时区读取当前获准类别的加密样本，不复用旧汇总缓存，也不发送模型。每日期包含睡眠小时、步数、HRV均值及样本数、来源、状态。睡眠合并实际区间；步数/HRV多来源先显示冲突，步数同来源重叠也不相加；无样本不填零，明确测量零保留。所有有值记录仍标 partial，不代表全天覆盖。手动范围导出明确排除此字段。391项后端测试通过；两端 UI 尚未接入此字段，健康趋势体验仍未完成。
 
 Account state now includes a 90-day health_trends field, computed in the account timezone from currently authorized encrypted sample categories, without legacy cached aggregates or model calls. Each date carries sleep hours, steps, mean HRV, sample count, sources and status. Sleep uses interval union; multi-source steps/HRV and overlapping step intervals are reported as conflicts rather than summed. Missing values remain null and measured zero is preserved. Values remain partial, never proof of full-day coverage. Product-only export explicitly excludes this field. All 391 backend tests pass; client UI integration is pending, so the health-trend experience is not complete.
+
+### 两端健康趋势显示 / Health trend clients
+
+两端旅程页接入 sleep/steps/hrv 指标与30/60/90日窗口，区分缺失和明确零值，点按显示样本数、来源及状态。柱高按窗口最大值缩放，附单位和非评分说明。详情在刷新失败或账号边界后清除；来源冲突即使误带数值也不展示。小程序官方编译及24项Node测试通过；iOS模型、页面与新增指标状态测试仅语法检查，完整构建和真实设备尚未验证。已有设计预览服务仍指向独立设计工作树，不包含此次健康趋势新卡片，不能拿旧预览证明新卡片渲染。
+
+Both Journey clients now display sleep, steps and HRV over 30/60/90 days, preserve missing-versus-zero distinctions, and open source/count/status details. Bars scale to the current window maximum with units and a non-score notice. Details clear on failed refresh or account changes; conflicted values remain hidden even if a numeric payload is present. Official mini-program compilation and all 24 Node tests pass. New iOS models, UI and metric-state tests have syntax validation only, pending full build and device tests. The existing preview server still uses the separate design worktree and does not prove rendering of this new health card.

@@ -10,6 +10,7 @@ public struct ProductState: Decodable, Sendable {
     public let health: ProductHealth
     public let privacyVersion: String
     public let trends: ProductTrends?
+    public let healthTrends: ProductHealthTrends?
     public let nextCheck: ProductNextCheck?
     public let onboarding: ProductOnboarding?
     public let todayContext: ProductTodayContext?
@@ -139,4 +140,31 @@ public struct ProductJourneyProgress: Decodable, Sendable {
 public struct ProductMilestone: Decodable, Identifiable, Sendable {
     public let id, date, status, title, evidence: String
     public let action: String?
+}
+
+public struct ProductHealthTrends: Decodable, Sendable {
+    public let timezone, windowEnd, notice: String
+    public let points: [ProductHealthPoint]
+}
+public struct ProductHealthPoint: Decodable, Identifiable, Sendable, Equatable {
+    public var id: String { date }
+    public let date: String
+    public let metrics: [String: ProductHealthMetric]
+}
+public struct ProductHealthMetric: Decodable, Sendable, Equatable {
+    public let value: Double?
+    public let unit, status: String
+    public let sampleCount: Int
+    public let sources: [String]
+    public var displayValue: Double? { status == "partial" && value?.isFinite == true ? value : nil }
+    public var statusLabel: String {
+        switch status {
+        case "partial": return "部分样本"
+        case "missing": return "无样本"
+        case "not_authorized": return "未授权"
+        case "source_conflict": return "来源冲突"
+        case "invalid": return "数据异常"
+        default: return "待核实"
+        }
+    }
 }

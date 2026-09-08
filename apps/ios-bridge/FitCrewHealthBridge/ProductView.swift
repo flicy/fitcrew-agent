@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var exportScope = "all"
     @State private var deleteScope = "all"
     @State private var trendDays = 30
+    @State private var healthMetric = "sleep"
+    @State private var selectedHealthPoint: ProductHealthPoint?
     @State private var selectedTrend: ProductTrendPoint?
     @State private var showLighten = false
     @State private var lightenMission: ProductMission?
@@ -42,13 +44,28 @@ struct ContentView: View {
         .sheet(isPresented: $showHealthConsent) { HealthConsentView(model: model) }
         .onChange(of: model.identityRevision) { _, _ in
             store.synchronizeIdentity()
-            showLighten = false; lightenMission = nil; selectedTrend = nil
+            showLighten = false; lightenMission = nil; selectedTrend = nil; selectedHealthPoint = nil
             note = ""; saved = false; experiment = nil; stoppingExperiment = nil; feedbackExperiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
             if model.isConfigured { Task { await store.refresh() } }
         }
         .onChange(of: store.state?.trends?.points) { _, _ in selectedTrend = nil }
+        .onChange(of: store.state?.healthTrends?.points) { _, _ in selectedHealthPoint = nil }
+        .sheet(item: $selectedHealthPoint) { point in
+            NavigationStack {
+                ScrollView { VStack(alignment: .leading, spacing: 16) {
+                    if let metric = point.metrics[healthMetric] {
+                        Text(metric.statusLabel).font(.headline)
+                        if let value = metric.displayValue { Text("\(value.formatted()) \(metric.unit)").font(.title2) }
+                        Text("\(metric.sampleCount) 条样本")
+                        Text("来源：\(metric.sources.isEmpty ? "无可用来源" : metric.sources.joined(separator: "、"))")
+                        Text("未授权不等于拒绝系统权限；有值不保证全天覆盖。来源冲突不计算数值。").font(.footnote)
+                    }
+                    Button("关闭") { selectedHealthPoint = nil }
+                }.padding(24) }.navigationTitle(point.date)
+            }.presentationDetents([.medium, .large])
+        }
         .sheet(item: $selectedTrend) { point in
             NavigationStack {
                 VStack(alignment: .leading, spacing: 20) {
@@ -232,6 +249,7 @@ struct ContentView: View {
                 Button(store.state?.journey == nil ? "开启 90 天旅程" : "更新目标") { Task { await store.mutate("/v3/journey", method: "PUT", body: ["goal": goal]) } }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy)
             }
             if let trends = store.state?.trends { trendCard(trends) }
+            if let health = store.state?.healthTrends { healthTrendCard(health) }
             card {
                 Text("观察里程碑").font(.title2.bold())
                 Text("记录观察过程，不代表健康改善。撤回仅移除此处的行动与证据展示，保留原实验和记录。").font(.footnote)
@@ -246,6 +264,35 @@ struct ContentView: View {
                 }
             }
             card { Text("旅程足迹").font(.title2.bold()); Text("\(store.state?.logs.count ?? 0) 次身体记录"); ForEach(store.state?.experiments ?? []) { e in Text("\(e.title) · \(status(e.status))") }; Text("通过观察积累证据，暂不推断因果关系。").font(.footnote) }
+        }
+    }
+    private func healthTrendCard(_ health: ProductHealthTrends) -> some View {
+        let points = Array(health.points.suffix(trendDays))
+        let maximum = max(1, points.compactMap { $0.metrics[healthMetric]?.displayValue }.max() ?? 1)
+        let observed = points.filter { $0.metrics[healthMetric]?.displayValue != nil }.count
+        return card {
+            Text("健康样本趋势").font(.title2.bold())
+            Text(health.notice).font(.footnote)
+            Picker("指标", selection: $healthMetric) { Text("睡眠").tag("sleep"); Text("步数").tag("steps"); Text("HRV").tag("hrv") }.pickerStyle(.segmented)
+            Picker("时间范围", selection: $trendDays) { ForEach([30,60,90], id: \.self) { Text("\($0) 天").tag($0) } }.pickerStyle(.segmented)
+            Text("\(observed) / \(trendDays) 天有可显示数值 · 时区 \(health.timezone)")
+            Text("\(points.first?.date ?? health.windowEnd) — \(health.windowEnd)").font(.footnote)
+            ScrollView(.horizontal) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(points) { point in
+                        Button { selectedHealthPoint = point } label: {
+                            VStack {
+                                if let metric = point.metrics[healthMetric], let value = metric.displayValue {
+                                    VStack { Spacer(minLength: 0); RoundedRectangle(cornerRadius: 4).fill(Color.purple).frame(width: 18, height: max(0,value / maximum * 100)) }.frame(height: 100)
+                                    Text(value.formatted()).font(.caption)
+                                } else { Text("—").frame(height: 100); Text("暂无").font(.caption) }
+                                Text(String(point.date.suffix(5))).font(.caption)
+                            }.frame(minWidth: 48)
+                        }.buttonStyle(.plain).accessibilityLabel("\(point.date)，\(point.metrics[healthMetric]?.statusLabel ?? "待核实")，点按查看来源")
+                    }
+                }
+            }
+            Text("单位：\(healthMetric == "sleep" ? "小时" : healthMetric == "steps" ? "步" : "毫秒")；柱高按本窗口最大值缩放，不是健康评分。点按一天查看缺口原因。").font(.footnote)
         }
     }
     private func trendCard(_ trends: ProductTrends) -> some View {

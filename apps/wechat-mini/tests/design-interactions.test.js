@@ -45,3 +45,14 @@ test('deletion without a receipt cannot show a success notice',async()=>{
   assert.equal(await page.write('forget','/v3/memories/synthetic',{},'DELETE'),false);
   assert.equal(page.data.notice,'');assert.match(page.data.error,/删除/);
 });
+test('health trends preserve measured zero, suppress conflicts and clear details on refresh failure',async()=>{
+ const {page,setRequest}=setup();
+ const metrics=status=>({steps:{value:status==='partial'?0:999,status,unit:'步',sample_count:1,sources:['synthetic']}});
+ setRequest(async()=>({...state,health_trends:{points:[{date:'one',metrics:metrics('partial')},{date:'two',metrics:metrics('source_conflict')}]}}));
+ await page.refresh();page.selectHealthMetric({currentTarget:{dataset:{metric:'steps'}}});
+ assert.equal(page.data.healthPoints[0].value,0);assert.equal(page.data.healthPoints[0].known,true);
+ assert.equal(page.data.healthPoints[1].value,null);assert.equal(page.data.healthObservedDays,1);
+ page.openHealthPoint({currentTarget:{dataset:{date:'one'}}});assert.equal(page.data.selectedHealthPoint.value,0);
+ setRequest(async()=>{throw Error('offline')});await page.refresh();
+ assert.deepEqual(page.data.healthPoints,[]);assert.equal(page.data.selectedHealthPoint,null);
+});

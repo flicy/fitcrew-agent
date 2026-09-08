@@ -1,10 +1,10 @@
 const {mutation,finish}=require('./client');
 const session=require('./session');
-const {textScale}=require('./presentation');
+const {textScale,healthPoints}=require('./presentation');
 const labels={proposed:'待确认',running:'观察中',paused:'已暂停',stopped:'已停止',completed:'已完成'};
 function confirm(title,content){return new Promise(resolve=>wx.showModal({title,content,confirmText:'确认',success:r=>resolve(r.confirm),fail:()=>resolve(false)}));}
 function base(extra={}) {
- const initial={textScale:1,notice:'',loading:false,busy:false,error:'',state:null,experiments:[],logs:[],trendPoints:[],trendDays:30,selectedTrend:null,observedDays:0,receipt:'',...extra.data};
+ const initial={healthMetric:'sleep',healthPoints:[],healthObservedDays:0,selectedHealthPoint:null,textScale:1,notice:'',loading:false,busy:false,error:'',state:null,experiments:[],logs:[],trendPoints:[],trendDays:30,selectedTrend:null,observedDays:0,receipt:'',...extra.data};
  return {
   resetPrivate(){this.setData({...JSON.parse(JSON.stringify(initial)),signedIn:!!wx.getStorageSync('fitcrew.session')});this._epoch=session.epoch(wx);},
   syncBoundary(){session.watch(wx,this);session.active(wx);if(this._epoch!==session.epoch(wx))this.resetPrivate();},
@@ -12,7 +12,7 @@ function base(extra={}) {
   async refresh(){
    this.syncBoundary();const epoch=session.epoch(wx);this.setData({loading:true,error:'',notice:''});
    try{const state=await getApp().api.request('/v3/state');if(!session.current(wx,epoch))return;this.setData({state,logs:[...state.logs].reverse(),experiments:state.experiments.map(x=>({...x,statusLabel:labels[x.status]||x.status,sourceLabel:x.source==='ai_selected'?'AI 选择 · 受约束行动':x.source==='rule_based'?'规则建议':'来源待确认',resultText:x.result?x.result.summary:''}))});this.updateTrends();}
-   catch(e){if(session.current(wx,epoch))this.setData({error:e.message,state:null,logs:[],experiments:[],trendPoints:[],selectedTrend:null,observedDays:0});}
+   catch(e){if(session.current(wx,epoch))this.setData({error:e.message,state:null,logs:[],experiments:[],trendPoints:[],selectedTrend:null,observedDays:0,healthPoints:[],selectedHealthPoint:null,healthObservedDays:0});}
    finally{if(session.current(wx,epoch))this.setData({loading:false});}
   },
   async write(key,path,body,method='POST'){
@@ -20,7 +20,11 @@ function base(extra={}) {
    try{const result=await getApp().api.request(path,method,mutation(wx,key,body));if(!session.current(wx,epoch))return false;if(method==='DELETE'){if(!result.deleted||!result.receipt_id)throw new Error('服务器未确认删除，请重试');this.setData({receipt:result.receipt_id});}finish(wx,key);await this.refresh();if(session.current(wx,epoch))this.setData({notice:method==='DELETE'?'已删除，服务回执见下方。':this.data.error?'已保存，最新内容暂未读到，请重新读取。':'已保存。'});return session.current(wx,epoch);}
    catch(e){if(session.current(wx,epoch))this.setData({error:e.message});return false;}finally{if(session.current(wx,epoch))this.setData({busy:false});}
   },
-  updateTrends(){const points=this.data.state&&this.data.state.trends?this.data.state.trends.points.slice(-this.data.trendDays):[];this.setData({selectedTrend:null,trendPoints:points.map(p=>({...p,barHeight:p.energy===null?0:p.energy*20})),observedDays:points.filter(p=>p.count>0).length});},
+  updateTrends(){const points=this.data.state&&this.data.state.trends?this.data.state.trends.points.slice(-this.data.trendDays):[];this.setData({selectedTrend:null,trendPoints:points.map(p=>({...p,barHeight:p.energy===null?0:p.energy*20})),observedDays:points.filter(p=>p.count>0).length});this.updateHealthTrends();},
+  updateHealthTrends(){const points=healthPoints(this.data.state,this.data.healthMetric,this.data.trendDays);this.setData({healthPoints:points,healthObservedDays:points.filter(p=>p.known).length,selectedHealthPoint:null});},
+  selectHealthMetric(e){this.syncBoundary();const metric=e.currentTarget.dataset.metric;if(!['sleep','steps','hrv'].includes(metric))return;this.setData({healthMetric:metric});this.updateHealthTrends();},
+  openHealthPoint(e){this.syncBoundary();const point=this.data.healthPoints.find(p=>p.date===e.currentTarget.dataset.date);if(point)this.setData({selectedHealthPoint:point});},
+  closeHealthPoint(){this.setData({selectedHealthPoint:null});},
   openTrendPoint(e){this.syncBoundary();const point=this.data.trendPoints.find(p=>p.date===e.currentTarget.dataset.date);if(point)this.setData({selectedTrend:point});},
   preventTouchMove(){},
   closeTrendPoint(){this.setData({selectedTrend:null});},

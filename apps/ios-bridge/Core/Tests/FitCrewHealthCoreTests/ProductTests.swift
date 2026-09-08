@@ -34,6 +34,17 @@ final class ProductTests: XCTestCase {
         }
     }
 
+    func testHealthMetricPreservesZeroAndHidesUnusableValues() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        for status in ["partial", "missing", "not_authorized", "source_conflict", "invalid"] {
+            let data = try JSONSerialization.data(withJSONObject: ["value": 0, "status": status, "unit": "步", "sample_count": 1, "sources": ["synthetic"]])
+            let metric = try decoder.decode(ProductHealthMetric.self, from: data)
+            if status == "partial" { XCTAssertEqual(metric.displayValue, 0) }
+            else { XCTAssertNil(metric.displayValue) }
+        }
+    }
+
     func testCheckValidationRejectsInvalidInput() {
         XCTAssertFalse(BodyCheckInput.isValid(energy: 0, stress: 1, note: ""))
         XCTAssertFalse(BodyCheckInput.isValid(energy: 3, stress: 4, note: ""))
