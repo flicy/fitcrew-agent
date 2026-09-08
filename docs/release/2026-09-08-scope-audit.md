@@ -197,3 +197,9 @@ GitHub confirms all jobs succeeded for commit `13061a61fbca3084986051f0a821721c1
 进一步读取同一运行日志：iOS 应用层 Swift Testing 的 12 项测试通过，包括 `failedExportCleanupBlocksGenerationUntilRetry`；Swift Core 的 XCTest 6 项及 Swift Testing 11 项通过。日志中 XCTest 的“0 tests”不代表应用测试未执行，后续 Swift Testing 有明确执行结果。CI 使用 `CODE_SIGNING_ALLOWED=NO`，因此不提供签名能力证据。
 
 Reading the same run's logs confirms 12 application Swift Testing tests passed, including `failedExportCleanupBlocksGenerationUntilRetry`; Core passed six XCTest and 11 Swift Testing tests. The application's XCTest “0 tests” line is followed by explicit Swift Testing execution results. CI sets `CODE_SIGNING_ALLOWED=NO`, so this provides no signing evidence.
+
+### 健康详情窄屏检查 / Narrow health detail inspection
+
+通过 CUA 操作发布工作树的 8769 预览，设置旅程、合成健康场景、320px 宽度及 160% 字号。选择步数后点按 2026-08-31，详情显示“0 步”、部分样本、2 条样本及合成来源；关闭后点按 2026-09-03，显示来源冲突且无数值。截图中关闭按钮可见、来源可换行、说明可读；冲突详情日期换成两行。这仅证明两个合成场景的浏览器交互和可读性，不覆盖微信原生弹层、真实数据、全部窗口或 iOS 界面。
+
+CUA inspected the release worktree preview on port 8769 with Journey, synthetic health data, 320px width and 160% text. Selecting steps and 2026-08-31 showed measured zero, partial status, two samples and a synthetic source. Closing it and selecting 2026-09-03 showed source conflict without a value. Screenshots showed an accessible close button, wrapping provenance and readable notices; the conflict date wrapped to two lines. This proves only those two synthetic browser interactions and readability, not native WeChat sheets, real data, all windows or iOS UI.
