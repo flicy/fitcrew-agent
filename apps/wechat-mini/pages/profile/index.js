@@ -40,9 +40,10 @@ Page(base({
   this.syncBoundary();const epoch=lifecycle.epoch(wx);
   const scope=['all','product','health'][this.data.exportScopeIndex];if(!scope)return;
   if(this.data.busy||!await confirm('导出'+this.data.exportScopes[this.data.exportScopeIndex]+'？','将把所选范围的数据写入本机小程序沙箱。文件包含敏感信息，请妥善保管；不会自动发送给他人。'))return;
-  if(!lifecycle.current(wx,epoch))return;this.setData({busy:true,error:''});
+  if(!lifecycle.current(wx,epoch)||this.data.busy)return;
+  this._exportRevision=(this._exportRevision||0)+1;this.setData({busy:true,error:'',exportPath:''});
   try{
-   lifecycle.cleanExport(wx);this.setData({exportPath:''});
+   lifecycle.cleanExport(wx);
    const data=await getApp().api.request('/v3/export?scope='+scope),filePath=wx.env.USER_DATA_PATH+'/fitcrew-private-export.json';
    if(!lifecycle.current(wx,epoch))return;
    wx.getFileSystemManager().writeFileSync(filePath,JSON.stringify(data,null,2),'utf8');
@@ -50,13 +51,13 @@ Page(base({
   }catch(e){if(lifecycle.current(wx,epoch))this.setData({error:e.message});}finally{if(lifecycle.current(wx,epoch))this.setData({busy:false});}
  },
  async shareExport(){
-  const epoch=lifecycle.epoch(wx);
-  if(!this.data.exportPath||!await confirm('选择导出接收位置','即将打开微信文件发送界面。文件包含你的私有健康数据，仅选择你信任的接收方。'))return;
-  if(!lifecycle.current(wx,epoch))return;
-  if(wx.shareFileMessage)wx.shareFileMessage({filePath:this.data.exportPath,fileName:'FitCrew-private-export.json',fail:()=>this.setData({error:'文件未发送，可重试或清除导出。'})});
+  this.syncBoundary();const epoch=lifecycle.epoch(wx),filePath=this.data.exportPath,revision=this._exportRevision||0;
+  if(this.data.busy||!filePath||!await confirm('选择导出接收位置','即将打开微信文件发送界面。文件包含你的私有健康数据，仅选择你信任的接收方。'))return;
+  if(!lifecycle.current(wx,epoch)||this.data.busy||this.data.exportPath!==filePath||(this._exportRevision||0)!==revision)return;
+  if(wx.shareFileMessage)wx.shareFileMessage({filePath,fileName:'FitCrew-private-export.json',fail:()=>{if(lifecycle.current(wx,epoch)&&this.data.exportPath===filePath&&(this._exportRevision||0)===revision)this.setData({error:'文件未发送，可重试或清除导出。'});}});
   else this.setData({error:'当前微信不支持发送文件，请升级微信；文件仍保留在本机沙箱。'});
  },
- clearExport(){try{lifecycle.cleanExport(wx);this.setData({exportPath:''});}catch(e){this.setData({error:'本机导出文件未确认清除，请重试。'});}},
+ clearExport(){this.syncBoundary();if(this.data.busy)return;this._exportRevision=(this._exportRevision||0)+1;this.setData({exportPath:'',error:''});try{lifecycle.cleanExport(wx);}catch(e){this.setData({error:'本机导出文件未确认清除，请重试。'});}},
  selectDeleteScope(e){if(!this.data.busy)this.setData({deleteScopeIndex:Number(e.detail.value)});},
  async erase(e){
   this.syncBoundary();let epoch=lifecycle.epoch(wx);
