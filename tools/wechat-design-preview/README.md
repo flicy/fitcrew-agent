@@ -17,3 +17,7 @@ From the repository root, run `python3 tools/wechat-design-preview/serve.py` and
 The harness reads WXML/WXSS, translates common tags/control flow and runs the original page JavaScript. Native pickers, dialogs, navigation and lifecycle are approximations. It is not a WeChat runtime or production replacement. All fixtures are explicitly synthetic and this directory is outside the mini-program package.
 
 Use `?capture=1&page=today&width=402`, optionally with `version=before`, for screenshot capture at a matching viewport width and 874px height. Evidence is under `docs/design/previews/`; it contains no real health records, credentials, AppIDs or login QR codes. Run the official offline compilation script and Node tests shown above. Original icons can be regenerated with `make-icons.py` and Pillow; Pillow is not a product runtime dependency.
+
+可用 `--port 8769` 在另一个端口查看不同工作树；“健康趋势（合成）”场景只在预览工具内生成数据，用来检查缺口、来源冲突、零值和详情，不进入小程序包。
+
+Use `--port 8769` to preview another worktree separately. The synthetic health scenario generates preview-only gaps, source conflicts, measured zeros and details; it is excluded from the mini-program package.

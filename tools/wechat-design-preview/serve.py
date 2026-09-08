@@ -50,5 +50,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
     def log_message(self,*args):pass
 if __name__=='__main__':
-    print('FitCrew source preview: http://127.0.0.1:8768 (synthetic fixtures only)',flush=True)
-    HTTPServer(('127.0.0.1',8768),Handler).serve_forever()
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--port',type=int,default=8768)
+    port=parser.parse_args().port
+    print(f'FitCrew source preview: http://127.0.0.1:{port} (synthetic fixtures only)',flush=True)
+    HTTPServer(('127.0.0.1',port),Handler).serve_forever()

@@ -187,3 +187,9 @@ Both Journey clients now display sleep, steps and HRV over 30/60/90 days, preser
 GitHub连接恢复，`13061a6` 已推送，最新CI 34202880672正在运行。旧CI 34161964649（f8da3c2）已核实全部通过。最新Swift Core实际编译和测试通过，双语文档检查通过。`devicectl list devices` 显示用户iPhone 16 Pro为 unavailable，不能安装或执行真机健康验证；微信DevTools实测login=false。不能将配对历史或Apple Watch可见性当作iPhone可用、微信登录或提审证据。
 
 GitHub connectivity recovered and `13061a6` was pushed. CI 34202880672 is running. Earlier CI 34161964649 for f8da3c2 was verified successful. Current Swift Core compiled and passed its tests; bilingual documentation validation passed. `devicectl list devices` reports the owner's iPhone 16 Pro unavailable, preventing installation and real-device health validation. WeChat DevTools reports login=false. Pairing history or Apple Watch visibility establishes neither iPhone availability nor WeChat login or submission.
+
+### 最新完整 CI / Latest full CI
+
+已通过 GitHub 查询核实提交 `13061a61fbca3084986051f0a821721c10197bac` 的 [CI 34202880672](https://github.com/flicy/fitcrew-agent/actions/runs/34202880672) 全部成功：Python 测试与策略检查、小程序边界测试、Compose 冒烟、Swift Core、iOS 模拟器项目生成及测试。此结果更新上文有关最新 iOS 构建尚未验证的历史状态；不证明签名归档、真实 HealthKit 数据链路或平台提审。主发布工作树另有端口 8769 的合成健康趋势预览，可选择零值、缺口和来源冲突场景；HTTP 返回 200，仅证明服务可访问，完整视觉验收仍待进行。
+
+GitHub confirms all jobs succeeded for commit `13061a61fbca3084986051f0a821721c10197bac` in [CI 34202880672](https://github.com/flicy/fitcrew-agent/actions/runs/34202880672): Python tests/policy, mini-program boundaries, Compose smoke tests, Swift Core, and iOS simulator project generation and testing. This supersedes earlier pending-build entries, but does not prove a signed archive, real HealthKit ingestion or platform submission. The release worktree also serves synthetic health-trend previews on port 8769 with measured zeros, gaps and source conflicts. HTTP 200 proves accessibility only; full visual acceptance remains pending.
