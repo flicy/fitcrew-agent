@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ _pairing_bearer = HTTPBearer(auto_error=False)
 
 @router.post("/exchange")
 def exchange_pairing(
+    response: Response,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_pairing_bearer)],
     session: Annotated[Session, Depends(get_session)],
 ) -> dict:
@@ -28,6 +29,7 @@ def exchange_pairing(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="pairing exchange unavailable"
         ) from error
+    response.headers["Cache-Control"] = "no-store"
     return {
         "base_url": result.base_url,
         "device_binding_id": result.device_binding_id,

@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var trainingFeeling = ""
     @State private var stressSource = ""
     @State private var pairing = ""
+    @State private var pairingConfirmation: PairingConfirmation?
     @State private var experiment: ProductExperiment?
     @State private var stoppingExperiment: ProductExperiment?
     @State private var feedbackExperiment: ProductExperiment?
@@ -32,6 +33,20 @@ struct ContentView: View {
     private let green = Color(red: 124/255, green: 58/255, blue: 237/255)
     private let background = Color(red: 245/255, green: 245/255, blue: 250/255)
 
+    private struct PairingConfirmation {
+        let url: URL
+        let host: String
+        let identity: AccountIdentitySnapshot
+    }
+
+    private func preparePairing(_ url: URL) {
+        guard !store.busy else { store.error = "请等待当前操作完成后再连接。"; return }
+        do {
+            let invitation = try PairingDecoder.decode(url)
+            pairingConfirmation = PairingConfirmation(url: url, host: invitation.baseURL.host ?? "", identity: AccountIdentitySnapshot())
+        } catch { store.error = "连接无效或已过期，请在小程序重新生成。" }
+    }
+
     var body: some View {
         TabView(selection: $tab) {
             page("今天", "TODAY · 一次做好一件小事") { today }.tabItem { Label("今天", systemImage: "sun.max") }.tag(0)
@@ -40,6 +55,18 @@ struct ContentView: View {
             page("身体记录", "LOG · 留下你真实的感受") { logs }.tabItem { Label("记录", systemImage: "square.and.pencil") }.tag(3)
             page("我的", "PROFILE · 你的数据，由你掌握") { profile }.tabItem { Label("我的", systemImage: "person.crop.circle") }.tag(4)
         }.tint(green)
+        .onOpenURL { preparePairing($0) }
+        .confirmationDialog("连接这个私人账号？", isPresented: Binding(get: { pairingConfirmation != nil }, set: { if !$0 { pairingConfirmation = nil } }), titleVisibility: .visible) {
+            if let request = pairingConfirmation {
+                Button("确认连接自己的账号") {
+                    guard request.identity.isCurrent() else { store.error = "账号已变化，请重新发起连接。"; return }
+                    Task { if await model.configure(from: request.url) { pairing = ""; await store.refresh() } }
+                }
+                Button("取消", role: .cancel) { pairingConfirmation = nil }
+            }
+        } message: {
+            Text("仅使用自己在 FitCrew 小程序或运营者处取得的链接。服务：\(pairingConfirmation?.host ?? "")。连接会替换本机当前账号，原账号的云端记录保留且不会合并。健康上传需另行选择与授权。")
+        }
         .task { if model.isConfigured { await store.refresh() } }
         .sheet(isPresented: $showHealthConsent) { HealthConsentView(model: model) }
         .onChange(of: model.identityRevision) { _, _ in
@@ -48,6 +75,7 @@ struct ContentView: View {
             note = ""; saved = false; experiment = nil; stoppingExperiment = nil; feedbackExperiment = nil; deletion = nil; showHealthConsent = false
             energy = 3; stress = 1; feeling = "正常"
             sleepFeeling = ""; trainingFeeling = ""; stressSource = ""
+            pairing = ""; pairingConfirmation = nil
             if model.isConfigured { Task { await store.refresh() } }
         }
         .onChange(of: store.state?.trends?.points) { _, _ in selectedTrend = nil }
@@ -411,7 +439,7 @@ struct ContentView: View {
             card {
                 Text(model.isConfigured ? "已连接 FitCrew" : "连接你的 FitCrew").font(.title2.bold())
                 if !model.isConfigured || store.requiresReauthentication { AppleAccountView(model: model).id(model.identityRevision) }
-                if !model.isConfigured || store.requiresReauthentication { Text("已有邀请也可以用配对链接连接。"); SecureField("粘贴 fitcrew-health 配对链接", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接账号") { Task { if let url = URL(string: pairing.trimmingCharacters(in: .whitespacesAndNewlines)) { if await model.configure(from: url) { pairing = ""; await store.refresh() } } } }.buttonStyle(.borderedProminent).disabled(pairing.isEmpty) }
+                Text("连接微信账号：在 FitCrew 小程序「我的」生成一次性连接，再粘贴到这里。已有 Apple 登录记录不会自动合并。"); SecureField("粘贴 fitcrew-health 配对链接", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("查看并确认连接") { if let url = URL(string: pairing.trimmingCharacters(in: .whitespacesAndNewlines)) { preparePairing(url) } else { store.error = "连接格式无效，请重新复制。" } }.buttonStyle(.borderedProminent).disabled(pairing.isEmpty || store.busy)
                 Text(model.statusMessage); Text("免费使用，无支付和提醒功能。").font(.footnote)
             }
             card {

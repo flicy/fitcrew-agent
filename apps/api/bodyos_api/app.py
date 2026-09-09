@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from bodyos_api import __version__
 from bodyos_api.bodyos_routes import router as bodyos_router
+from bodyos_api.device_pairing import router as device_pairing_router
 from bodyos_api.health_routes import router as health_router
 from bodyos_api.owner_routes import router as owner_router
 from bodyos_api.pairing_routes import router as pairing_router
@@ -17,6 +18,7 @@ def create_app() -> FastAPI:
     app.include_router(bodyos_router)
     app.include_router(product_router)
     app.include_router(public_auth_router)
+    app.include_router(device_pairing_router)
 
     @app.get("/healthz", tags=["operations"])
     def healthcheck() -> dict[str, str]:

@@ -4,6 +4,8 @@
 
 这是现有服务器的操作流程，尚未执行生产升级。它不代表小程序已上传或提审。发布前必须确认服务器实际使用本仓库的 Compose 项目、数据库及运行时路径；若实际结构不同，先修订流程。保留 Moticlaw 唯一飞书入口、现有身份、加密密钥、数据库与 HealthKit 同步。不得运行旧 `deploy.sh` / `rollback.sh`，也不得自动降级数据库。
 
+连接功能新增 `0005_device_only_pairing`。回退旧 API 前必须停用未兑换的设备连接，避免旧逻辑修改健康授权；详见 [连接与回滚要求](../release/2026-09-09-wechat-ios-connection.md)。
+
 ### 进入发布前
 
 1. 通过已有受信任 SSH 配置或账户持有人的控制台登录。SSH 验证失败时报告所用用户、主机和错误码；不改主机校验、不猜凭据。
@@ -56,6 +58,8 @@ docker ps -aq | xargs -r docker inspect --format '{{.Id}} {{.Name}} {{.Image}} {
 真正卡住时报告：已经完成的具体产物与验证、失败命令的非敏感摘要、是否改变了生产状态、缺少的唯一必要访问/配置、恢复点与下一步。不以本地测试、CI、测试号二维码或 `/healthz` 冒充平台提审成功；最后仍需正式版本号、提交时间及平台审核状态证据。
 
 ## English
+
+Device connection adds `0005_device_only_pairing`. Invalidate unused device-only invitations before reverting to an older API to prevent legacy consent replacement; see [connection and rollback requirements](../release/2026-09-09-wechat-ios-connection.md).
 
 This is an operational procedure for the existing server; no production upgrade has been performed. It does not mean the Mini Program has been uploaded or submitted. First verify that the actual server uses this repository's Compose project, database, and runtime paths; revise the procedure if it differs. Preserve Moticlaw as the sole Feishu ingress, existing identities, encryption keys, database, and HealthKit ingestion. Do not run legacy `deploy.sh` / `rollback.sh` or automatically downgrade the database.
 

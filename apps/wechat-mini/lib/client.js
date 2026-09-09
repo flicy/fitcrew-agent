@@ -13,7 +13,7 @@ function makeClient(wx,baseURL) {
   return new Promise((resolve,reject)=>wx.request({
    url:baseURL.replace(/\/$/,'')+path,method,data,timeout:20000,
    header:{'Content-Type':'application/json',...(token&&!anonymous?{Authorization:'Bearer '+token}:{})},
-   success:res=>{if(!lifecycle.current(wx,epoch)){reject(new Error('账户已变化，请重新操作。'));return;}if(res.statusCode===401&&!anonymous){lifecycle.boundary(wx);reject(new Error('登录已过期，请重新登录。'));return;}if(res.statusCode>=200&&res.statusCode<300)resolve(res.data);else{const detail=res.data&&res.data.detail;reject(new Error((typeof detail==='string'?detail:JSON.stringify(detail||'服务请求失败'))+'（'+res.statusCode+'）'));}},
+   success:res=>{if(!lifecycle.current(wx,epoch)){reject(new Error('账户已变化，请重新操作。'));return;}if(res.statusCode===401&&!anonymous){lifecycle.boundary(wx);reject(new Error('登录已过期，请重新登录。'));return;}if(res.statusCode>=200&&res.statusCode<300)resolve(res.data);else{const detail=res.data&&res.data.detail;const error=new Error((typeof detail==='string'?detail:JSON.stringify(detail||'服务请求失败'))+'（'+res.statusCode+'）');error.statusCode=res.statusCode;reject(error);}},
    fail:()=>reject(new Error('网络请求未确认，请检查网络后重试；同一操作将使用原请求编号。'))
   }));
  }

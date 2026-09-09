@@ -19,8 +19,14 @@ def test_product_migration_runs_on_fresh_and_legacy_database(tmp_path, monkeypat
                 connection.execute(text("DROP TABLE product_records"))
                 connection.execute(text("DROP TABLE login_challenges"))
                 connection.execute(text("ALTER TABLE device_bindings DROP COLUMN expires_at"))
+                connection.execute(
+                    text("ALTER TABLE pairing_exchange_sessions DROP COLUMN preserve_consents")
+                )
         command.upgrade(config, "head")
         tables = inspect(engine).get_table_names()
         assert "product_records" in tables and "login_challenges" in tables
         assert "expires_at" in {c["name"] for c in inspect(engine).get_columns("device_bindings")}
+        assert "preserve_consents" in {
+            c["name"] for c in inspect(engine).get_columns("pairing_exchange_sessions")
+        }
         command.upgrade(config, "head")

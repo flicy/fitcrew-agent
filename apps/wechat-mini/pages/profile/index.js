@@ -3,9 +3,11 @@ const lifecycle=require('../../lib/session');
 const {validBase}=require('../../lib/client');
 const config=require('../../config');
 Page(base({
+ ...require('../../lib/device-pairing'),
+ onHide(){this.clearPairingView();},
  async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
- data:{deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
- async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn)await this.capabilities();},
+ data:{pairedDevices:[],pairingURL:'',pairingExpires:'',pairingBusy:false,deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
+ async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn){await this.capabilities();await this.loadPairedDevices();}},
  async capabilities(){const epoch=lifecycle.epoch(wx);try{const caps=await getApp().api.request('/v3/capabilities');if(lifecycle.current(wx,epoch))this.setData({caps});}catch(e){if(lifecycle.current(wx,epoch))this.setData({caps:null,error:e.message});}},
  openPrivacy(){if(wx.openPrivacyContract)wx.openPrivacyContract({fail:()=>this.setData({error:'平台隐私保护指引尚未配置，请由运营者在小程序后台补全后再登录。'})});},
  async login(){

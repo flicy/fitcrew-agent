@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -92,6 +93,9 @@ class PairingExchangeSession(TimestampMixin, Base):
     fitcrew_user_id: Mapped[str] = mapped_column(ForeignKey("users.fitcrew_user_id"), index=True)
     device_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
     categories_json: Mapped[str] = mapped_column(Text, nullable=False)
+    preserve_consents: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     idempotency_key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     pairing_code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
