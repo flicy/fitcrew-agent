@@ -326,7 +326,17 @@ struct ContentView: View {
             card { Text("用一周，了解自己多一点").font(.title2.bold()); Text("默认使用规则建议；单独授权且服务可用时，可由 AI 选择实验。开始前可查看数据用途、方法和停止条件。"); Button("生成一个实验建议") { Task { await store.mutate("/v3/experiments/propose") } }.buttonStyle(.borderedProminent).disabled(!model.isConfigured || store.busy) }
             ForEach(store.state?.experiments ?? []) { e in card {
                 Text(e.title).font(.title2.bold()); Text("\(status(e.status)) · \(e.durationDays) 天 · \(sourceLabel(e))").font(.subheadline); details(e)
-                if let result = e.result { Text("实验结果").font(.headline); Text(result.display) }
+                if let summary = e.resultSummary { Text("实验结果").font(.headline); Text(summary) }
+                if let observation = e.healthObservation {
+                    Text("健康样本观察").font(.headline)
+                    ForEach(observation.metrics) { metric in
+                        Text(metric.label).font(.subheadline.bold())
+                        Text(metric.summary)
+                        if let source = metric.sourceText { Text("来源：\(source)").font(.footnote) }
+                    }
+                    Text("时区：\(observation.timezone)").font(.footnote)
+                    Text(observation.notice).font(.footnote).foregroundStyle(.secondary)
+                }
                 if e.canGiveFeedback {
                     Text("你的感受比结论更重要").font(.headline)
                     if let feedback = e.userFeedback { Text("已保存反馈：\(feedback.assessment == "fits" ? "适合我" : feedback.assessment == "not_fit" ? "不适合我" : "暂不确定")") }

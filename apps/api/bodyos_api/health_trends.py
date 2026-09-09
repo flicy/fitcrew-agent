@@ -18,10 +18,10 @@ METRICS = {
 }
 
 
-def health_trends(session, cipher, user_id, categories, today, timezone):
+def health_trends(session, cipher, user_id, categories, today, timezone, *, start_date=None):
     zone = ZoneInfo(timezone)
     end = datetime.fromisoformat(today).date()
-    start = end - timedelta(days=89)
+    start = datetime.fromisoformat(start_date).date() if start_date else end - timedelta(days=89)
     window_start = datetime.combine(start, time.min, zone).astimezone(UTC)
     window_end = datetime.combine(end + timedelta(days=1), time.min, zone).astimezone(UTC)
     allowed = set(categories) & set.union(*(kinds for kinds, _ in METRICS.values()))
@@ -69,7 +69,7 @@ def health_trends(session, cipher, user_id, categories, today, timezone):
                     a_day, b_day = a, b
                 grouped[day].append((row.kind, a_day, b_day, value, row.source))
     points = []
-    for offset in range(90):
+    for offset in range((end - start).days + 1):
         day = start + timedelta(days=offset)
         metrics = {}
         for name, (kinds, unit) in METRICS.items():

@@ -32,6 +32,13 @@ from bodyos_api.models import (
     SyncBatch,
     User,
 )
+from bodyos_api.product_health import (
+    CATEGORY_LABELS,
+    NOTICE,
+    experiment_health_metric_labels,
+    experiment_health_observation,
+    experiment_health_scope,
+)
 
 GOALS = {
     "sleep": "建立稳定睡眠节律",
@@ -406,6 +413,12 @@ class ProductService:
         )
         logs = [self.read(row) for row in self.rows("log")]
         experiments = [self.read(row) for row in self.rows("experiment")]
+        for item in experiments:
+            observation = experiment_health_observation(
+                self.session, self.cipher, self.user_id, item
+            )
+            if observation is not None:
+                item["health_observation"] = observation
         return {
             "journey": journey,
             "journey_progress": self.journey_progress(journey, logs),
@@ -480,6 +493,7 @@ class ProductService:
         }[goal]
         if selection["choice"] == "gentle":
             intervention = "暂不增加活动要求，在相近时间记录精力与压力，先观察自己的节律"
+        health_scope = experiment_health_scope(self.session, self.user_id)
         return self.write(
             "experiment",
             str(uuid4()),
@@ -487,13 +501,24 @@ class ProductService:
                 "title": GOALS[goal] + " · 7 天观察",
                 "hypothesis": "观察这个小行动是否伴随主观精力变化；不预设结果。",
                 "intervention": intervention,
-                "metrics": ["每天主观精力（1–5）", "压力（1–3）"],
+                "metrics": ["每天主观精力（1–5）", "压力（1–3）"]
+                + experiment_health_metric_labels(health_scope),
                 "success_criteria": [
                     "至少四个不同日期的记录",
                     "比较观察期前后记录；不解释为因果或疗效",
                 ],
                 "stop_conditions": ["出现不适立即停止", "你可以随时暂停、停止或删除数据"],
-                "data_categories": ["手动精力与压力记录"],
+                "data_categories": ["手动精力与压力记录"]
+                + (
+                    [
+                        "本次提案时已授权的 Apple 健康类别："
+                        + "、".join(CATEGORY_LABELS[k] for k in sorted(set(health_scope.values()))),
+                        NOTICE,
+                    ]
+                    if health_scope
+                    else []
+                ),
+                "health_scope": health_scope,
                 "duration_days": 7,
                 "baseline_days": 7,
                 "purpose": (
@@ -525,6 +550,7 @@ class ProductService:
         if item["status"] not in valid:
             raise HTTPException(409, "invalid experiment transition")
         if action == "accept":
+            item["health_timezone"] = self.session.get(User, self.user_id).timezone
             item["accepted_at"] = self.now().isoformat()
             item["baseline_start"] = (self.now() - timedelta(days=7)).isoformat()
             item["consent_version"] = PRIVACY_VERSION

@@ -52,6 +52,25 @@ final class ProductTests: XCTestCase {
         XCTAssertTrue(BodyCheckInput.isValid(energy: 3, stress: 1, note: "今天感觉不错"))
     }
 
+    func testExperimentHealthObservationKeepsMissingDistinctFromZeroChange() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        for change in [NSNull(), NSNumber(value: 0)] as [Any] {
+            let metric: [String: Any] = [
+                "key": "steps", "label": "步数", "unit": "步",
+                "status": "descriptive_only", "summary": "仅作描述",
+                "baseline_days": 4, "observation_days": 4, "excluded_days": 0, "change": change
+            ]
+            let data = try JSONSerialization.data(withJSONObject: [
+                "timezone": "Asia/Shanghai", "notice": "有样本不代表全天完整", "metrics": [metric]
+            ])
+            let observation = try decoder.decode(ProductExperimentHealth.self, from: data)
+            XCTAssertEqual(observation.metrics.first?.baselineDays, 4)
+            if change is NSNull { XCTAssertNil(observation.metrics.first?.change) }
+            else { XCTAssertEqual(observation.metrics.first?.change, 0) }
+        }
+    }
+
     func testRealStateShapeDecodesMissionAndEvaluation() throws {
         let data = Data(#"{"journey":{"id":"j","goal":"sleep","title":"Sleep","start_date":"2026-09-07","days":90,"revision":1},"experiments":[{"id":"e","title":"Sleep","hypothesis":"Earlier sleep","intervention":"Walk","metrics":["sleep"],"success_criteria":["more"],"stop_conditions":["pain"],"data_categories":["sleep"],"duration_days":7,"status":"completed","revision":3,"source":"rule_based","result":{"summary":"Insufficient evidence","status":"insufficient","observed_days":2}}],"logs":[],"mission":{"id":"m","title":"Walk","status":"pending","date":"2026-09-07","why":"Move gently","revision":1},"health":{"sample_count":0,"last_sync_at":null},"privacy_version":"2026-09-07"}"#.utf8)
         let state = try ProductState.decode(data)
@@ -59,5 +78,6 @@ final class ProductTests: XCTestCase {
         XCTAssertEqual(state.journey?.days, 90)
         XCTAssertEqual(state.experiments.first?.actions, [])
         XCTAssertTrue(state.experiments.first?.result?.display.contains("Insufficient evidence") == true)
+        XCTAssertEqual(state.experiments.first?.resultSummary, "Insufficient evidence")
     }
 }

@@ -23,6 +23,15 @@
       <view class="small muted helper">自愿参加，可暂停或停止。结果只描述相关变化，不证明因果。</view>
     </view>
     <view wx:if="{{item.resultText}}" class="experiment-result"><view class="section-label">观察结果</view><view class="body helper">{{item.resultText}}</view></view>
+    <view wx:if="{{item.health_observation}}" class="experiment-result">
+      <view class="section-label">健康样本观察</view>
+      <view wx:for="{{item.health_observation.metrics}}" wx:for-item="healthMetric" wx:key="key" class="helper">
+        <view class="h3">{{healthMetric.label}}</view><view class="body">{{healthMetric.summary}}</view>
+        <view class="small muted">来源：{{healthMetric.source_text}}</view>
+      </view>
+      <view class="small muted helper">时区：{{item.health_observation.timezone}}</view>
+      <view class="small muted helper">{{item.health_observation.notice}}</view>
+    </view>
     <view wx:if="{{item.status === 'completed' && (item.result.status === 'descriptive_only' || item.result.status === 'insufficient_data')}}" class="experiment-feedback">
       <view class="h3">这次行动适合你吗？</view><view class="small muted">先选择感受，再决定仅保存反馈，或单独确认为记忆。「暂不确定」只保存反馈。</view>
       <view wx:if="{{item.user_feedback}}" class="notice success small">已保存反馈：{{item.user_feedback.assessment === 'fits' ? '适合我' : item.user_feedback.assessment === 'not_fit' ? '不适合我' : '暂不确定'}}</view>

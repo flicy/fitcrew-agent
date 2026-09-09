@@ -62,13 +62,32 @@ public enum JSONValue: Decodable, Sendable {
     }
 }
 
+public struct ProductExperimentHealth: Decodable, Sendable {
+    public let timezone, notice: String
+    public let metrics: [ProductExperimentHealthMetric]
+}
+
+public struct ProductExperimentHealthMetric: Decodable, Identifiable, Sendable {
+    public var id: String { key }
+    public let key, label, unit, status, summary: String
+    public let sourceText: String?
+    public let baselineDays, observationDays, excludedDays: Int
+    public let change: Double?
+}
+
 public struct ProductExperiment: Decodable, Identifiable, Sendable {
     public let id, title, hypothesis, intervention, status, source: String
     public let metrics, successCriteria, stopConditions, dataCategories: [String]
     public let durationDays, revision: Int
     public let purpose, baselineStart, acceptedAt, endsAt: String?
     public let result: JSONValue?
+    public let healthObservation: ProductExperimentHealth?
     public let userFeedback: ProductFeedback?
+    public var resultSummary: String? {
+        guard case .object(let fields) = result,
+              case .string(let summary) = fields["summary"] else { return nil }
+        return summary
+    }
     public var canGiveFeedback: Bool {
         guard status == "completed", case .object(let fields) = result,
               case .string(let resultStatus) = fields["status"] else { return false }

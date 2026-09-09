@@ -198,6 +198,8 @@ def export(svc: Service, scope: Literal["all", "product", "health"] = "all"):
         if scope == "product":
             for key in ("health", "today_context", "health_trends"):
                 result.pop(key, None)
+            for item in result["experiments"]:
+                item.pop("health_observation", None)
     if scope in {"all", "health"}:
         result["health_export"] = HealthIngestionService(
             svc.session, svc.cipher
