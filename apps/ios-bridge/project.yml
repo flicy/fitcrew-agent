@@ -18,6 +18,8 @@ targets:
         CFBundleDisplayName: FitCrew
         CFBundleShortVersionString: 3.0.0
         CFBundleVersion: "1"
+        FitCrewAPIBaseURL: $(FITCREW_API_BASE_URL)
+        PrivacyPolicyURL: $(FITCREW_PRIVACY_POLICY_URL)
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.fitcrew.healthbridge.pairing

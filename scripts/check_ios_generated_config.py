@@ -27,6 +27,12 @@ def main() -> None:
     project = (ROOT / "apps" / "ios-bridge" / "project.yml").read_text()
 
     require(
+        info.get("FitCrewAPIBaseURL") == "$(FITCREW_API_BASE_URL)"
+        and info.get("PrivacyPolicyURL") == "$(FITCREW_PRIVACY_POLICY_URL)",
+        "generated Info.plist must preserve release URL build-setting substitutions",
+    )
+
+    require(
         info.get("CFBundleShortVersionString") == "3.0.0",
         "generated Info.plist has the wrong release version",
     )

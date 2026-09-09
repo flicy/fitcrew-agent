@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：iOS 发布地址配置（2026-09-10）
+
+- 增加服务与隐私政策 URL 的构建变量，防止 XcodeGen 覆盖手动配置；新增最终 App 配置检查。配对与反馈 AI 等当前能力见 `docs/agent-context/CURRENT_STATE.md`。尚未部署或提审。
+
 ### 未发布：V3 双端正式版开发（2026-09-07）
 
 - 新增加密旅程、实验、每日行动与手动记录，复用 V2 身份与健康摄取。
@@ -23,6 +27,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: iOS release URL configuration (2026-09-10)
+
+- Added API/privacy URL build substitutions and built-app configuration validation. Current pairing and feedback AI capabilities are documented in `docs/agent-context/CURRENT_STATE.md`. No deployment or submission occurred.
 
 ### Unreleased: V3 dual-platform production-release development (2026-09-07)
 

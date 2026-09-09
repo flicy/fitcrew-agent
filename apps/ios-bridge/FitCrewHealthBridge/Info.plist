@@ -35,6 +35,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>FitCrewAPIBaseURL</key>
+	<string>$(FITCREW_API_BASE_URL)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -43,6 +45,8 @@
 	<string>FitCrew 仅在你授权后读取所选的血糖、睡眠、恢复与活动数据，并同步至你的私人账号，在 FitCrew 中展示同步状态并与个人记录一起供你查看。</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>FitCrew 不写入健康数据；此说明仅用于系统能力声明。</string>
+	<key>PrivacyPolicyURL</key>
+	<string>$(FITCREW_PRIVACY_POLICY_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>processing</string>
