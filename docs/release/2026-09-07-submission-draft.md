@@ -15,7 +15,7 @@
 
 ### 审核说明草稿
 
-应用不是医疗诊断、治疗或急救工具。实验结果是用户记录的描述性对比，不证明因果。审核人员可先查看五个页面与未连接状态；完整验证需可用的正式服务及实际平台登录。iOS 使用 Apple 登录，微信使用微信登录；HealthKit 授权可选，不授权仍可记录日常感受。请在“我的”查看授权、导出、删除数据与注销入口。AI 仅在已配置真实服务商且用户另行同意后处理最小聚合，当前实现不上传自由文本笔记或原始 HealthKit 样本至模型。申报功能、服务商与后台实际能力必须一致，不得通过关闭审核入口隐瞒计划功能。
+应用不是医疗诊断、治疗或急救工具。实验结果是用户记录的描述性对比，不证明因果。审核人员可先查看五个页面与未连接状态；完整验证需可用的正式服务及实际平台登录。iOS 使用 Apple 登录，微信使用微信登录；HealthKit 授权可选，不授权仍可记录日常感受。请在“我的”查看授权、导出、删除数据与注销入口。AI 仅在已配置真实服务商且用户另行同意后处理最小聚合及最近最多十条确认反馈的类别信息，当前实现不上传自由文本笔记或原始 HealthKit 样本至模型。申报功能、服务商与后台实际能力必须一致，不得通过关闭审核入口隐瞒计划功能。
 
 ### 隐私信息待核对表
 
@@ -24,7 +24,7 @@
 | 平台身份 | 服务端验证 Apple/微信身份后签发设备令牌，身份字段加密保存 | 运营者、服务域名、凭据及实际留存政策 |
 | 手动记录 | 精力、压力、感受、可选笔记、旅程和实验，服务端加密保存 | 对应平台隐私标签/声明、留存与备份删除周期 |
 | Apple 健康 | 系统权限与服务端分类授权，复用既有加密摄取 | 真机实际读取类别、用途、权限拒绝/撤回表现 |
-| AI | 单独授权，目标枚举及近期手动记录聚合；不发送笔记、账号标识或原始健康样本 | 服务商、协议、适用资质及处理地；个人主体资格未解决 |
+| AI | 单独授权，目标枚举、近期手动记录聚合及确认反馈类别；不发送笔记、账号标识或原始健康样本 | 服务商、协议、适用资质及处理地；个人主体资格未解决 |
 | 删除 | 提供数据删除与注销；撤销授权及设备凭据，Apple 注销涉及撤销平台令牌 | 线上数据库验证、备份保留说明、外部服务留存，不能承诺未经验证的立即永久删除 |
 | 导出 | 本人记录及健康导出 | 真机文件分享、导出文件清理，提醒用户已另存副本由本人管理 |
 
@@ -44,7 +44,7 @@ Status: owner review draft, not ready for submission. Verify the operator's lega
 
 FitCrew helps users choose a 90-day sleep, energy or activity direction, log daily feelings and observe weekly experiments. Current iOS project version is 3.0.0 (1); the owner's developer account determines the final bundle identifier and signing. The release is free, without purchases, subscriptions or WeChat reminders. Results are descriptive observations, not medical diagnoses or causal proof. Empty data must remain empty. Apple and WeChat login currently create separate identities: cross-platform account merging is not implemented. WeChat cannot directly read Apple Health.
 
-Reviewers can inspect the five tabs before connecting; full review requires working production authentication and service configuration. Optional HealthKit access requires both system permission and category consent. Profile provides consent, export, data deletion and account deletion. Configured AI requires separate consent and receives only the goal enum and recent manual-record aggregates, not notes, account identifiers or raw HealthKit samples. Declare actual providers and features truthfully; personal-account AI eligibility remains unresolved.
+Reviewers can inspect the five tabs before connecting; full review requires working production authentication and service configuration. Optional HealthKit access requires both system permission and category consent. Profile provides consent, export, data deletion and account deletion. Configured AI requires separate consent and receives only the goal enum, recent manual-record aggregates and up to ten confirmed-feedback category entries, not notes, account identifiers or raw HealthKit samples. Declare actual providers and features truthfully; personal-account AI eligibility remains unresolved.
 
 Privacy verification must cover encrypted platform identity, manual records and health ingestion; actual retention, backup expiry and hosting; AI provider, agreements, processing location and eligibility; server-side deletion and Apple token revocation; and on-device export cleanup. Do not promise unverified immediate permanent deletion of backups or copies already saved by the user.
 
@@ -76,9 +76,9 @@ A six-step onboarding explains purposes and record modes. Users choose a 90-day 
 
 ### 不可据此宣称的能力 / Claims not established
 
-实验保留手动记录比较；新提案现可披露并纳入已授权的健康样本观察，撤回授权、删除或来源冲突会重新影响结果，详见 [实验健康观察](2026-09-09-health-experiment-observations.md)。两端现已实现独立的 Apple 健康趋势卡，展示当前授权样本的睡眠小时、步数、HRV 和 30/60/90 天窗口；缺口不补零，来源冲突不显示数值，详情说明样本数和来源，有值也不代表全天完整覆盖。该卡通过代码测试，真实 HealthKit 长期数据链路仍未验收，不能描述为已验证的健康改善或个性化医学建议。确认记忆未自动送给 AI；不能宣传已读到微信聊天上下文、已获得左侧微信 AI 入口或已具备主动通知。iOS 与微信账号仍未自动关联，微信新账号不因此自动取得 iOS 的健康记录。首次权限分支、生产 AI 提供方及资格均需继续验证。
+实验保留手动记录比较；新提案现可披露并纳入已授权的健康样本观察，撤回授权、删除或来源冲突会重新影响结果，详见 [实验健康观察](2026-09-09-health-experiment-observations.md)。两端现已实现独立的 Apple 健康趋势卡，展示当前授权样本的睡眠小时、步数、HRV 和 30/60/90 天窗口；缺口不补零，来源冲突不显示数值，详情说明样本数和来源，有值也不代表全天完整覆盖。该卡通过代码测试，真实 HealthKit 长期数据链路仍未验收，不能描述为已验证的健康改善或个性化医学建议。确认反馈仅在另行同意最新 AI 用途后按最小类别信息使用，详见 [确认反馈与 AI](2026-09-09-ai-confirmed-feedback.md)；不能宣传已读到微信聊天上下文、已获得左侧微信 AI 入口或已具备主动通知。iOS 与微信账号仍未自动关联，微信新账号不因此自动取得 iOS 的健康记录。首次权限分支、生产 AI 提供方及资格均需继续验证。
 
-Experiments retain manual-record comparisons; new proposals can disclose and include consented health-sample observations, recomputed after withdrawal, deletion or source conflict. See [experiment health observations](2026-09-09-health-experiment-observations.md). Both clients now implement a separate Apple Health card showing authorized sleep hours, steps and HRV over 30/60/90-day windows. Missing observations are not zero-filled, conflicted values are hidden, and details identify sources/counts; measured values do not establish full-day coverage. Code tests pass, but longitudinal real-device HealthKit ingestion remains unverified, so the card cannot establish health improvement or personalized medical advice. Confirmed memories are not automatically sent to AI. Access to WeChat chat context, the developer AI entry or proactive notifications is not established. iOS and WeChat accounts are not automatically linked, so a new WeChat identity does not automatically obtain iOS health records. Initial permission branches and production AI provider/eligibility still require validation.
+Experiments retain manual-record comparisons; new proposals can disclose and include consented health-sample observations, recomputed after withdrawal, deletion or source conflict. See [experiment health observations](2026-09-09-health-experiment-observations.md). Both clients now implement a separate Apple Health card showing authorized sleep hours, steps and HRV over 30/60/90-day windows. Missing observations are not zero-filled, conflicted values are hidden, and details identify sources/counts; measured values do not establish full-day coverage. Code tests pass, but longitudinal real-device HealthKit ingestion remains unverified, so the card cannot establish health improvement or personalized medical advice. Confirmed feedback may be used as minimal category entries only after renewed, separate consent; see [AI feedback scope](2026-09-09-ai-confirmed-feedback.md). Access to WeChat chat context, the developer AI entry or proactive notifications is not established. iOS and WeChat accounts are not automatically linked, so a new WeChat identity does not automatically obtain iOS health records. Initial permission branches and production AI provider/eligibility still require validation.
 
 
 ## 设备连接范围更新 / Device connection scope update

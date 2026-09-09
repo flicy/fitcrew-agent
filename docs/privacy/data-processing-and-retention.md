@@ -2,6 +2,8 @@
 
 ## 中文
 
+范围说明：下文记录 V2 飞书主账号方案，不能直接作为 V3 iOS/小程序的终端用户隐私政策。V3 复用加密与身份基础，但采用平台登录和可选设备连接，提供用户侧导出/删除；AI 请求范围及新同意规则见 [确认反馈与 AI](../release/2026-09-09-ai-confirmed-feedback.md)。真实运营者、联系方式、服务提供方、部署及保留周期仍需核实后形成公开政策。
+
 飞书账号是主账号，Apple 健康授权是可选项。系统把飞书 `open_id` 经 HMAC 映射并加密保存，再关联不可变的 `fitcrew_user_id`；模型 envelope 中两者都不出现。
 
 处理范围包括：血糖、睡眠阶段、HRV、静息心率、训练、活动能量、步数、站立时间和活动摘要。设备上传必须带独立 token、设备绑定和当前 category consent；批次与样本 ID 幂等。原始值和日特征采用 AES-GCM 与字段级 AAD 加密。模型只收到日级统计、质量状态、意图、规则及最多三条带页码私人知识摘录，不收到问题原文或原始时间序列。
@@ -13,6 +15,8 @@
 这是一套生活方式教练系统，不是医疗器械或诊断服务。异常症状、用药和疾病治疗由合格医疗专业人员处理。
 
 ## English
+
+Scope: the following describes the V2 Feishu-primary design and is not a ready V3 iOS/Mini Program end-user privacy policy. V3 reuses encryption/identity foundations but adds platform login, optional device connection and user-facing export/erasure. See [AI feedback scope](../release/2026-09-09-ai-confirmed-feedback.md) for new request/consent rules. Verify the actual operator, contact, providers, deployment and retention before publishing a policy.
 
 Feishu is the primary account and Apple Health authorization is optional. The service HMAC-maps and encrypts the Feishu `open_id`, then links it to an immutable `fitcrew_user_id`; neither identifier appears in a model envelope.
 

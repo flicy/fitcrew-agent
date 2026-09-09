@@ -1,5 +1,6 @@
 """Constrained AI action selection through the existing de-identified gateway."""
 
+import hashlib
 import json
 from datetime import timedelta
 
@@ -8,8 +9,25 @@ from sqlalchemy import select, update
 from bodyos_api.model_gateway import HarnessFailure, ModelEnvelopeRejected
 from bodyos_api.models import Consent
 
+AI_NOTICE = (
+    "经你单独同意后，将目标类别、近 7 天记录天数及精力/压力均值，"
+    "以及同一目标下最近最多 10 条由你明确确认的实验反馈发送给所示 AI 服务，"
+    "用于从低风险行动中选择实验。反馈仅包含目标类别、行动类型和适合/不适合的主观评价，"
+    "不是疗效证据。不发送备注、身份、实验标题或原始 Apple 健康数据；可随时撤回。"
+)
+
+
+def disclosure_version(settings):
+    if not settings.product_ai_provider or not settings.product_ai_notice_version:
+        return ""
+    content = json.dumps(
+        [settings.product_ai_provider, settings.product_ai_notice_version, AI_NOTICE]
+    )
+    return "ai2:" + hashlib.sha256(content.encode()).hexdigest()[:28]
+
 
 def capabilities(svc, settings):
+    version = disclosure_version(settings)
     available = bool(
         settings.product_ai_enabled
         and settings.product_ai_provider
@@ -22,17 +40,15 @@ def capabilities(svc, settings):
             Consent.purpose == "experiment_selection",
             Consent.granted.is_(True),
             Consent.withdrawn_at.is_(None),
-            Consent.receipt_version == settings.product_ai_notice_version,
+            Consent.receipt_version == version,
         )
     )
     return {
         "ai_available": available,
         "ai_provider": settings.product_ai_provider,
-        "ai_notice_version": settings.product_ai_notice_version,
+        "ai_notice_version": version,
         "ai_consent_granted": available and consent is not None,
-        "ai_notice": "经你单独同意后，将目标类别、近 7 天记录天数及精力/压力均值"
-        "发送给所示 AI 服务，"
-        "用于从低风险行动中选择实验。不发送备注、身份或原始 Apple 健康数据；可随时撤回。",
+        "ai_notice": AI_NOTICE,
     }
 
 
@@ -87,6 +103,8 @@ def select_action(svc, settings, gateway):
         if records
         else None,
     }
+    context, sources = svc.confirmed_feedback_context(journey["goal"])
+    features["confirmed_feedback"] = context
     envelope = {
         "schema_version": "bodyos-model.v1",
         "intent": "choose_low_risk_experiment",
@@ -97,6 +115,10 @@ def select_action(svc, settings, gateway):
             'Return exactly JSON {"choice":"standard"} or {"choice":"gentle"}.',
             "standard means the user's goal-based small action; gentle means observation only.",
             "Prefer gentle if energy is low, stress is high or evidence is missing.",
+            "Confirmed feedback is newest first and is subjective, not medical evidence. "
+            "Consider the latest feedback for each action; "
+            "avoid repeating an action marked not_fit "
+            "when the other option remains suitable. Never interpret fits as proven efficacy.",
             "Do not invent observations, add free text, diagnosis or medical claims.",
         ],
     }
@@ -105,6 +127,18 @@ def select_action(svc, settings, gateway):
         selected = json.loads(result.text)
         if set(selected) != {"choice"} or selected["choice"] not in {"standard", "gentle"}:
             raise ValueError("not an approved action")
-        return {"source": "ai_selected", "ai_status": "available", "choice": selected["choice"]}
+        return {
+            "source": "ai_selected",
+            "ai_status": "available",
+            "choice": selected["choice"],
+            "memory_context_count": len(context),
+            "memory_source_ids": sources,
+        }
     except (HarnessFailure, ModelEnvelopeRejected, ValueError, TypeError):
-        return {"source": "rule_based", "ai_status": "unavailable", "choice": "standard"}
+        return {
+            "source": "rule_based",
+            "ai_status": "unavailable",
+            "choice": "standard",
+            "memory_context_count": len(context),
+            "memory_source_ids": sources,
+        }

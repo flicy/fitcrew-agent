@@ -132,7 +132,7 @@ struct ContentView: View {
         .confirmationDialog("如何保存这条主观反馈？", isPresented: Binding(get: { feedbackExperiment != nil }, set: { if !$0 { feedbackExperiment = nil } }), titleVisibility: .visible) {
             Button("仅保存反馈") { saveFeedback(remember: false) }
             if feedbackAssessment != "uncertain" { Button("保存并确认为记忆") { saveFeedback(remember: true) } }
-        } message: { Text("确认记忆后会存入你的私人账号，可在下方撤回。这是主观感受，不是疗效结论；不会自动发送给 AI。") }
+        } message: { Text("确认记忆后会存入你的私人账号，可在下方撤回。这是主观感受，不是疗效结论；仅在另行同意 AI 用途后，才会用于后续实验选择。") }
         .confirmationDialog("停止这次实验？", isPresented: Binding(get: { stoppingExperiment != nil }, set: { if !$0 { stoppingExperiment = nil } }), titleVisibility: .visible) {
             Button("停止实验", role: .destructive) {
                 if let value = stoppingExperiment { Task { await transition(value, "stop") } }
@@ -428,7 +428,7 @@ struct ContentView: View {
         Group {
             card {
                 Text("我确认的记忆").font(.title2.bold())
-                Text("仅包含你明确确认的主观反馈，不自动发送给 AI。撤回记忆会保留实验里的反馈记录。").font(.footnote)
+                Text("仅包含你明确确认的主观反馈。另行同意 AI 用途后可用于实验选择；撤回会停止相关待确认建议，保留实验里的反馈记录。").font(.footnote)
                 if (store.state?.confirmedMemories ?? []).isEmpty { Text("尚无确认记忆。") }
                 ForEach(store.state?.confirmedMemories ?? []) { memory in
                     Text(memory.text); Text(memory.experimentTitle).font(.subheadline)

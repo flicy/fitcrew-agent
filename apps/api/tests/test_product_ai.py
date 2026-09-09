@@ -47,7 +47,11 @@ def test_ai_receives_only_minimum_aggregates_and_selects_approved_action(session
         "/v3/logs", json=rid(energy=2, stress=3, feeling="有点累", note="private never send")
     )
     consent = client.post(
-        "/v3/ai-consent", json={"granted": True, "provider_notice_version": "provider-test-v1"}
+        "/v3/ai-consent",
+        json={
+            "granted": True,
+            "provider_notice_version": client.get("/v3/capabilities").json()["ai_notice_version"],
+        },
     )
     assert consent.status_code == 200
     result = client.post("/v3/experiments/propose", json=rid()).json()
@@ -71,13 +75,21 @@ def test_ai_failure_is_labeled_and_revocation_is_immediate(session, field_cipher
     setup_ai(client, Unavailable())
     client.put("/v3/journey", json=rid(goal="activity"))
     client.post(
-        "/v3/ai-consent", json={"granted": True, "provider_notice_version": "provider-test-v1"}
+        "/v3/ai-consent",
+        json={
+            "granted": True,
+            "provider_notice_version": client.get("/v3/capabilities").json()["ai_notice_version"],
+        },
     )
     response = client.post("/v3/experiments/propose", json=rid()).json()
     assert response["source"] == "rule_based"
     assert response["ai_status"] == "unavailable"
     revoked = client.post(
-        "/v3/ai-consent", json={"granted": False, "provider_notice_version": "provider-test-v1"}
+        "/v3/ai-consent",
+        json={
+            "granted": False,
+            "provider_notice_version": client.get("/v3/capabilities").json()["ai_notice_version"],
+        },
     )
     assert revoked.status_code == 200
     assert client.get("/v3/capabilities").json()["ai_consent_granted"] is False
@@ -93,7 +105,11 @@ def test_unapproved_model_text_is_not_shown_to_user(session, field_cipher):
     setup_ai(client, Malformed())
     client.put("/v3/journey", json=rid(goal="sleep"))
     client.post(
-        "/v3/ai-consent", json={"granted": True, "provider_notice_version": "provider-test-v1"}
+        "/v3/ai-consent",
+        json={
+            "granted": True,
+            "provider_notice_version": client.get("/v3/capabilities").json()["ai_notice_version"],
+        },
     )
     response = client.post("/v3/experiments/propose", json={"request_id": str(uuid4())})
     assert response.status_code == 200

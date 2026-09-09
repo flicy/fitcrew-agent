@@ -46,6 +46,12 @@ GOALS = {
     "activity": "建立轻松活动习惯",
 }
 PRIVACY_VERSION = "2026-09-07"
+STANDARD_ACTIONS = {
+    "sleep": "睡前留出 10 分钟安静收尾，按自己的作息休息",
+    "energy": "每天在相近时间记录精力和压力",
+    "activity": "身体允许时，尝试 5 分钟轻松活动",
+}
+GENTLE_ACTION = "暂不增加活动要求，在相近时间记录精力与压力，先观察自己的节律"
 
 
 class ProductService:
@@ -472,6 +478,51 @@ class ProductService:
             },
         )
 
+    def confirmed_feedback_context(self, goal):
+        context = []
+        sources = []
+        memories = sorted(
+            [self.read(r) for r in self.rows("confirmed_memory")],
+            key=lambda item: item["confirmed_at"],
+            reverse=True,
+        )
+        for memory in memories:
+            experiment = self.read(self.row("experiment", memory["experiment_id"]))
+            if not experiment or experiment["status"] != "completed":
+                continue
+            feedback = experiment.get("user_feedback", {})
+            if (
+                experiment.get("result", {}).get("status") == "invalidated"
+                or not feedback.get("memory_confirmed")
+                or feedback.get("assessment") != memory["assessment"]
+                or memory["assessment"] not in {"fits", "not_fit"}
+                or experiment["title"] != GOALS[goal] + " · 7 天观察"
+            ):
+                continue
+            action = {STANDARD_ACTIONS[goal]: "standard", GENTLE_ACTION: "gentle"}.get(
+                experiment["intervention"]
+            )
+            if action is None:
+                continue
+            context.append(
+                {"goal_category": goal, "action": action, "assessment": memory["assessment"]}
+            )
+            sources.append(memory["experiment_id"])
+            if len(context) == 10:
+                break
+        return context, sources
+
+    def invalidate_memory_proposals(self, source_ids):
+        stopped = set()
+        for row in self.rows("experiment"):
+            item = self.read(row)
+            if item["status"] == "proposed" and set(item.get("memory_source_ids", [])) & source_ids:
+                item["status"] = "stopped"
+                item["purpose"] += " 参考的确认记忆已撤回或改变，本提案已停止；请重新生成。"
+                self.write("experiment", row.resource_key, item)
+                stopped.add(row.resource_key)
+        self.forget_cached_results(stopped)
+
     def propose(self, selection=None):
         journey = self.read(self.row("journey", "current"))
         if not journey:
@@ -486,13 +537,9 @@ class ProductService:
             "ai_status": "not_authorized",
             "choice": "standard",
         }
-        intervention = {
-            "sleep": "睡前留出 10 分钟安静收尾，按自己的作息休息",
-            "energy": "每天在相近时间记录精力和压力",
-            "activity": "身体允许时，尝试 5 分钟轻松活动",
-        }[goal]
+        intervention = STANDARD_ACTIONS[goal]
         if selection["choice"] == "gentle":
-            intervention = "暂不增加活动要求，在相近时间记录精力与压力，先观察自己的节律"
+            intervention = GENTLE_ACTION
         health_scope = experiment_health_scope(self.session, self.user_id)
         return self.write(
             "experiment",
@@ -509,6 +556,11 @@ class ProductService:
                 ],
                 "stop_conditions": ["出现不适立即停止", "你可以随时暂停、停止或删除数据"],
                 "data_categories": ["手动精力与压力记录"]
+                + (
+                    [f"AI 请求范围含 {selection['memory_context_count']} 条已确认主观实验反馈"]
+                    if selection.get("memory_context_count")
+                    else []
+                )
                 + (
                     [
                         "本次提案时已授权的 Apple 健康类别："
@@ -528,6 +580,7 @@ class ProductService:
                 "status": "proposed",
                 "source": selection["source"],
                 "ai_status": selection["ai_status"],
+                "memory_source_ids": selection.get("memory_source_ids", []),
                 "result": None,
                 "created_at": self.now().isoformat(),
             },
@@ -647,6 +700,7 @@ class ProductService:
             raise HTTPException(422, "uncertain feedback cannot become confirmed memory")
         old = self.row("confirmed_memory", key)
         if old:
+            self.invalidate_memory_proposals({key})
             self.session.delete(old)
             self.session.flush()
         self.forget_cached_results({key})
@@ -677,6 +731,7 @@ class ProductService:
         memory = self.row("confirmed_memory", key)
         if not memory:
             raise HTTPException(404, "memory not found")
+        self.invalidate_memory_proposals({key})
         self.session.delete(memory)
         item = self.read(self.row("experiment", key))
         if item and item.get("user_feedback"):
@@ -782,6 +837,7 @@ class ProductService:
                 }
                 self.write("experiment", experiment.resource_key, item)
                 invalidated.add(experiment.resource_key)
+        self.invalidate_memory_proposals(invalidated)
         for memory in self.rows("confirmed_memory"):
             if self.read(memory)["experiment_id"] in invalidated:
                 self.session.delete(memory)
