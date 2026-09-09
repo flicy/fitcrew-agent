@@ -55,6 +55,16 @@ jobs:
             -f infra/tencent/compose.yaml exec -T api python -c \
             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"
           curl --fail --silent --show-error http://127.0.0.1/healthz >/dev/null
+          python3 - <<'PY'
+          import secrets
+          from pathlib import Path
+          key = Path('infra/tencent/runtime/backup.key')
+          key.write_text(secrets.token_urlsafe(48))
+          key.chmod(0o600)
+          PY
+          bash infra/tencent/backup.sh
+          backup_file=$(find "$PWD/infra/tencent/runtime/backups" -name 'bodyos-*.sql.enc' -print -quit)
+          bash infra/tencent/restore-test.sh "$backup_file"
 
   swift-core:
     runs-on: macos-15
