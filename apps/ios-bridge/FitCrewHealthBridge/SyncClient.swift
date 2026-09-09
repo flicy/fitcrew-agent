@@ -60,9 +60,19 @@ final class BridgeViewModel: ObservableObject {
 
     private let healthKit = HealthKitClient()
     private let syncClient = SyncClient()
-    private let consentStore = ConsentStore()
+    private let consentStore: ConsentStore
+    private let exchangeInvitation: (PairingInvitation) async throws -> PairingProvisioning
+    private let writeToken: (String) throws -> Void
+    private var pairingRequest = UUID()
 
-    init() {
+    init(
+        consentStore: ConsentStore = ConsentStore(),
+        exchangeInvitation: @escaping (PairingInvitation) async throws -> PairingProvisioning = { try await SyncClient().exchange($0) },
+        writeToken: @escaping (String) throws -> Void = KeychainStore.saveDeviceToken
+    ) {
+        self.consentStore = consentStore
+        self.exchangeInvitation = exchangeInvitation
+        self.writeToken = writeToken
         identityRevision = consentStore.identityRevision
         lastSync = consentStore.lastSync
     }
@@ -85,14 +95,19 @@ final class BridgeViewModel: ObservableObject {
         }
     }
 
-    func configure(from url: URL) async {
+    @discardableResult
+    func configure(from url: URL) async -> Bool {
+        let request = UUID()
+        pairingRequest = request
+        let identity = AccountIdentitySnapshot(store: consentStore)
         do {
             let invitation = try PairingDecoder.decode(url)
-            let pairing = try await syncClient.exchange(invitation)
-            guard pairing.baseURL.scheme == "https", pairing.baseURL.host != nil else {
+            let pairing = try await exchangeInvitation(invitation)
+            guard pairingRequest == request, identity.isCurrent(in: consentStore) else { return false }
+            guard pairing.baseURL == invitation.baseURL else {
                 throw PairingError.invalidPayload
             }
-            try KeychainStore.saveDeviceToken(pairing.deviceToken)
+            try writeToken(pairing.deviceToken)
             consentStore.replaceConfiguration(BridgeConfiguration(
                 baseURL: pairing.baseURL,
                 deviceBindingID: pairing.deviceBindingID,
@@ -101,8 +116,11 @@ final class BridgeViewModel: ObservableObject {
             lastSync = consentStore.lastSync
             identityRevision = consentStore.identityRevision
             statusMessage = "设备绑定成功，请授权 Apple 健康"
+            return true
         } catch {
+            guard pairingRequest == request, identity.isCurrent(in: consentStore) else { return false }
             statusMessage = "设备绑定失败：\(error.localizedDescription)"
+            return false
         }
     }
 
@@ -125,7 +143,7 @@ final class BridgeViewModel: ObservableObject {
 
     func install(_ pairing: PairingProvisioning) throws {
         guard pairing.baseURL.scheme == "https", pairing.baseURL.host != nil else { throw PairingError.invalidPayload }
-        try KeychainStore.saveDeviceToken(pairing.deviceToken)
+        try writeToken(pairing.deviceToken)
         consentStore.replaceConfiguration(BridgeConfiguration(baseURL: pairing.baseURL, deviceBindingID: pairing.deviceBindingID, consentIDs: pairing.consentIDs))
         lastSync = consentStore.lastSync
         identityRevision = consentStore.identityRevision

@@ -11,7 +11,7 @@
 - 全部数据导出包含健康观察；仅手动记录与实验的导出不包含健康观察值。原始健康导出范围保持不变。
 - 两端展示观察摘要和来源。iOS 的手动实验结果同时改成可读摘要，不再向用户直接展示内部结果字段。
 
-验证：完整后端回归 406 项通过，另有六个健康观察测试覆盖加密样本摄取、零值、冲突、删除、撤权与重新授权、暂停、时区、部分边界日、跨用户隔离及导出范围。小程序 33 项测试和官方离线编译通过；Swift Core 的七个 XCTest 与 11 个 Swift Testing 测试通过。新增 iOS 页面仍需完整模拟器构建和真机验收；新页面视觉验收未完成。以上使用合成测试样本，不是用户真实健康数据验收。
+验证：完整后端回归 406 项通过，另有六个健康观察测试覆盖加密样本摄取、零值、冲突、删除、撤权与重新授权、暂停、时区、部分边界日、跨用户隔离及导出范围。小程序 33 项测试和官方离线编译通过；Swift Core 的七个 XCTest 与 11 个 Swift Testing 测试通过。提交 `0cc080a` 的 CI 34300345272 中，iOS 模拟器构建与测试已通过；仍需真机验收，新页面视觉验收未完成。以上使用合成测试样本，不是用户真实健康数据验收。
 
 ## English
 
@@ -24,4 +24,4 @@ Experiments can now show consented sleep, step-count and HRV sample observations
 - All-data export includes observations; product-only export excludes their health values. The existing raw-health export scope is unchanged.
 - Both clients show readable summaries and sources. iOS also renders manual experiment summaries instead of internal result fields.
 
-Validation: 406 backend tests pass. Six health-observation tests cover encrypted ingestion, zero, conflicts, deletion, withdrawal/regrant, pauses, timezone, partial boundary days, user isolation and export scope. All 33 Mini Program tests and official offline compilation pass. Swift Core passes seven XCTest and 11 Swift Testing tests. The new iOS page still needs a complete simulator build and device acceptance; visual acceptance remains incomplete. Tests use synthetic samples and do not verify the user's real health data.
+Validation: 406 backend tests pass. Six health-observation tests cover encrypted ingestion, zero, conflicts, deletion, withdrawal/regrant, pauses, timezone, partial boundary days, user isolation and export scope. All 33 Mini Program tests and official offline compilation pass. Swift Core passes seven XCTest and 11 Swift Testing tests. For commit `0cc080a`, the iOS simulator build/test job in CI 34300345272 passed. Device and visual acceptance remain incomplete. Tests use synthetic samples and do not verify the user's real health data.

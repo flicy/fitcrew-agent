@@ -411,7 +411,7 @@ struct ContentView: View {
             card {
                 Text(model.isConfigured ? "已连接 FitCrew" : "连接你的 FitCrew").font(.title2.bold())
                 if !model.isConfigured || store.requiresReauthentication { AppleAccountView(model: model).id(model.identityRevision) }
-                if !model.isConfigured || store.requiresReauthentication { Text("已有邀请也可以用配对链接连接。"); SecureField("粘贴 fitcrew-health 配对链接", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接账号") { Task { if let url = URL(string: pairing.trimmingCharacters(in: .whitespacesAndNewlines)) { await model.configure(from: url); if model.isConfigured { pairing = ""; await store.refresh() } } } }.buttonStyle(.borderedProminent).disabled(pairing.isEmpty) }
+                if !model.isConfigured || store.requiresReauthentication { Text("已有邀请也可以用配对链接连接。"); SecureField("粘贴 fitcrew-health 配对链接", text: $pairing).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接账号") { Task { if let url = URL(string: pairing.trimmingCharacters(in: .whitespacesAndNewlines)) { if await model.configure(from: url) { pairing = ""; await store.refresh() } } } }.buttonStyle(.borderedProminent).disabled(pairing.isEmpty) }
                 Text(model.statusMessage); Text("免费使用，无支付和提醒功能。").font(.footnote)
             }
             card {
