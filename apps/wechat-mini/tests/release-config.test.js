@@ -1,6 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {validateRelease}=require('../scripts/validate-release');
+const {validateRelease,effectiveProject}=require('../scripts/validate-release');
 const project={appid:'wx0123456789abcdef',setting:{urlCheck:true}};
+test('private DevTools overrides cannot hide sandbox identity or disabled domain checks',()=>{
+ const effective=effectiveProject(project,{appid:'wxae59705a7cce30f9',setting:{urlCheck:false}});
+ const errors=validateRelease(effective,{baseURL:'https://api.fitcrew.cn'}).join('\n');
+ assert.match(errors,/sandbox AppID/);assert.match(errors,/validation must stay enabled/);
+ assert.equal(project.setting.urlCheck,true);
+ assert.equal(effectiveProject(project,{setting:{compileHotReLoad:true}}).setting.urlCheck,true);
+});
 test('formal release validation rejects the supplied sandbox ID without changing it',()=>{
  const sandbox={...project,appid:'wxae59705a7cce30f9'};
  assert.match(validateRelease(sandbox,{baseURL:'https://api.fitcrew.cn'}).join('\n'),/sandbox AppID/);

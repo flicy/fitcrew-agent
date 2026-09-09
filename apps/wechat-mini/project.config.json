@@ -7,6 +7,24 @@
   "setting": {
     "urlCheck": true,
     "es6": true,
-    "minified": true
+    "minified": true,
+    "enhance": true
+  },
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "tests"
+      },
+      {
+        "type": "folder",
+        "value": "scripts"
+      },
+      {
+        "type": "file",
+        "value": "README.md"
+      }
+    ],
+    "include": []
   }
 }

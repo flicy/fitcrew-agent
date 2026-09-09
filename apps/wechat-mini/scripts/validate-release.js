@@ -1,5 +1,10 @@
 const {isIP}=require('node:net');
+const fs=require('node:fs'),path=require('node:path');
 const {validBase}=require('../lib/client');
+
+function effectiveProject(project,privateProject={}){
+ return {...project,...privateProject,setting:{...project.setting,...privateProject.setting}};
+}
 
 function validateRelease(project,config){
  const failures=[];
@@ -18,9 +23,11 @@ function validateRelease(project,config){
  if(project.setting?.urlCheck!==true)failures.push('Legal-domain validation must stay enabled');
  return failures;
 }
-module.exports={validateRelease};
+module.exports={validateRelease,effectiveProject};
 if(require.main===module){
- const failures=validateRelease(require('../project.config.json'),require('../config'));
+ const privatePath=path.join(__dirname,'../project.private.config.json');
+ const privateProject=fs.existsSync(privatePath)?JSON.parse(fs.readFileSync(privatePath,'utf8')):{};
+ const failures=validateRelease(effectiveProject(require('../project.config.json'),privateProject),require('../config'));
  if(failures.length){console.error(failures.join('\n'));process.exitCode=1;}
  else console.log('Local public configuration checks passed; domain ownership/category/filing/privacy and real-device review still require platform evidence.');
 }

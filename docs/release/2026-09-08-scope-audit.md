@@ -2,6 +2,14 @@
 
 ## 2026-09-09 最新补记 / Latest update
 
+追加核验：34298675448 现已全部通过，包含 iOS 模拟器。微信开发者工具自带 `project-config` 字段说明已用于配置上传排除项（tests、scripts、README），并同步至隔离测试工程；`es6` 与 `enhance` 同时启用。正式校验会合并本机 `project.private.config.json` 的优先覆盖，避免它覆盖 AppID 或关闭域名校验却被漏检。原生打包仍等待登录。最新本地小程序测试为 33 项通过。
+
+Additional verification: run 34298675448 now passes in full, including iOS simulator tests. Bundled DevTools `project-config` documentation was used to exclude tests, scripts, and README from upload, mirrored into the isolated sandbox; `es6` and `enhance` are enabled together. Release validation includes higher-priority `project.private.config.json` overrides so an overridden AppID or disabled domain check cannot be overlooked. Native packaging still awaits login. Latest local Mini Program tests: 33 passing.
+
+微信官方 AI Demo 当前可读的 [240d618 提交](https://github.com/wechat-miniprogram/ai-mode-demo/tree/240d61873714c0e488df95529df160a12d4f131f)（2026-07-03）明确演示小微 handoff：对话中显示文字与小程序卡片，用户点卡片后进入业务页；对话内不渲染原子组件。需要 AppID 同时申请 AI 开发模式及小微 handoff 内测权限；不能依赖 `wx.openAgent` / `wx.navigateBackAgent` 返回对话。FitCrew 的接入候选应承接到记录确认页，沿用现有登录和幂等保存，未经本人确认不把对话推测写成健康事实；这只是候选方向，尚未接入生产。官方 guide 和类目页本次读取失败，不能声称已重新核实最新正式提审开放时间或个人主体资格。
+
+The currently readable official [AI Demo commit 240d618](https://github.com/wechat-miniprogram/ai-mode-demo/tree/240d61873714c0e488df95529df160a12d4f131f), dated 2026-07-03, demonstrates Xiaowei handoff: text and a Mini Program card appear in chat; tapping opens the business page. Atomic components are not rendered in chat. AppID access requires both AI development mode and Xiaowei handoff beta; pages cannot rely on `wx.openAgent` / `wx.navigateBackAgent` to return to chat. A FitCrew candidate should hand off to record confirmation, reuse existing login and idempotency, and never save conversational inference as health fact without user confirmation. This is a candidate direction, not a production integration. The official guide and category pages failed to load in this check; current production-submission availability and individual eligibility have not been reverified.
+
 加密备份与恢复已在真实 PostgreSQL CI 容器中验证通过（运行 34295290029）。API 独立镜像配置和非 API 服务保持不变的检查也已通过（运行 34298675448 的后端任务，iOS 仍在运行）；未部署生产。服务器 SSH 拒绝现有凭据，开发者工具仍等待持有人扫码登录。
 
 小程序已修复请求乱序导致旧数据覆盖新状态的问题；Today 增加可展开的近七天健康样本情况，区分未选择上传、缺少样本、部分样本、冲突/异常。32 项 Node 测试及官方离线编译通过；新 UI 的视觉和真机验收仍未完成。预览服务器已恢复，当前浏览器错误页的导航被策略拦截。正式配置检查会拒绝已知测试号、IP 地址及保留测试域名。正式 AppID、业务域名、真实登录、部署和提审回执仍缺失。
