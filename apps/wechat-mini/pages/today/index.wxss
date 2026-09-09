@@ -20,3 +20,4 @@
 .inline-meta { display: inline-block; margin-left: 12px; font-size: calc(14px * var(--text-scale)); font-weight: 400; color: #6B6375; }
 .experiment-peek { padding: 20px 0 0; margin-top: 20px; border-top: 1px solid #E5DFEB; }
 .lighten-option { justify-content: space-between; text-align: left; min-height: 64px; background: #F1ECF7; }
+.health-readiness-row { padding: 12px 0; border-bottom: 1px solid #E5DFEB; }

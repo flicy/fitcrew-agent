@@ -1,5 +1,15 @@
 # 全范围完成审计 / Full-scope Completion Audit
 
+## 2026-09-09 最新补记 / Latest update
+
+加密备份与恢复已在真实 PostgreSQL CI 容器中验证通过（运行 34295290029）。API 独立镜像配置和非 API 服务保持不变的检查也已通过（运行 34298675448 的后端任务，iOS 仍在运行）；未部署生产。服务器 SSH 拒绝现有凭据，开发者工具仍等待持有人扫码登录。
+
+小程序已修复请求乱序导致旧数据覆盖新状态的问题；Today 增加可展开的近七天健康样本情况，区分未选择上传、缺少样本、部分样本、冲突/异常。32 项 Node 测试及官方离线编译通过；新 UI 的视觉和真机验收仍未完成。预览服务器已恢复，当前浏览器错误页的导航被策略拦截。正式配置检查会拒绝已知测试号、IP 地址及保留测试域名。正式 AppID、业务域名、真实登录、部署和提审回执仍缺失。
+
+Encrypted backup and restore passed against real PostgreSQL in CI run 34295290029. Independent API image configuration and unchanged non-API service checks passed in run 34298675448's backend job; iOS is still running. Production was not deployed. SSH rejects the existing credentials; DevTools awaits the account holder's login scan.
+
+The Mini Program now rejects out-of-order refresh results that could overwrite newer state. Today adds collapsible seven-day health-sample coverage, separating unselected uploads, missing samples, partial samples, and conflicts/invalid data. All 32 Node tests and official offline compilation pass; new UI visual and device acceptance remain unverified. The preview server is restored, but navigation from its browser error page is policy-blocked. Formal configuration validation rejects the known sandbox AppID, IP addresses, and reserved test domains. Production AppID, business domain, real login, deployment, and submission receipts remain outstanding.
+
 ## 中文
 
 证据时间：2026-09-08。依据用户提供的在线 [评审页](https://flicy.github.io/cola-pages/fitcrew/v4/review/) S1–S10、用户确认免费与真实 Apple Health、后续明确保留 AI 和主动帮助方向，以及当前开发分支源码。结论：目标未完成；PR #12 的基础实现与通过的测试不能替代完整产品及正式提审。

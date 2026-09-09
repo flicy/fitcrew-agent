@@ -56,3 +56,22 @@ test('health trends preserve measured zero, suppress conflicts and clear details
  setRequest(async()=>{throw Error('offline')});await page.refresh();
  assert.deepEqual(page.data.healthPoints,[]);assert.equal(page.data.selectedHealthPoint,null);
 });
+test('Today separates health sample coverage from manual records and clears it at boundaries',async()=>{
+ const {page,setRequest}=setup('today');
+ const points=Array.from({length:9},(_,i)=>({date:'2026-09-'+String(i+1).padStart(2,'0'),metrics:{
+  sleep:{status:'not_authorized',value:null,sources:[]},
+  steps:{status:i===7?'source_conflict':i===8?'partial':'missing',value:i===8?0:123,sources:['synthetic']},
+  hrv:{status:'missing',value:null,sources:[]}
+ }}));
+ setRequest(async()=>({...state,logs:[{energy:5}],health_trends:{points,window_end:'2026-09-09',timezone:'Asia/Shanghai'}}));
+ await page.refresh();
+ const summary=page.data.healthReadiness;
+ assert.equal(summary.windowStart,'2026-09-03');
+ assert.equal(summary.metrics[0].detail,'未选择上传此类数据');
+ assert.equal(summary.metrics[1].observedDays,1);assert.equal(summary.metrics[1].issueDays,1);
+ assert.equal(summary.metrics[1].latestDate,'2026-09-09');
+ assert.equal(summary.metrics[2].detail,'近七天暂无可用数值');
+ assert.equal(page.data.showHealthReadiness,false);page.toggleHealthReadiness();assert.equal(page.data.showHealthReadiness,true);
+ setRequest(async()=>{throw Error('offline')});await page.refresh();assert.equal(page.data.healthReadiness,null);
+ page.resetPrivate();assert.equal(page.data.showHealthReadiness,false);assert.equal(page.data.healthReadiness,null);
+});

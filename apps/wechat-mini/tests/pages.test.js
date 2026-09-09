@@ -6,6 +6,32 @@ function setup(){
  return {wx,setRequest:f=>request=f,storage};
 }
 function mount(definition){return {...definition,data:JSON.parse(JSON.stringify(definition.data)),setData(data){Object.assign(this.data,data);}};}
+test('late refresh cannot resurrect deleted records or clear newer state on failure',async()=>{
+ for(const failOld of [false,true]){
+  const h=setup(),page=mount(base());let resolveOld,rejectOld;
+  h.setRequest(()=>new Promise((resolve,reject)=>{resolveOld=resolve;rejectOld=reject;}));
+  const old=page.refresh();
+  h.setRequest(async()=>({logs:[],experiments:[],mission:{id:'current'}}));
+  await page.refresh();
+  if(failOld)rejectOld(new Error('old timeout'));
+  else resolveOld({logs:[{id:'deleted'}],experiments:[],mission:{id:'old'}});
+  await old;
+  assert.equal(page.data.state.mission.id,'current');
+  assert.deepEqual(page.data.logs,[]);assert.equal(page.data.error,'');
+ }
+});
+test('starting a mutation invalidates older reads without ending a newer loading state',async()=>{
+ const h=setup(),page=mount(base());let resolveRead,resolveWrite,resolveLatest;
+ h.setRequest(()=>new Promise(resolve=>resolveRead=resolve));const old=page.refresh();
+ h.setRequest((path,method)=>new Promise(resolve=>{if(method==='POST')resolveWrite=resolve;else resolveLatest=resolve;}));
+ const saving=page.write('log','/v3/logs',{note:'new'});
+ resolveWrite({id:'saved'});await Promise.resolve();
+ assert.equal(page.data.loading,true);
+ resolveRead({logs:[{id:'old'}],experiments:[]});await old;
+ assert.equal(page.data.state,null);assert.equal(page.data.loading,true);
+ resolveLatest({logs:[{id:'saved'}],experiments:[]});await saving;
+ assert.equal(page.data.logs[0].id,'saved');assert.equal(page.data.loading,false);
+});
 test('failed write preserves input and intent; retry sends same UUID',async()=>{
  const h=setup(),page=mount(base({data:{note:'draft'}})),sent=[];
  h.setRequest(async(path,method,body)=>{sent.push(body);throw new Error('offline');});

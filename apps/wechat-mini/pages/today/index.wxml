@@ -25,6 +25,19 @@
       <view class="muted">{{state.today_context.detail}}</view>
       <view class="small muted helper">来源：{{state.today_context.source}}<view>{{state.today_context.window_start}} — {{state.today_context.window_end}}</view></view>
       <button class="text-button" bindtap="openProfile">数据用途与授权 <text class="arrow">↗</text></button>
+      <button class="text-button" wx:if="{{healthReadiness}}" bindtap="toggleHealthReadiness">{{showHealthReadiness ? '收起健康样本情况' : '查看健康样本情况'}} <text class="arrow">{{showHealthReadiness ? '−' : '＋'}}</text></button>
+    </view>
+    <view class="card health-readiness" wx:if="{{healthReadiness && showHealthReadiness}}">
+      <view class="section-label">健康样本 · 近七天</view>
+      <view class="h3 helper">先看数据是否准备好</view>
+      <view class="health-readiness-row" wx:for="{{healthReadiness.metrics}}" wx:key="key">
+        <view class="body">{{item.label}}</view><view class="muted">{{item.detail}}</view>
+        <view wx:if="{{item.latestDate}}" class="small muted">最近有样本：{{item.latestDate}}</view>
+        <view wx:if="{{item.issue}}" class="small muted">{{item.issue}}</view>
+      </view>
+      <view class="small muted helper">{{healthReadiness.windowStart}} — {{healthReadiness.windowEnd}} · {{healthReadiness.timezone}}</view>
+      <view class="small muted helper">{{healthReadiness.notice}}</view>
+      <button class="text-button" bindtap="openJourney">查看趋势与来源 <text class="arrow">→</text></button>
     </view>
     <view class="card mission-card" wx:if="{{state.mission}}">
       <view class="mission-heading"><text class="section-label">今天的一小步</text><text class="mission-orbit" aria-hidden="true">↗</text></view>

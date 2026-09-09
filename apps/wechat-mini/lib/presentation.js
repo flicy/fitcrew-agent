@@ -16,3 +16,20 @@ function healthPoints(state,metric,days){
  return mapped.map(p=>({...p,barHeight:p.known?p.value/maximum*100:0}));
 }
 module.exports.healthPoints=healthPoints;
+
+function healthReadiness(state){
+ if(!state||!state.health_trends)return null;
+ const points=state.health_trends.points.slice(-7);
+ const metrics=[['sleep','睡眠'],['steps','步数'],['hrv','心率变异性']].map(([key,label])=>{
+  const observations=healthPoints(state,key,7),known=observations.filter(p=>p.known);
+  const authorized=observations.some(p=>p.status&&p.status!=='not_authorized');
+  const conflicts=observations.filter(p=>['source_conflict','invalid'].includes(p.status)).length;
+  return {key,label,observedDays:known.length,issueDays:conflicts,
+   detail:!authorized?'未选择上传此类数据':known.length?known.length+' / 7 天有样本':'近七天暂无可用数值',
+   issue:conflicts?conflicts+' 天存在冲突或异常，已排除数值':'',
+   latestDate:known.length?known[known.length-1].date:''};
+ });
+ return {metrics,windowStart:points.length?points[0].date:'',windowEnd:state.health_trends.window_end||'',
+  timezone:state.health_trends.timezone||'',notice:state.health_trends.notice||'有样本也不代表全天完整覆盖。'};
+}
+module.exports.healthReadiness=healthReadiness;
