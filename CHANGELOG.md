@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：小程序时间显示（2026-09-10）
+
+- 连接有效期、设备会话和其他时间保留 UTC/偏移标记，缺少时区时明确提示，避免误认为设备本地时间。iOS 实验时间保留完整来源字符串，无同类截断。
+
 ### 未发布：iOS 发布地址配置（2026-09-10）
 
 - 增加服务与隐私政策 URL 的构建变量，防止 XcodeGen 覆盖手动配置；新增最终 App 配置检查。配对与反馈 AI 等当前能力见 `docs/agent-context/CURRENT_STATE.md`。尚未部署或提审。
@@ -27,6 +31,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: Mini Program timestamps (2026-09-10)
+
+- Connection expiry, device sessions and other timestamps retain UTC/offset labels; unspecified zones are explicit. iOS experiment dates retain the complete source string without this truncation.
 
 ### Unreleased: iOS release URL configuration (2026-09-10)
 
