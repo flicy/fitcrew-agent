@@ -47,6 +47,22 @@ jobs:
           trap 'docker compose --env-file infra/tencent/runtime/.env.runtime -f infra/tencent/compose.yaml down -v' EXIT
           docker compose --env-file infra/tencent/runtime/.env.runtime \
             -f infra/tencent/compose.yaml config >/dev/null
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          command = ['docker', 'compose', '--env-file', 'infra/tencent/runtime/.env.runtime',
+                     '-f', 'infra/tencent/compose.yaml', 'config', '--format', 'json']
+          baseline = json.loads(subprocess.check_output(command))['services']
+          tag = 'a' * 40
+          pinned = json.loads(subprocess.check_output(
+              command, env={**os.environ, 'FITCREW_API_IMAGE_TAG': tag}))['services']
+          assert pinned['api']['image'] == 'fitcrew-bodyos:' + tag
+          for service in baseline:
+              if service != 'api':
+                  assert pinned[service] == baseline[service], service
+          print('API image pin leaves every other Compose service unchanged.')
+          PY
           docker compose --env-file infra/tencent/runtime/.env.runtime \
             -f infra/tencent/compose.yaml build api
           docker compose --env-file infra/tencent/runtime/.env.runtime \
