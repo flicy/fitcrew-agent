@@ -102,6 +102,7 @@ struct HealthConsentView: View {
         NavigationStack { Form {
             Section("选择允许同步的数据") {
                 Text("所选数据将加密上传到你的私人账号，用于生活方式观察和实验评价，不会自动进入群聊。随后可在 Apple 健康中选择具体读取权限。")
+                Text("本次选择会更新这个账号所有设备的上传范围。未勾选的类别将撤回，依赖这些授权的旧实验观察会停止显示；保持勾选且告知版本未变的授权会保留。").font(.footnote)
                 ForEach(scopes, id: \.0) { key, label in Toggle(label, isOn: Binding(get: { selected.contains(key) }, set: { if $0 { selected.insert(key) } else { selected.remove(key) } })) }
             }
             Section {

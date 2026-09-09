@@ -286,17 +286,30 @@ def consents(
     if user.data_generation != principal.data_generation:
         raise HTTPException(409, "data was erased; refresh before granting consent")
     now = datetime.now(UTC)
-    # Explicit replacement: omitted categories are withdrawn, never silently retained.
-    session.execute(
-        update(Consent)
+    # Preserve unchanged grants so a retry or a second iPhone does not revoke
+    # the exact consent records disclosed by existing experiments.
+    active = session.scalars(
+        select(Consent)
         .where(
             Consent.fitcrew_user_id == principal.fitcrew_user_id,
             Consent.purpose == "private_coaching",
+            Consent.granted.is_(True),
+            Consent.withdrawn_at.is_(None),
         )
-        .values(granted=False, withdrawn_at=now)
-    )
+        .order_by(Consent.id)
+    ).all()
+    selected = {category.value for category in body.categories}
     result = {}
+    for grant in active:
+        if grant.category in selected and grant.receipt_version == body.privacy_version:
+            result.setdefault(grant.category, grant.id)
+        else:
+            # Omitted categories are withdrawn; revoked grants are never revived.
+            grant.granted = False
+            grant.withdrawn_at = now
     for category in sorted(set(body.categories)):
+        if category.value in result:
+            continue
         consent = Consent(
             id=str(uuid4()),
             fitcrew_user_id=principal.fitcrew_user_id,
