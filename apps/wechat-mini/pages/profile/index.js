@@ -2,8 +2,9 @@ const {base,confirm}=require('../../lib/page');
 const lifecycle=require('../../lib/session');
 const {validBase}=require('../../lib/client');
 const config=require('../../config');
+const devicePairing=require('../../lib/device-pairing');
 Page(base({
- ...require('../../lib/device-pairing'),
+ ...devicePairing,
  onHide(){this.clearPairingView();},
  async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
  data:{pairedDevices:[],pairingURL:'',pairingExpires:'',pairingBusy:false,deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},

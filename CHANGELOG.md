@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：微信原生 Profile 修复（2026-09-10）
+
+- 将设备连接模块改为顶层显式引用，修复官方模拟器“我的”页模块缺失白屏；原生复测正文显示且无调试器错误。基础库修复与验收边界见 `docs/release/2026-09-10-native-wechat-runtime.md`。
+
 ### 未发布：小程序时间显示（2026-09-10）
 
 - 连接有效期、设备会话和其他时间保留 UTC/偏移标记，缺少时区时明确提示，避免误认为设备本地时间。iOS 实验时间保留完整来源字符串，无同类截断。
@@ -31,6 +35,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: native WeChat Profile fix (2026-09-10)
+
+- Explicitly import the device-pairing module at top level, fixing the missing-module blank Profile in official DevTools. Native retest rendered its contents with zero debugger errors; see the runtime diagnosis document for cache repair and acceptance limits.
 
 ### Unreleased: Mini Program timestamps (2026-09-10)
 

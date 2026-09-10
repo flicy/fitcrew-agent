@@ -4,6 +4,8 @@
 
 ## 中文
 
+最新环境更正（2026-09-10 18 时）：微信工具已登录；已修复不完整基础库缓存，并在官方模拟器验证首页及修复后的 Profile 正文。修复后官方预览生成成功（135,823 字节），尚非正式提审。下面早先“未登录”的阻塞快照不再适用；正式 AppID、生产域名和服务器访问仍未落实。详见 [原生排错](../release/2026-09-10-native-wechat-runtime.md)。
+
 正式发布分支为 `codex/free-public-release-20260907`，继承 V2 的 User、DeviceBinding、Consent、加密摄取与 HealthKit；生产飞书入口保留 Moticlaw。本次尚未部署或正式提审。不要把早期 9 月 7 日的缺失项或测试数量当作当前状态。
 
 最新已核验 CI 的代码为 `1386968c85788db05e932358300fc1a9f8949077`，运行 `34358841593` 成功。五页原生小程序与 iOS、90 天旅程、手动记录、实验与健康观察、导出/删除和独立 AI 同意已经实现；这不等于完整 Demo 等价或平台验收。
@@ -23,6 +25,8 @@
 下一步优先完成微信正式配置与真实登录/保存/重登/删除联调；Apple 账号可用后签名构建并进行真实 HealthKit 验收。正式提审前核对具体版本、材料与用户确认，最终必须留存平台提交时间和审核状态。招募与小红书发布继续延后。不得运行旧全服务部署或破坏数据、密钥和身份；API 单独发布见 `docs/operations/api-only-release.md`。
 
 ## English
+
+Latest correction (2026-09-10, 18:00 hour): DevTools is now signed in. The incomplete vendor cache was repaired; Today and the corrected Profile rendered in the official simulator. Post-fix official preview generation succeeded (135,823 bytes); this is not formal submission. Earlier signed-out status below is superseded. Production AppID/domain/server access remain unresolved; see the linked runtime diagnosis.
 
 The release branch is `codex/free-public-release-20260907`. It extends V2 User, DeviceBinding, Consent, encrypted ingestion and HealthKit, preserving Moticlaw as the sole production Feishu ingress. No production deployment or formal submission has occurred. Do not use September 7 missing-feature snapshots or test counts as current evidence.
 
