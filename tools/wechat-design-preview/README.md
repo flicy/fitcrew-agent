@@ -21,3 +21,13 @@ Use `?capture=1&page=today&width=402`, optionally with `version=before`, for scr
 可用 `--port 8769` 在另一个端口查看不同工作树；“健康趋势（合成）”场景只在预览工具内生成数据，用来检查缺口、来源冲突、零值和详情，不进入小程序包。
 
 Use `--port 8769` to preview another worktree separately. The synthetic health scenario generates preview-only gaps, source conflicts, measured zeros and details; it is excluded from the mini-program package.
+
+## 2026-09-10 更新 / Update
+
+预览新增「设备与 AI（合成）」状态，包含设备连接、独立 AI 同意与健康实验观察。切换页面时，同一场景的模拟记录、反馈、记忆和授权保留；刷新整个页面重置。连接链接不可兑换，复制只模拟在预览内，不写系统剪贴板；导出不生成实际健康文件。未支持的模拟接口会明确报错。预览不是后台模型或原生能力的端到端测试。
+
+The new “Devices and AI (synthetic)” scenario covers device connections, separate AI consent and health experiment observations. Scene state survives tab changes and resets on a full reload. Pairing links cannot be redeemed; copy does not touch the system clipboard, and exports do not create real health files. Unsupported simulated endpoints fail explicitly. This is not end-to-end backend or native-runtime validation.
+
+顶部 `/meta` 信息标明当前源码提交。格式化函数直接读取 `templates/format.wxs`，避免预览副本遗漏产品修复。服务必须在当前发布工作树启动，而不是旧设计工作树。当前 Mac 会话由 launchd 的 `com.fitcrew.source-preview.8768` 作业运行；停止方式：`launchctl remove com.fitcrew.source-preview.8768`。未安装登录自启动文件。
+
+The `/meta` banner identifies the source commit. The formatter reads `templates/format.wxs` directly so preview copies cannot omit product fixes. Run the server from the current release worktree. The current Mac session uses the launchd job `com.fitcrew.source-preview.8768`; stop it with the command above. No login-startup file was installed.

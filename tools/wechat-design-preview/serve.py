@@ -33,11 +33,15 @@ def bundle(before):
     return {'pages':{name:ast(source(f'pages/{name}/index.wxml',before)) for name in PAGES},
         'css':{name:source('app.wxss',before)+'\n'+source(f'pages/{name}/index.wxss',before) for name in PAGES},
         'status':ast(source('templates/status.wxml',before)), 'modules':modules,
+        'formatter':source('templates/format.wxs',before),
         'config':json.loads(source('app.json',before))}
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url=urlsplit(self.path)
-        if url.path=='/bundle':
+        if url.path=='/meta':
+            revision=subprocess.run(['git','rev-parse','--short','HEAD'],cwd=ROOT,capture_output=True,text=True,check=True).stdout.strip()
+            body=json.dumps({'revision':revision,'synthetic':True}).encode();mime='application/json'
+        elif url.path=='/bundle':
             body=json.dumps(bundle(parse_qs(url.query).get('version')==['before']),ensure_ascii=False).encode();mime='application/json'
         elif url.path.startswith('/assets/tabs/'):
             path=(MINI/url.path[1:]).resolve()
