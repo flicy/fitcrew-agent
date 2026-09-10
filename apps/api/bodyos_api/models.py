@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -40,6 +41,9 @@ class User(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
     locale: Mapped[str] = mapped_column(String(16), default="zh-CN", nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Shanghai", nullable=False)
+    data_generation: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
 
 class IdentityBinding(TimestampMixin, Base):
@@ -66,6 +70,7 @@ class DeviceBinding(TimestampMixin, Base):
     last_cursor: Mapped[str | None] = mapped_column(Text)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Consent(TimestampMixin, Base):
@@ -88,6 +93,9 @@ class PairingExchangeSession(TimestampMixin, Base):
     fitcrew_user_id: Mapped[str] = mapped_column(ForeignKey("users.fitcrew_user_id"), index=True)
     device_public_id: Mapped[str] = mapped_column(String(128), nullable=False)
     categories_json: Mapped[str] = mapped_column(Text, nullable=False)
+    preserve_consents: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     idempotency_key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     pairing_code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -267,3 +275,26 @@ class OutboxEvent(TimestampMixin, Base):
         DateTime(timezone=True), index=True
     )
     last_error_code: Mapped[str | None] = mapped_column(String(64))
+
+
+class ProductRecord(TimestampMixin, Base):
+    """Encrypted V3 documents scoped to the existing immutable user identity."""
+
+    __tablename__ = "product_records"
+    __table_args__ = (UniqueConstraint("fitcrew_user_id", "kind", "resource_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    fitcrew_user_id: Mapped[str] = mapped_column(ForeignKey("users.fitcrew_user_id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    payload_nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    payload_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+
+class LoginChallenge(Base):
+    __tablename__ = "login_challenges"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    nonce: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -1,0 +1,6 @@
+.account-card { background: #EEE8F6; border-color: transparent; margin-top: 0; }
+.settings-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.settings-title .h2 { margin-bottom: 0; }
+.sync-state { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E5DFEB; }
+.memory-empty { padding-top: 20px; }
+.data-removal { border-color: #EAD4DC; }

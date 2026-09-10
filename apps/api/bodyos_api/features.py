@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from statistics import mean, stdev
@@ -18,6 +19,25 @@ def _values(samples: list[DecryptedSample], kind: str) -> list[float]:
 
 def _mean_or_none(values: list[float]) -> float | None:
     return mean(values) if values else None
+
+
+def _sum_or_none(values: list[float], divisor: float = 1) -> float | None:
+    return sum(values) / divisor if values else None
+
+
+def _sleep_hours(samples: list[DecryptedSample]) -> float | None:
+    if not samples or any(s.end_at < s.start_at for s in samples):
+        return None
+    intervals = sorted((s.start_at, s.end_at) for s in samples)
+    start, end = intervals[0]
+    seconds = 0.0
+    for next_start, next_end in intervals[1:]:
+        if next_start <= end:
+            end = max(end, next_end)
+        else:
+            seconds += (end - start).total_seconds()
+            start, end = next_start, next_end
+    return (seconds + (end - start).total_seconds()) / 3600
 
 
 def compute_daily_features(
@@ -50,37 +70,33 @@ def compute_daily_features(
             glucose["mean_mg_dl"]
         )
 
-    sleep_deep = _values(samples, "sleep_deep")
-    sleep_rem = _values(samples, "sleep_rem")
-    sleep_core = _values(samples, "sleep_core")
-    sleep_unspecified = _values(samples, "sleep_asleep")
-    sleep_total_seconds = sum(sleep_deep + sleep_rem + sleep_core + sleep_unspecified)
+    sleep_kinds = {"sleep_deep", "sleep_rem", "sleep_core", "sleep_asleep"}
+    sleep_samples = [s for s in samples if s.kind in sleep_kinds]
     workouts = _values(samples, "workout")
 
     return {
-        "algorithm_version": "features.v1",
+        "algorithm_version": "features.v3",
         "glucose": glucose,
         "sleep": {
-            "total_hours": sleep_total_seconds / 3600,
-            "deep_hours": sum(sleep_deep) / 3600,
-            "rem_hours": sum(sleep_rem) / 3600,
-            "core_hours": sum(sleep_core) / 3600,
+            "total_hours": _sleep_hours(sleep_samples),
+            "deep_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_deep"]),
+            "rem_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_rem"]),
+            "core_hours": _sleep_hours([s for s in sleep_samples if s.kind == "sleep_core"]),
         },
         "activity": {
-            "steps": sum(_values(samples, "step_count")),
-            "active_energy_kcal": sum(_values(samples, "active_energy")),
-            "stand_hours": sum(_values(samples, "stand_hours")),
-            "workout_count": len(workouts),
-            "workout_minutes": sum(workouts) / 60,
+            "steps": _sum_or_none(_values(samples, "step_count")),
+            "active_energy_kcal": _sum_or_none(_values(samples, "active_energy")),
+            "stand_hours": _sum_or_none(_values(samples, "stand_hours")),
+            "workout_count": len(workouts) if workouts else None,
+            "workout_minutes": _sum_or_none(workouts, 60),
         },
         "recovery": {
             "hrv_ms_mean": _mean_or_none(_values(samples, "heart_rate_variability")),
-            "resting_heart_rate_bpm_mean": _mean_or_none(
-                _values(samples, "resting_heart_rate")
-            ),
+            "resting_heart_rate_bpm_mean": _mean_or_none(_values(samples, "resting_heart_rate")),
         },
         "data_quality": {
             "duplicate_count": duplicate_count,
+            "invalid_sleep_intervals": sum(s.end_at < s.start_at for s in sleep_samples),
             "expected_glucose_points": expected_points,
             "glucose_completeness": min(1.0, len(values) / expected_points),
             "sample_counts": {
@@ -89,3 +105,36 @@ def compute_daily_features(
             },
         },
     }
+
+
+def normalize_cached_features(payload: dict[str, Any]) -> dict[str, Any]:
+    """Mask unsupported legacy values without mutating stored historical evidence."""
+    result = deepcopy(payload)
+    counts = result.get("data_quality", {}).get("sample_counts", {})
+    fields = {
+        "sleep": {
+            "total_hours": ("sleep_deep", "sleep_rem", "sleep_core", "sleep_asleep"),
+            "deep_hours": ("sleep_deep",),
+            "rem_hours": ("sleep_rem",),
+            "core_hours": ("sleep_core",),
+        },
+        "activity": {
+            "steps": ("step_count",),
+            "active_energy_kcal": ("active_energy",),
+            "stand_hours": ("stand_hours",),
+            "workout_count": ("workout",),
+            "workout_minutes": ("workout",),
+        },
+        "recovery": {
+            "hrv_ms_mean": ("heart_rate_variability",),
+            "resting_heart_rate_bpm_mean": ("resting_heart_rate",),
+        },
+    }
+    for group, metrics in fields.items():
+        for metric, kinds in metrics.items():
+            if metric in result.get(group, {}) and not any(
+                counts.get(kind, 0) > 0 for kind in kinds
+            ):
+                result[group][metric] = None
+    result["read_policy_version"] = "missing-values.v1"
+    return result
