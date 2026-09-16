@@ -1,0 +1,72 @@
+<import src="../../templates/status.wxml"/>
+<wxs module="fmt" src="../../templates/format.wxs"/>
+<view class="page" style="--text-scale:{{textScale}}">
+  <view class="page-header">
+    <view class="brand-row"><view class="brand"><text class="brand-mark"/>FitCrew</view><text class="eyebrow">今天 · TODAY</text></view>
+    <view class="title">今天，照顾好自己</view>
+    <view class="subtitle">从一个小行动开始，慢慢认识身体。</view>
+  </view>
+  <template is="status" data="{{loading,error,busy,notice}}"/>
+  <block wx:if="{{state}}">
+    <view class="card onboarding" wx:if="{{state.onboarding.step < 7}}">
+      <view class="tag-row"><text class="pill">开始前 · {{state.onboarding.step}} / 6</text><text class="small muted">可中断，随时继续</text></view>
+      <view class="onboarding-track" aria-label="引导第 {{state.onboarding.step}} 步，共六步"><view wx:for="{{[1,2,3,4,5,6]}}" wx:key="*this" class="step-mark {{item <= state.onboarding.step ? 'reached' : ''}}"/></view>
+      <view wx:if="{{state.onboarding.step === 1}}"><view class="h2">慢慢认识自己的节律</view><view class="body">FitCrew 帮你记录生活方式与感受，不作医疗诊断。你可以随时停止实验、撤回记录或删除账号。</view><button class="primary" bindtap="advanceOnboarding" disabled="{{busy}}">我已了解，继续</button></view>
+      <view wx:if="{{state.onboarding.step === 2}}"><view class="h2">选一个 90 天方向</view><button class="primary" bindtap="openJourney">前往旅程选择</button><button bindtap="advanceOnboarding" disabled="{{busy || !state.journey}}">已保存方向，继续</button></view>
+      <view wx:if="{{state.onboarding.step === 3}}"><view class="h2">先了解数据用途</view><view class="body">手动记录用于你的私人趋势和实验比较。Apple 健康按类别另行授权。AI 需要单独同意，不会自动读取笔记或原始健康样本；记录不会自动分享到群聊。</view><button class="primary" bindtap="advanceOnboarding" disabled="{{busy}}">已阅读用途，继续</button></view>
+      <view wx:if="{{state.onboarding.step === 4}}"><view class="h2">选择记录方式</view><view class="body">小程序不能直接读取 Apple 健康。先用手动记录，稍后可在 iOS App 查看健康授权。</view><button class="primary" data-route="manual" bindtap="advanceOnboarding" disabled="{{busy}}">先用手动记录</button></view>
+      <view wx:if="{{state.onboarding.step === 5}}"><view class="h2">确认数据准备情况</view><view class="body">没有健康样本也可以继续。手动记录不会被标成已同步 Apple 健康。</view><button class="primary" data-route="manual" bindtap="advanceOnboarding" disabled="{{busy}}">暂用手动记录，继续</button></view>
+      <view wx:if="{{state.onboarding.step === 6}}"><view class="h2">做一次 Body Check</view><button class="primary" bindtap="openLog">记录此刻感受</button><button bindtap="advanceOnboarding" disabled="{{busy || !logs.length}}">已保存记录，完成引导</button></view>
+      <view class="small muted helper">确认后的进度保存在你的账号中，中断后可继续。</view>
+    </view>
+    <view class="context-block" wx:if="{{state.today_context}}">
+      <view class="context-label"><text class="context-dot"/>当前状态</view>
+      <view class="h3">{{state.today_context.title}}</view>
+      <view class="muted">{{state.today_context.detail}}</view>
+      <view class="small muted helper">来源：{{state.today_context.source}}<view>{{state.today_context.window_start}} — {{state.today_context.window_end}}</view></view>
+      <button class="text-button" bindtap="openProfile">数据用途与授权 <text class="arrow">↗</text></button>
+      <button class="text-button" wx:if="{{healthReadiness}}" bindtap="toggleHealthReadiness">{{showHealthReadiness ? '收起健康样本情况' : '查看健康样本情况'}} <text class="arrow">{{showHealthReadiness ? '−' : '＋'}}</text></button>
+    </view>
+    <view class="card health-readiness" wx:if="{{healthReadiness && showHealthReadiness}}">
+      <view class="section-label">健康样本 · 近七天</view>
+      <view class="h3 helper">先看数据是否准备好</view>
+      <view class="health-readiness-row" wx:for="{{healthReadiness.metrics}}" wx:key="key">
+        <view class="body">{{item.label}}</view><view class="muted">{{item.detail}}</view>
+        <view wx:if="{{item.latestDate}}" class="small muted">最近有样本：{{item.latestDate}}</view>
+        <view wx:if="{{item.issue}}" class="small muted">{{item.issue}}</view>
+      </view>
+      <view class="small muted helper">{{healthReadiness.windowStart}} — {{healthReadiness.windowEnd}} · {{healthReadiness.timezone}}</view>
+      <view class="small muted helper">{{healthReadiness.notice}}</view>
+      <button class="text-button" bindtap="openJourney">查看趋势与来源 <text class="arrow">→</text></button>
+    </view>
+    <view class="card mission-card" wx:if="{{state.mission}}">
+      <view class="mission-heading"><text class="section-label">今天的一小步</text><text class="mission-orbit" aria-hidden="true">↗</text></view>
+      <view class="mission-title">{{state.mission.title}}</view>
+      <view class="mission-reason">{{state.mission.why}}</view>
+      <block wx:if="{{state.mission.status !== 'done' && state.mission.status !== 'skipped'}}">
+        <button class="primary mission-complete" bindtap="mission" data-action="done" disabled="{{busy}}">{{busy ? '正在保存…' : '我做到了'}}<text wx:if="{{!busy}}" class="arrow">✓</text></button>
+        <view class="row"><button class="mission-secondary" bindtap="mission" data-action="lighten" disabled="{{busy}}">轻一点</button><button class="mission-secondary" bindtap="mission" data-action="skip" disabled="{{busy}}">今天跳过</button></view>
+      </block>
+      <view wx:else class="mission-confirmed" role="status">✓ {{state.mission.status === 'done' ? '今日已完成，给自己一点肯定。' : '今天先休息，按自己的节奏来。'}}</view>
+      <view wx:if="{{state.mission.adjusted_at}}" class="small mission-audit">调整已保存：{{fmt.time(state.mission.adjusted_at)}} · 版本 {{state.mission.revision}}</view>
+    </view>
+    <view wx:else class="card hero"><view class="eyebrow">从这里开始</view><view class="h2">选一个你在意的方向</view><view class="body">先设定旅程，再获得今天的行动。</view><button class="primary" bindtap="openJourney">开始我的旅程 <text class="arrow">→</text></button></view>
+    <view class="section-head"><view class="h2">留意接下来的变化</view></view>
+    <view class="card next-check" wx:if="{{state.next_check}}"><view class="section-label">下一次检查</view><view class="h3 helper">{{state.next_check.title}}</view><view class="muted">{{state.next_check.detail}}</view><button class="text-button" bindtap="openNextCheck">{{state.next_check.action === 'log' ? '记录此刻感受' : state.next_check.action === 'journey' ? '选择旅程' : '查看实验'}} <text class="arrow">→</text></button></view>
+    <view class="card check-in"><view class="section-label">BODY CHECK · 最近一次记录</view><view wx:if="{{logs.length}}"><view class="h2 helper">{{logs[0].feeling}}<text class="inline-meta">精力 {{logs[0].energy}} / 5</text></view><view class="small muted">{{fmt.time(logs[0].created_at)}} · 你的主观感受</view></view><view wx:else class="muted helper">还没有身体记录。你的第一条感受，会成为起点。</view><button class="secondary" bindtap="openLog">记下现在的感受 <text class="arrow">＋</text></button></view>
+    <view class="experiment-peek" wx:for="{{experiments}}" wx:key="id" wx:if="{{item.status === 'running' || item.status === 'paused'}}"><text class="pill {{item.status === 'paused' ? 'paused' : ''}}">{{item.statusLabel}}</text><view class="h3 helper">{{item.title}}</view><view class="small muted">{{item.sourceLabel}}</view><button class="text-button" bindtap="openExperiments">查看实验与停止选项 <text class="arrow">→</text></button></view>
+  </block>
+  <block wx:if="{{choosing}}">
+    <view class="sheet-backdrop" catchtouchmove="preventTouchMove" bindtap="cancelLighten"/>
+    <scroll-view scroll-y class="choice-sheet" role="dialog" aria-modal="true" aria-label="选择更轻的行动">
+      <view class="sheet-content"><view class="sheet-handle"/><view class="sheet-head"><view class="h2">今天可以轻一点</view><button class="sheet-close quiet" bindtap="cancelLighten" disabled="{{busy}}">取消</button></view>
+        <view class="muted">选择后保存；取消会保留原任务。</view>
+        <view wx:if="{{error}}" class="error" role="alert">{{error}}<view class="small">尚未保存。可重试同一选项，或取消。</view></view>
+        <button class="lighten-option" wx:for="{{alternatives}}" wx:key="id" data-id="{{item.id}}" bindtap="chooseLighten" disabled="{{busy}}">{{item.title}}<text class="arrow">→</text></button>
+        <view class="small muted helper">更轻的行动仍会保留为今天的记录，不代表实验已经完成。</view>
+        <view wx:if="{{busy}}" class="notice" role="status">正在保存这次调整…</view>
+      </view>
+    </scroll-view>
+  </block>
+  <view class="footer">生活方式记录与观察，不提供疾病诊断或治疗建议。</view>
+</view>

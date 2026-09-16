@@ -4,6 +4,12 @@ import Security
 enum KeychainStore {
     private static let service = "com.fitcrew.healthbridge"
 
+    static func removeDeviceToken() {
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                       kSecAttrService as String: service,
+                       kSecAttrAccount as String: "device-token"] as CFDictionary)
+    }
+
     static func saveDeviceToken(_ token: String) throws {
         let data = Data(token.utf8)
         let base: [String: Any] = [

@@ -1,0 +1,110 @@
+{
+  "environment": "Browser approximation of actual WXML/WXSS with synthetic fixtures; not native WeChat",
+  "checks": [
+    {
+      "page": "today",
+      "scale": 1,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "journey",
+      "scale": 1,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "experiments",
+      "scale": 1,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "log",
+      "scale": 1,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "profile",
+      "scale": 1,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "today",
+      "scale": 1.3,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "journey",
+      "scale": 1.3,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "experiments",
+      "scale": 1.3,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "log",
+      "scale": 1.3,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "profile",
+      "scale": 1.3,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "today",
+      "scale": 1.6,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "journey",
+      "scale": 1.6,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "experiments",
+      "scale": 1.6,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "log",
+      "scale": 1.6,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    },
+    {
+      "page": "profile",
+      "scale": 1.6,
+      "scrollWidth": 320,
+      "smallTargets": [],
+      "width": 320
+    }
+  ]
+}

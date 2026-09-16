@@ -1,0 +1,11 @@
+function day(value) { return value ? value.slice(5, 10).replace('-', '/') : ''; }
+function time(value) {
+  if (!value) return '尚无记录';
+  var zone = '（时区未注明）';
+  var offset = value.slice(-6);
+  if (value.slice(-1) === 'Z' || offset === '+00:00') zone = ' UTC';
+  else if ((offset.slice(0, 1) === '+' || offset.slice(0, 1) === '-') && offset.slice(3, 4) === ':') zone = ' UTC' + offset;
+  return value.replace('T', ' ').slice(0, 16) + zone;
+}
+function mean(value) { return value === null || value === undefined ? '—' : Math.round(value * 10) / 10; }
+module.exports = { day: day, time: time, mean: mean };

@@ -10,6 +10,14 @@ class Settings(BaseSettings):
     )
 
     environment: str = "development"
+    public_auth_enabled: bool = False
+    product_ai_enabled: bool = False
+    product_ai_provider: str = ""
+    product_ai_notice_version: str = ""
+    wechat_app_id: str = ""
+    wechat_app_secret: SecretStr = SecretStr("")
+    apple_client_id: str = ""
+    apple_client_secret: SecretStr = SecretStr("")
     database_url: str = "sqlite+pysqlite:///:memory:"
     encryption_key: SecretStr = SecretStr("")
     owner_token: SecretStr = SecretStr("")
