@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：服务器只读诊断（2026-09-17）
+
+- 新增可在腾讯云控制台独立运行的发布前检查：磁盘、固定容器元数据、备份/密钥存在性与只读 schema revision；不读取秘密或健康记录，不清理或部署。补齐失败和输出过滤测试，纠正状态文档中已过时的登录/服务器信息。尚未在生产执行或正式提审。
+
 ### 未发布：微信原生 Profile 修复（2026-09-10）
 
 - 将设备连接模块改为顶层显式引用，修复官方模拟器“我的”页模块缺失白屏；原生复测正文显示且无调试器错误。基础库修复与验收边界见 `docs/release/2026-09-10-native-wechat-runtime.md`。
@@ -35,6 +39,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: read-only server diagnostics (2026-09-17)
+
+- Add a standalone Tencent-console preflight for disk, fixed container metadata, backup/key presence and read-only schema revision. It does not read secrets or health records, clean up or deploy. Add failure/output-filtering tests and correct stale login/server status. No production execution or formal submission occurred.
 
 ### Unreleased: native WeChat Profile fix (2026-09-10)
 
