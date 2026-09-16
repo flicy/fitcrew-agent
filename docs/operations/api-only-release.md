@@ -8,6 +8,8 @@
 
 ### 进入发布前
 
+独立诊断工具需要 Python 3.11 或更新版本，与项目最低版本一致；旧解释器会在执行任何检查命令前退出并提示版本要求。
+
 无法从本机 SSH 登录时，可在已授权的腾讯云控制台“执行命令”中运行 `infra/tencent/release-preflight.py` 的完整内容（用 `python3 - <<'PY'` / `PY` 包裹）。它是独立标准库脚本，不要求服务器已拉取新分支；默认检查 `/opt/fitcrew-bodyos`。本地已存在文件时用 `python3 infra/tencent/release-preflight.py --repo /opt/fitcrew-bodyos`。只检查磁盘、固定容器元数据、备份文件元数据/密钥是否存在，以及只读数据库 schema revision；不读取密钥内容、健康记录或任意日志，不清理、备份、恢复或部署。退出码 2 表示前置检查发现阻塞；0 也不证明恢复演练、HTTPS、平台配置或提审完成。10 GiB 是本地构建的保守检查阈值，不是容量充足保证。检查可能持续数分钟，每条外部命令最多 20 秒；控制台命令超时可设 240 秒。
 
 1. 通过已有受信任 SSH 配置或账户持有人的控制台登录。SSH 验证失败时报告所用用户、主机和错误码；不改主机校验、不猜凭据。
@@ -66,6 +68,8 @@ Device connection adds `0005_device_only_pairing`. Invalidate unused device-only
 This is an operational procedure for the existing server; no production upgrade has been performed. It does not mean the Mini Program has been uploaded or submitted. First verify that the actual server uses this repository's Compose project, database, and runtime paths; revise the procedure if it differs. Preserve Moticlaw as the sole Feishu ingress, existing identities, encryption keys, database, and HealthKit ingestion. Do not run legacy `deploy.sh` / `rollback.sh` or automatically downgrade the database.
 
 ### Before release
+
+The standalone diagnostic requires Python 3.11 or newer, matching the project minimum. Older interpreters exit with a version message before any diagnostic command runs.
 
 If local SSH is unavailable, run the full contents of `infra/tencent/release-preflight.py` inside `python3 - <<'PY'` / `PY` in the authorized Tencent console Execute Command interface. This standalone standard-library script does not require updating the server checkout and defaults to `/opt/fitcrew-bodyos`. When already present, run `python3 infra/tencent/release-preflight.py --repo /opt/fitcrew-bodyos`. It reads disk usage, fixed container metadata, encrypted-backup metadata/key presence, and the schema revision in a read-only DB session. It does not read secret contents, health records or arbitrary logs, and does not clean up, back up, restore or deploy. Exit 2 indicates diagnostic blockers; exit 0 does not establish restore, HTTPS, platform configuration or submission acceptance. The 10 GiB build headroom check is conservative, not a capacity guarantee. Each external command has a 20-second timeout; allow 240 seconds in the console.
 

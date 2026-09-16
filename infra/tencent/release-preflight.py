@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -28,7 +29,7 @@ def nonempty(path):
 
 def collect(repo):
     report = {
-        "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "checked_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
         "mode": "read_only",
         "deployment_performed": False,
         "restore_verified": False,
@@ -68,7 +69,7 @@ def collect(repo):
             "nonempty_count": len(backups),
             "latest_size_bytes": latest.st_size if latest else None,
             "latest_modified_utc": datetime.datetime.fromtimestamp(
-                latest.st_mtime, datetime.timezone.utc
+                latest.st_mtime, datetime.UTC
             ).isoformat() if latest else None,
         }
         if latest is None:
@@ -77,7 +78,11 @@ def collect(repo):
         blockers.append("backup_metadata_unavailable")
 
     report["containers"] = {}
-    template = '{{.Id}}|{{.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.StartedAt}}'
+    template = (
+        '{{.Id}}|{{.Image}}|{{.State.Status}}|'
+        '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.StartedAt}}'
+    )
+    container_states = {"created", "running", "paused", "restarting", "removing", "exited", "dead"}
     for service in ("api", "db", "worker", "gateway", "caddy"):
         name = "fitcrew-bodyos-" + service + "-1"
         raw = query(["docker", "inspect", "--format", template, name])
@@ -85,14 +90,14 @@ def collect(repo):
         valid = (len(fields) == 5
                  and re.fullmatch(r"[0-9a-f]{64}", fields[0])
                  and re.fullmatch(r"sha256:[0-9a-f]{64}", fields[1])
-                 and fields[2] in {"created", "running", "paused", "restarting", "removing", "exited", "dead"}
+                 and fields[2] in container_states
                  and fields[3] in {"none", "starting", "healthy", "unhealthy"}
                  and re.fullmatch(r"[0-9T:Z.+-]+", fields[4]))
         if not valid:
             blockers.append(service + "_metadata_unavailable")
             continue
         report["containers"][service] = dict(zip(
-            ("container_id", "image_id", "status", "health", "started_at"), fields
+            ("container_id", "image_id", "status", "health", "started_at"), fields, strict=True
         ))
         if fields[2] != "running" or fields[3] in {"starting", "unhealthy"}:
             blockers.append(service + "_not_healthy")
@@ -122,6 +127,9 @@ def collect(repo):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    # The console runs outside the project's dependency-managed Python environment.
+    if sys.version_info < (3, 11):  # noqa: UP036
+        parser.error("Python 3.11 or newer is required; no diagnostic commands were run.")
     parser.add_argument("--repo", type=Path, default=Path("/opt/fitcrew-bodyos"))
     args = parser.parse_args()
     result = collect(args.repo)
