@@ -19,6 +19,8 @@ def test_owner_alpha_schema_contains_required_tables() -> None:
             "pairing_exchange_sessions",
             "sync_batches",
         "users",
+        "product_records",
+        "login_challenges",
     }
 
 

@@ -13,6 +13,7 @@ from bodyos_api.dlp import (
     sanitize_private_request_context,
     sanitize_public_group_question,
 )
+from bodyos_api.features import normalize_cached_features
 from bodyos_api.knowledge import KnowledgeService
 from bodyos_api.models import DailyFeature, DeviceBinding, HealthSample
 from bodyos_api.policy import BehaviorToken
@@ -288,7 +289,7 @@ class BodyOSService:
         return {
             "date": feature.feature_date,
             "quality_status": feature.quality_status,
-            **payload,
+            **normalize_cached_features(payload),
         }
 
     def _knowledge(self, fitcrew_user_id: str, intent: str) -> list[dict]:

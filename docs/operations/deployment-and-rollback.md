@@ -1,5 +1,9 @@
 # Tencent Deployment and Rollback / 腾讯云部署与回滚
 
+> 历史 V2 整套部署说明。V3 小程序发布必须使用 [API 独立发布流程](api-only-release.md)，保留 Moticlaw 作为唯一飞书入口。不要对 V3 运行下文的整套部署或数据库降级命令。
+>
+> Historical V2 full-stack procedure. For V3 Mini Program releases, use the [API-only release procedure](api-only-release.md), preserving Moticlaw as the sole Feishu ingress. Do not run the full-stack deployment or database downgrade commands below against V3.
+
 ## 中文
 
 ### 边界与架构

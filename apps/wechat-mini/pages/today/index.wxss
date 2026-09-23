@@ -1,0 +1,23 @@
+.context-block { margin: 24px 0 16px; padding-left: 14px; border-left: 3px solid #C4B3DF; }
+.context-label { color: #6B6375; font-size: calc(13px * var(--text-scale)); margin-bottom: 8px; }
+.context-dot { display: inline-block; width: 6px; height: 6px; background: #6544A3; border-radius: 50%; margin-right: 7px; }
+.mission-card { background: #493065; color: #FFFFFF; border: none; padding: 24px; }
+.mission-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.mission-heading .section-label { color: #E0D3EF; }
+.mission-orbit { font-size: 24px; border: 1px solid #9A80B5; border-radius: 50%; width: 40px; height: 40px; text-align: center; }
+.mission-title { font-size: calc(25px * var(--text-scale)); font-weight: 650; line-height: 1.4; margin-bottom: 12px; }
+.mission-reason { color: #E9E0F2; line-height: 1.65; font-size: calc(15px * var(--text-scale)); }
+.mission-card .mission-complete { background: #F3EBFC; color: #493065; margin-top: 24px; }
+.mission-card .mission-secondary { background: transparent; color: #F5EEFE; border: 1px solid #AA91C4; }
+.mission-card button[disabled] { background: #725A88; color: #EAE1F3; border-color: transparent; }
+.mission-confirmed { border-top: 1px solid #AA91C4; padding-top: 18px; margin-top: 20px; font-size: calc(17px * var(--text-scale)); }
+.mission-audit { color: #E0D3EF; margin-top: 16px; }
+.arrow { margin-left: auto; padding-left: 12px; }
+.onboarding-track { display: flex; gap: 5px; margin: 16px 0 20px; }
+.step-mark { height: 4px; background: #E8E1EF; border-radius: 4px; flex: 1; }
+.step-mark.reached { background: #6544A3; }
+.next-check { background: #F0ECE4; border-color: #E5DDD1; }
+.inline-meta { display: inline-block; margin-left: 12px; font-size: calc(14px * var(--text-scale)); font-weight: 400; color: #6B6375; }
+.experiment-peek { padding: 20px 0 0; margin-top: 20px; border-top: 1px solid #E5DFEB; }
+.lighten-option { justify-content: space-between; text-align: left; min-height: 64px; background: #F1ECF7; }
+.health-readiness-row { padding: 12px 0; border-bottom: 1px solid #E5DFEB; }

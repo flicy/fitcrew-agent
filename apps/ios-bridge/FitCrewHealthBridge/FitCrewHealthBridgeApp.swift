@@ -11,9 +11,6 @@ struct FitCrewHealthBridgeApp: App {
                     BackgroundSyncScheduler.shared.register(model: model)
                     BackgroundSyncScheduler.shared.schedule()
                 }
-                .onOpenURL { url in
-                    Task { await model.configure(from: url) }
-                }
         }
     }
 }

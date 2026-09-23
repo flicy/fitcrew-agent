@@ -27,7 +27,13 @@ def main() -> None:
     project = (ROOT / "apps" / "ios-bridge" / "project.yml").read_text()
 
     require(
-        info.get("CFBundleShortVersionString") == "2.0.0",
+        info.get("FitCrewAPIBaseURL") == "$(FITCREW_API_BASE_URL)"
+        and info.get("PrivacyPolicyURL") == "$(FITCREW_PRIVACY_POLICY_URL)",
+        "generated Info.plist must preserve release URL build-setting substitutions",
+    )
+
+    require(
+        info.get("CFBundleShortVersionString") == "3.0.0",
         "generated Info.plist has the wrong release version",
     )
     build_version = info.get("CFBundleVersion")
@@ -69,6 +75,10 @@ def main() -> None:
         "generated entitlements are missing HealthKit",
     )
     require(
+        entitlements.get("com.apple.developer.applesignin") == ["Default"],
+        "generated entitlements are missing Sign in with Apple",
+    )
+    require(
         "com.apple.developer.healthkit.access" not in entitlements,
         "generated entitlements unexpectedly request Verifiable Health Records",
     )
@@ -88,7 +98,10 @@ def main() -> None:
     require((width, height) == (1024, 1024), "AppIcon source must be 1024x1024")
     require(header[25] not in {4, 6}, "AppIcon source must not contain an alpha channel")
 
-    print("Generated iOS configuration is HealthKit and TestFlight ready.")
+    print(
+        "Generated iOS version, entitlements and icon checks passed; "
+        "signing and review remain separate."
+    )
 
 
 if __name__ == "__main__":
