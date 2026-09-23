@@ -9,7 +9,6 @@ function effectiveProject(project,privateProject={}){
 function validateRelease(project,config){
  const failures=[];
  if(!/^wx[0-9a-f]{16}$/i.test(project.appid||''))failures.push('Missing verified WeChat AppID');
- if((project.appid||'').toLowerCase()==='wxae59705a7cce30f9')failures.push('The supplied sandbox AppID cannot be used for formal production review');
  let domain=false;
  if(validBase(config.baseURL)){
   try{

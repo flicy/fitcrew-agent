@@ -14,7 +14,7 @@
 - `81924d8` / `a652acf`：iOS 配对保护账号切换与旧请求回写；微信账号可生成限时单次连接、列出和撤销设备，不自动合并 Apple 身份。目标迁移为 `0005_device_only_pairing`，见[连接与回滚要求](../release/2026-09-09-wechat-ios-connection.md)。
 - `7f63bbd` / `1386968`：重复确认未变化的授权保留原授权；单独同意后 AI 接收同目标最多 10 条已确认结构化反馈；撤回记忆使相关待执行建议失效。这不证明微信 AI 灰度资格或完整主动干预能力。
 - iOS 有发布地址构建变量和产物检查，见[发布配置](../release/2026-09-10-ios-release-configuration.md)。正式签名与真实 HealthKit 验收未完成。
-- 官方微信工具的基础库及 Profile 模块已修复，见[原生排错](../release/2026-09-10-native-wechat-runtime.md)。9 月 16 日测试预览生成成功（126,337 字节），只证明测试包生成，二维码可能过期。只有测试 AppID `wxae59705a7cce30f9` 已知，API baseURL 仍为空。浏览器预览使用合成数据，没有真实持久化服务。
+- 官方微信工具的基础库及 Profile 模块已修复，见[原生排错](../release/2026-09-10-native-wechat-runtime.md)。9 月 16 日测试预览生成成功（126,337 字节），只证明测试包生成，二维码可能过期。用户已于 9 月 24 日确认正式 AppID 为 `wxae59705a7cce30f9`，并已写入发布工程；该声明尚未通过后台凭据或上传回执独立验证。API baseURL 仍为空。浏览器预览使用合成数据，没有真实持久化服务。
 
 ### 服务器与阻塞
 
@@ -22,7 +22,7 @@
 
 该次快照中根分区 59 GB 已用 56 GB，仅余 1.2 GB（99%）。尚未清理、验证备份恢复或升级。这是 9 月 16 日快照，不是实时读数。9 月 17 日本会话无浏览器控制工具，现有 `root@124.156.218.104` SSH 仍返回 `Permission denied (publickey,password)`，不代表用户已退出控制台。备用只读检查见 [API 独立发布流程](../operations/api-only-release.md) 和 `infra/tencent/release-preflight.py`；不读取秘密内容、不清理、不迁移、不部署。
 
-其他未完成项：正式微信 AppID、类目/备案与合法 API 接入，运营者与隐私政策信息，真实 AI 服务商及资格，Apple 会员/账号/签名，微信真实登录—保存—重登—删除验收，iPhone 安装与真实授权/同步/拒绝/撤回验收。云托管是待评估备用路径，尚未开通或改造，不宣称已免除所有备案要求或免费，不自动购买资源。
+其他未完成项：微信类目/备案与合法 API 接入，运营者与隐私政策信息，真实 AI 服务商及资格，Apple 会员/账号/签名，微信真实登录—保存—重登—删除验收，iPhone 安装与真实授权/同步/拒绝/撤回验收。云托管是待评估备用路径，尚未开通或改造，不宣称已免除所有备案要求或免费，不自动购买资源。
 
 ### 后续目标与证明
 
@@ -42,7 +42,7 @@ Both clients have five native pages, a 90-day journey, manual records, experimen
 - `81924d8` / `a652acf`: iOS pairing guards account changes and stale responses. Authenticated WeChat users can issue expiring single-use connections and list/revoke devices; Apple identities are not automatically merged. Target migration: `0005_device_only_pairing`; consult the linked connection document before rollback.
 - `7f63bbd` / `1386968`: unchanged consent preserves grants. Separate AI consent permits up to ten confirmed structured feedback items for the same goal; withdrawing memory invalidates dependent pending proposals. This establishes neither WeChat AI eligibility nor complete proactive intervention.
 - iOS has release URL build variables and artifact checks; formal signing and real HealthKit acceptance remain incomplete. See the linked release configuration document.
-- Official WeChat base-library and Profile dependency problems were repaired. The September 16 sandbox preview succeeded (126,337 bytes), proving packaging only; its QR may expire. Only test AppID `wxae59705a7cce30f9` is known, API baseURL remains empty, and browser previews use synthetic fixtures without real persistence.
+- Official WeChat base-library and Profile dependency problems were repaired. The September 16 sandbox preview succeeded (126,337 bytes), proving packaging only; its QR may expire. The owner confirmed `wxae59705a7cce30f9` as the formal AppID on September 24 and it is now in the release project; that declaration is not independently verified by dashboard credentials or an upload receipt. API baseURL remains empty, and browser previews use synthetic fixtures without real persistence.
 
 ### Server and blockers
 
@@ -50,7 +50,7 @@ On September 16, read-only diagnostics succeeded through the user's logged-in Te
 
 That remote snapshot showed 56 GB used on a 59 GB root partition, with 1.2 GB free (99%). No cleanup, backup restore verification or upgrade occurred. These are September 16 observations, not live readings. On September 17 this session lacks browser-control tools, while existing `root@124.156.218.104` SSH still returns `Permission denied (publickey,password)`. This does not establish that the user is signed out of Tencent. The standalone `infra/tencent/release-preflight.py`, documented in the API-only procedure, is a read-only fallback; it does not read secrets, clean up, migrate or deploy.
 
-Remaining: production WeChat AppID/category/filing/legal API access, operator/privacy details, real AI provider and eligibility, Apple membership/account/signing, real WeChat login/save/relogin/erasure, and iPhone installation with real HealthKit authorization/sync/denial/revocation. Cloud hosting is an unevaluated fallback, not provisioned or implemented. Do not claim a blanket filing exemption or free service, or purchase resources automatically.
+Remaining: WeChat category/filing/legal API access, operator/privacy details, real AI provider and eligibility, Apple membership/account/signing, real WeChat login/save/relogin/erasure, and iPhone installation with real HealthKit authorization/sync/denial/revocation. Cloud hosting is an unevaluated fallback, not provisioned or implemented. Do not claim a blanket filing exemption or free service, or purchase resources automatically.
 
 ### Next goals and evidence
 

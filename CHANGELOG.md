@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：微信正式 AppID 配置（2026-09-24）
+
+- 按运营者确认，将 `wxae59705a7cce30f9` 写入小程序发布工程，并移除本地校验器中针对该 AppID 的历史测试号硬编码拒绝；校验仍要求合法 HTTPS 业务域名与启用域名校验。运营者声明尚未由后台凭据或正式上传回执独立证实，未因此部署或提审。
+
 ### 未发布：服务器只读诊断（2026-09-17）
 
 - 新增可在腾讯云控制台独立运行的发布前检查：磁盘、固定容器元数据、备份/密钥存在性与只读 schema revision；不读取秘密或健康记录，不清理或部署。补齐失败和输出过滤测试，纠正状态文档中已过时的登录/服务器信息。尚未在生产执行或正式提审。
@@ -39,6 +43,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: formal WeChat AppID configuration (2026-09-24)
+
+- Put owner-confirmed `wxae59705a7cce30f9` in the Mini Program release project and remove the historic sandbox-ID hard-coded rejection from the local validator. Validation still requires a legal HTTPS business domain with domain checking enabled. The owner declaration is not independently established by dashboard credentials or a formal upload receipt; this did not deploy or submit anything.
 
 ### Unreleased: read-only server diagnostics (2026-09-17)
 
