@@ -55,6 +55,12 @@ Store `BODYOS_PUBLIC_AUTH_ENABLED`, `BODYOS_WECHAT_APP_ID`, `BODYOS_WECHAT_APP_S
 
 Do not run the legacy all-service deployment script: it starts the historical gateway. Inspect live services, backup, migrate and plan rollback while preserving Moticlaw as sole Feishu ingress. Deploy only the authorized data API/client changes. Completion requires each platform's actual build, device acceptance, privacy/filing materials and formal review submission receipt. Tests, screenshots, uploads, experience builds and TestFlight do not prove production submission.
 
+## 2026-10-09 微信优先路径更新 / WeChat-first path update
+
+微信云托管私有 `callContainer` 模式现可在小程序公开配置中留空 `baseURL`，并由后端显式启用 `BODYOS_PRIVATE_WECHAT_CLOUD_ENABLED`。这只放宽微信端获取公网域名的先后顺序，不免除真实云环境、持久数据库、平台隐私配置、真机验收和正式提审。Apple 登录与 iOS 配对仍需生产 HTTPS 地址；免费体验环境在小程序发布后第 15 天到期，不能作为长期生产方案。旧表格与测试计数保留为 9 月初快照，当前证据见 [CURRENT_STATE](../agent-context/CURRENT_STATE.md) 和 [云托管传输准备](2026-10-09-cloudbase-transport.md)。
+
+Private WeChat Cloud Hosting `callContainer` now permits an empty public `baseURL` when the backend explicitly enables `BODYOS_PRIVATE_WECHAT_CLOUD_ENABLED`. This changes the order in which a public domain is needed for WeChat; it does not remove the need for a real cloud environment, durable database, platform privacy setup, device acceptance, or formal submission. Apple sign-in and iOS pairing still require production HTTPS. The free experience environment expires on day 15 after Mini Program publication and cannot sustain production. Earlier tables and test counts above remain an early-September snapshot; consult [CURRENT_STATE](../agent-context/CURRENT_STATE.md) and the [Cloud Hosting transport note](2026-10-09-cloudbase-transport.md) for current evidence.
+
 ## 官方依据 / Official references
 
 - [Apple enrollment](https://developer.apple.com/help/account/membership/program-enrollment/)
