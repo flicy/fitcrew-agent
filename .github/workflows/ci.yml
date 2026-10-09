@@ -37,6 +37,14 @@ jobs:
           fi
       - name: Test native WeChat client boundaries
         run: node --test apps/wechat-mini/tests/*.test.js
+      - name: Build isolated CloudBase API source
+        run: |
+          python3 infra/tencent/prepare-cloudbase-api.py \
+            --output "$RUNNER_TEMP/fitcrew-cloudbase-api"
+          docker build -t fitcrew-cloudbase-api:ci \
+            "$RUNNER_TEMP/fitcrew-cloudbase-api"
+          docker run --rm --entrypoint python fitcrew-cloudbase-api:ci -c \
+            "from bodyos_api.app import app; from bodyos_api.cloudbase_pg_manifest import build_manifest; assert app.title == 'FitCrew BodyOS API'; assert build_manifest()['revision']"
       - name: Validate and smoke-test Compose
         run: |
           mkdir -p infra/tencent/runtime/acme infra/tencent/runtime/tls \

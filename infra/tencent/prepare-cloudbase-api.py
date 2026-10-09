@@ -29,8 +29,8 @@ def stage(output: Path) -> dict[str, object]:
         raise ValueError("deployment stage must be outside the source worktree")
     if output.exists():
         raise ValueError("deployment stage already exists")
-    if git(root, "status", "--porcelain"):
-        raise ValueError("commit and verify the release worktree before staging")
+    if git(root, "status", "--porcelain", "--untracked-files=no"):
+        raise ValueError("commit all tracked release changes before staging")
 
     head = git(root, "rev-parse", "HEAD").decode().strip()
     files = git(root, "ls-tree", "-r", "--name-only", "HEAD", "--", *SOURCE_PATHS)
