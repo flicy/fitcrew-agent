@@ -1,0 +1,22 @@
+.journey-direction .h2 { font-size: calc(26px * var(--text-scale)); }
+.journey-day { margin: 12px 0; }
+.calendar-progress { height: 5px; background: #D8CCE8; border-radius: 5px; overflow: hidden; }
+.calendar-progress view { height: 100%; background: #6544A3; max-width: 100%; }
+.goal-options { display: flex; flex-direction: column; gap: 10px; }
+.goal-options button { justify-content: space-between; text-align: left; }
+.trend-card { margin-top: 0; }
+.segmented { display: flex; gap: 4px; padding: 4px; background: #F0ECF5; border-radius: 14px; }
+.segmented button { flex: 1; padding: 8px 4px; margin: 0; min-width: 44px; min-height: 44px; background: transparent; font-size: calc(15px * var(--text-scale)); color: #6B6375; }
+.segmented .active { background: #FFFFFF; color: #593A91; box-shadow: 0 2px 6px rgba(41,35,51,.08); }
+.trend-summary { margin: 22px 0 6px; }
+.chart-legend { font-size: calc(12px * var(--text-scale)); color: #6B6375; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 20px 0 8px; }
+.legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: #6544A3; margin-right: 5px; }
+.trend-scroll { width: 100%; white-space: nowrap; }
+.trend-chart { display: flex; padding: 8px 0; gap: 4px; }
+.trend-day { flex-shrink: 0; width: 58px; margin: 0; padding: 4px; display: block; text-align: center; background: transparent; border-radius: 10px; font-weight: 400; }
+.trend-column { height: 100px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #D8D0E2; }
+.trend-bar { width: 18px; background: #8063AE; border-radius: 5px 5px 0 0; }
+.trend-gap { color: #85798F; }
+.chart-value { margin-top: 8px; color: #593A91; }
+.trend-day .small { white-space: nowrap; font-size: calc(12px * var(--text-scale)); }
+.list-item:first-child { border-top: 0; padding-top: 0; }

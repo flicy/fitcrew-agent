@@ -36,7 +36,7 @@ struct SyncClient {
     }
 }
 
-private struct PairingProvisioning: Decodable {
+struct PairingProvisioning: Decodable {
     let baseURL: URL
     let deviceBindingID: UUID
     let consentIDs: [String: UUID]
@@ -55,12 +55,25 @@ final class BridgeViewModel: ObservableObject {
     @Published private(set) var statusMessage = "等待授权"
     @Published private(set) var authorizationStatus = "未确认"
     @Published private(set) var lastSync: Date?
+    @Published private(set) var isSyncing = false
+    @Published private(set) var identityRevision: UUID
 
     private let healthKit = HealthKitClient()
     private let syncClient = SyncClient()
-    private let consentStore = ConsentStore()
+    private let consentStore: ConsentStore
+    private let exchangeInvitation: (PairingInvitation) async throws -> PairingProvisioning
+    private let writeToken: (String) throws -> Void
+    private var pairingRequest = UUID()
 
-    init() {
+    init(
+        consentStore: ConsentStore = ConsentStore(),
+        exchangeInvitation: @escaping (PairingInvitation) async throws -> PairingProvisioning = { try await SyncClient().exchange($0) },
+        writeToken: @escaping (String) throws -> Void = KeychainStore.saveDeviceToken
+    ) {
+        self.consentStore = consentStore
+        self.exchangeInvitation = exchangeInvitation
+        self.writeToken = writeToken
+        identityRevision = consentStore.identityRevision
         lastSync = consentStore.lastSync
     }
 
@@ -73,50 +86,90 @@ final class BridgeViewModel: ObservableObject {
         return lastSync.formatted(date: .abbreviated, time: .shortened)
     }
 
-    func configure(from url: URL) async {
+    func refreshSyncState() {
+        identityRevision = consentStore.identityRevision
+        lastSync = consentStore.lastSync
+        if consentStore.configuration?.consentIDs.isEmpty != false {
+            authorizationStatus = "尚未授权上传健康数据"
+            statusMessage = "健康同步已停止，需重新选择授权范围"
+        }
+    }
+
+    @discardableResult
+    func configure(from url: URL) async -> Bool {
+        let request = UUID()
+        pairingRequest = request
+        let identity = AccountIdentitySnapshot(store: consentStore)
         do {
             let invitation = try PairingDecoder.decode(url)
-            let pairing = try await syncClient.exchange(invitation)
-            guard pairing.baseURL.scheme == "https", pairing.baseURL.host != nil else {
+            let pairing = try await exchangeInvitation(invitation)
+            guard pairingRequest == request, identity.isCurrent(in: consentStore) else { return false }
+            guard pairing.baseURL == invitation.baseURL else {
                 throw PairingError.invalidPayload
             }
-            try KeychainStore.saveDeviceToken(pairing.deviceToken)
+            try writeToken(pairing.deviceToken)
             consentStore.replaceConfiguration(BridgeConfiguration(
                 baseURL: pairing.baseURL,
                 deviceBindingID: pairing.deviceBindingID,
                 consentIDs: pairing.consentIDs
             ))
             lastSync = consentStore.lastSync
+            identityRevision = consentStore.identityRevision
             statusMessage = "设备绑定成功，请授权 Apple 健康"
+            return true
         } catch {
+            guard pairingRequest == request, identity.isCurrent(in: consentStore) else { return false }
             statusMessage = "设备绑定失败：\(error.localizedDescription)"
+            return false
         }
     }
 
     func requestAuthorization() async {
+        let identity = AccountIdentitySnapshot(store: consentStore)
+        let configuration = consentStore.configuration
         do {
-            try await healthKit.requestAuthorization()
+            let kinds = Set(consentStore.configuration?.consentIDs.keys.map { $0 } ?? [])
+            guard !kinds.isEmpty else { statusMessage = "请先选择健康数据授权范围"; return }
+            try await healthKit.requestAuthorization(kinds: kinds)
+            guard identity.isCurrent(in: consentStore), consentStore.configuration == configuration else { return }
             authorizationStatus = "已请求最小读取权限"
             statusMessage = "授权完成后可以同步"
         } catch {
-            statusMessage = "授权失败：\(error.localizedDescription)"
+            if identity.isCurrent(in: consentStore), consentStore.configuration == configuration {
+                statusMessage = "授权失败：\(error.localizedDescription)"
+            }
         }
+    }
+
+    func install(_ pairing: PairingProvisioning) throws {
+        guard pairing.baseURL.scheme == "https", pairing.baseURL.host != nil else { throw PairingError.invalidPayload }
+        try writeToken(pairing.deviceToken)
+        consentStore.replaceConfiguration(BridgeConfiguration(baseURL: pairing.baseURL, deviceBindingID: pairing.deviceBindingID, consentIDs: pairing.consentIDs))
+        lastSync = consentStore.lastSync
+        identityRevision = consentStore.identityRevision
+        statusMessage = "账号已连接，Apple 健康授权可选"
     }
 
     @discardableResult
     func sync(fullReconciliation: Bool) async -> Bool {
+        guard !isSyncing else { return false }
+        isSyncing = true
+        defer { isSyncing = false }
         guard let configuration = consentStore.configuration,
-              let token = KeychainStore.deviceToken()
+              let token = KeychainStore.deviceToken(), !configuration.consentIDs.isEmpty
         else {
             statusMessage = "请先完成设备绑定"
             return false
         }
         let endDate = Date()
+        let identity = AccountIdentitySnapshot(store: consentStore)
         let startDate = fullReconciliation
             ? Calendar.current.date(byAdding: .day, value: -30, to: endDate)!
             : (lastSync ?? Calendar.current.date(byAdding: .day, value: -1, to: endDate)!)
         do {
-            let samples = try await healthKit.readSamples(since: startDate, until: endDate)
+            let samples = try await healthKit.readSamples(since: startDate, until: endDate, kinds: Set(configuration.consentIDs.keys))
+                .filter { configuration.consentIDs[$0.kind.rawValue] != nil }
+            guard identity.isCurrent(in: consentStore), consentStore.configuration == configuration else { return false }
             let batches = try BatchPlanner.makeBatches(
                 deviceBindingID: configuration.deviceBindingID,
                 consentIDs: configuration.consentIDs,
@@ -127,9 +180,15 @@ final class BridgeViewModel: ObservableObject {
                 fullReconciliation: fullReconciliation,
                 samples: samples
             )
+            guard !batches.isEmpty else {
+                statusMessage = "本次没有可上传样本，可能尚无记录或读取受限。未推进同步游标；可先手动记录，或检查权限后重试。"
+                return false
+            }
             for batch in batches {
+                guard identity.isCurrent(in: consentStore), consentStore.configuration == configuration else { return false }
                 try await syncClient.upload(batch, to: configuration.baseURL, deviceToken: token)
             }
+            guard identity.isCurrent(in: consentStore), consentStore.configuration == configuration else { return false }
             lastSync = endDate
             consentStore.lastSync = endDate
             if fullReconciliation {
@@ -139,7 +198,9 @@ final class BridgeViewModel: ObservableObject {
             BackgroundSyncScheduler.shared.schedule()
             return true
         } catch {
-            statusMessage = "同步失败，游标未推进：\(error.localizedDescription)"
+            if identity.isCurrent(in: consentStore), consentStore.configuration == configuration {
+                statusMessage = "同步失败，游标未推进：\(error.localizedDescription)"
+            }
             return false
         }
     }

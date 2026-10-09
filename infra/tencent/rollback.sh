@@ -4,6 +4,10 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 RUNTIME="$HERE/runtime"
 ENV_FILE="$RUNTIME/.env.runtime"
+if [ -f "$ENV_FILE" ] && grep -q '^FITCREW_API_IMAGE_TAG=' "$ENV_FILE"; then
+    echo "Legacy full rollback refuses an independently pinned API; use the reviewed API-only procedure." >&2
+    exit 1
+fi
 COMPOSE="docker compose --env-file $ENV_FILE -f $HERE/compose.yaml"
 ROLLBACK_SHA=${ROLLBACK_SHA:-${1:-}}
 PREVIOUS_CADDYFILE="$RUNTIME/Caddyfile.before-deploy"

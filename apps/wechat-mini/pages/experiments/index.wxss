@@ -1,0 +1,13 @@
+.experiment-intro { margin: 8px 0 24px; }
+.experiment-steps { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: calc(13px * var(--text-scale)); color: #6B6375; padding: 4px 0 8px; flex-wrap: wrap; }
+.intro-plus { margin-left: auto; padding-left: 12px; }
+.experiment-card { margin-top: 20px; }
+.experiment-hypothesis { padding: 16px; border-radius: 14px; background: #F5F2F8; }
+.experiment-disclosure { padding-top: 1px; border-top: 1px solid #E5DFEB; margin-top: 18px; }
+.detail-row { padding-left: 12px; border-left: 2px solid #C9B9DE; margin: 8px 0; }
+.experiment-result { background: #EDF5EF; border-radius: 14px; padding: 16px; margin-top: 22px; color: #2C654F; }
+.experiment-result .section-label { color: #2C654F; }
+.experiment-feedback { margin-top: 22px; padding-top: 20px; border-top: 1px solid #E5DFEB; }
+.feedback-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.feedback-options button { flex: 1 0 40%; }
+.feedback-options button:last-child { flex-basis: 100%; }

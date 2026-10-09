@@ -10,12 +10,25 @@ class Settings(BaseSettings):
     )
 
     environment: str = "development"
+    public_auth_enabled: bool = False
+    private_wechat_cloud_enabled: bool = False
+    product_ai_enabled: bool = False
+    product_ai_provider: str = ""
+    product_ai_notice_version: str = ""
+    wechat_app_id: str = ""
+    wechat_app_secret: SecretStr = SecretStr("")
+    apple_client_id: str = ""
+    apple_client_secret: SecretStr = SecretStr("")
     database_url: str = "sqlite+pysqlite:///:memory:"
+    database_schema: str = ""
     encryption_key: SecretStr = SecretStr("")
     owner_token: SecretStr = SecretStr("")
     identity_pepper: SecretStr = SecretStr("")
     internal_token: SecretStr = SecretStr("")
     model_proxy_token: SecretStr = SecretStr("")
+    cloudbase_ai_env_id: str = ""
+    cloudbase_ai_api_key: SecretStr = SecretStr("")
+    cloudbase_ai_model: str = ""
     public_base_url: str = "http://127.0.0.1:8000"
     codex_command: str = "codex"
     hermes_command: str = "hermes"

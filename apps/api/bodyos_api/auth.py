@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from bodyos_api.config import Settings, get_settings
 from bodyos_api.db import get_session
-from bodyos_api.models import DeviceBinding
+from bodyos_api.models import DeviceBinding, User
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -19,6 +20,7 @@ _bearer = HTTPBearer(auto_error=False)
 class DevicePrincipal:
     fitcrew_user_id: str
     device_binding_id: str
+    data_generation: int = 0
 
 
 def require_owner(
@@ -66,16 +68,22 @@ def require_device(
         select(DeviceBinding).where(DeviceBinding.revoked_at.is_(None))
     ).all()
     binding = next(
-        (
-            item
-            for item in bindings
-            if hmac.compare_digest(item.token_hash, candidate_hash)
-        ),
+        (item for item in bindings if hmac.compare_digest(item.token_hash, candidate_hash)),
         None,
     )
     if binding is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid device token")
+    if binding.expires_at is not None:
+        expiry = binding.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=UTC)
+        if expiry <= datetime.now(UTC):
+            raise HTTPException(status_code=401, detail="device session expired")
+    user = session.get(User, binding.fitcrew_user_id)
+    if user is None or user.status != "active":
+        raise HTTPException(status_code=401, detail="account unavailable")
     return DevicePrincipal(
         fitcrew_user_id=binding.fitcrew_user_id,
         device_binding_id=binding.id,
+        data_generation=user.data_generation,
     )

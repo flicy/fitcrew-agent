@@ -5,6 +5,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from bodyos_api.dlp import (
     SensitiveOutput,
@@ -28,6 +30,68 @@ class HarnessResult:
 
 class Harness(Protocol):
     def run(self, prompt: str) -> HarnessResult: ...
+
+
+class UnavailableHarness:
+    def run(self, prompt: str) -> HarnessResult:
+        raise HarnessFailure("model harness unavailable")
+
+
+def cloudbase_ai_settings_valid(env_id: str, api_key: str, model: str) -> bool:
+    return bool(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{2,63}", env_id)
+        and api_key
+        and re.fullmatch(r"[A-Za-z0-9._/-]+", model)
+    )
+
+
+class CloudBaseAIHarness:
+    """Server-only CloudBase AI call; the gateway validates the private envelope first."""
+
+    def __init__(
+        self,
+        *,
+        env_id: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: int = 30,
+    ):
+        if not cloudbase_ai_settings_valid(env_id, api_key, model):
+            raise ValueError("invalid CloudBase AI configuration")
+        self._url = f"https://{env_id}.api.tcloudbasegateway.com/v1/ai/cloudbase/chat/completions"
+        self._api_key = api_key
+        self._model = model
+        self._timeout_seconds = timeout_seconds
+
+    def run(self, prompt: str) -> HarnessResult:
+        body = json.dumps(
+            {
+                "model": self._model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = Request(
+            self._url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self._timeout_seconds) as response:
+                payload = response.read(65537)
+            if len(payload) > 65536:
+                raise ValueError("oversized model response")
+            content = json.loads(payload)["choices"][0]["message"]["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("empty model response")
+        except (HTTPError, URLError, OSError, ValueError, TypeError, KeyError, IndexError):
+            raise HarnessFailure("cloudbase AI request failed") from None
+        return HarnessResult(text=content.strip(), route=f"cloudbase:{self._model}")
 
 
 _PRIVATE_TOP_LEVEL = {

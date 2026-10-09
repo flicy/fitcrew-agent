@@ -338,3 +338,24 @@ def test_sync_status_envelope_contains_only_connection_time_and_category_coverag
         "knowledge": [],
         "constraints": ["no_raw_health_values"],
     }
+
+
+def test_private_context_masks_legacy_missing_health_values(session, field_cipher):
+    seed_feature(session, field_cipher)
+    feature = session.query(DailyFeature).filter_by(fitcrew_user_id=USER_ID).one()
+    payload = {
+        "algorithm_version": "features.v1",
+        "sleep": {"total_hours": 0},
+        "activity": {"steps": 0},
+        "data_quality": {"sample_counts": {"step_count": 1}},
+    }
+    encrypted = field_cipher.encrypt_json(
+        payload, aad=f"feature:{USER_ID}:2026-08-01:daily_health_v1"
+    )
+    feature.payload_nonce, feature.payload_ciphertext = encrypted.nonce, encrypted.ciphertext
+    session.commit()
+    features = BodyOSService(session, field_cipher, None)._latest_features(USER_ID)
+    assert features["sleep"]["total_hours"] is None
+    assert features["activity"]["steps"] == 0
+    assert features["algorithm_version"] == "features.v1"
+    assert feature.payload_ciphertext == encrypted.ciphertext

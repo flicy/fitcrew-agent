@@ -1,6 +1,11 @@
+import json
 import subprocess
+from io import BytesIO
+from types import SimpleNamespace
+from urllib.error import HTTPError
 
 import bodyos_api.model_gateway as model_gateway_module
+import bodyos_api.runtime as runtime_module
 import pytest
 from bodyos_api.model_gateway import (
     HarnessFailure,
@@ -183,3 +188,116 @@ def test_private_request_context_rejects_manually_injected_identifiers() -> None
 
     assert primary.prompts == []
     assert fallback.prompts == []
+
+
+def test_cloudbase_harness_posts_only_the_rendered_private_prompt(monkeypatch) -> None:
+    requests = []
+
+    class Response:
+        def __enter__(self):
+            return BytesIO(b'{"choices":[{"message":{"content":"{\\"choice\\":\\"gentle\\"}"}}]}')
+
+        def __exit__(self, *_):
+            return False
+
+    def fake_urlopen(request, *, timeout):
+        requests.append((request, timeout))
+        return Response()
+
+    monkeypatch.setattr(model_gateway_module, "urlopen", fake_urlopen)
+    harness = model_gateway_module.CloudBaseAIHarness(
+        env_id="fitcrew-1234", api_key="secret-key", model="hy3", timeout_seconds=8
+    )
+
+    result = RoutedModelGateway(harness, FakeHarness([])).respond(envelope())
+
+    assert result == HarnessResult(text='{"choice":"gentle"}', route="cloudbase:hy3")
+    request, timeout = requests[0]
+    assert (
+        request.full_url
+        == "https://fitcrew-1234.api.tcloudbasegateway.com/v1/ai/cloudbase/chat/completions"
+    )
+    assert request.get_header("Authorization") == "Bearer secret-key"
+    assert timeout == 8
+    body = json.loads(request.data)
+    assert body["model"] == "hy3"
+    assert body["stream"] is False
+    assert body["messages"][0]["role"] == "user"
+    assert "BODYOS_ENVELOPE=" in body["messages"][0]["content"]
+    assert "open_id" not in body["messages"][0]["content"]
+
+
+@pytest.mark.parametrize("env_id", ["", "https://evil.example", "foo/bar", "foo.example"])
+def test_cloudbase_harness_rejects_invalid_environment(env_id) -> None:
+    with pytest.raises(ValueError):
+        model_gateway_module.CloudBaseAIHarness(env_id=env_id, api_key="secret", model="hy3")
+
+
+def test_cloudbase_harness_fails_closed_without_leaking_http_error(monkeypatch) -> None:
+    def fail(*_args, **_kwargs):
+        raise HTTPError("https://example", 401, "secret-key rejected", {}, None)
+
+    monkeypatch.setattr(model_gateway_module, "urlopen", fail)
+    harness = model_gateway_module.CloudBaseAIHarness(
+        env_id="fitcrew-1234", api_key="secret-key", model="hy3"
+    )
+    with pytest.raises(HarnessFailure, match="cloudbase AI request failed") as failure:
+        harness.run("safe prompt")
+    assert "secret-key" not in str(failure.value)
+
+
+def test_cloudbase_runtime_has_no_undisclosed_cli_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=False,
+            cloudbase_ai_env_id="fitcrew-1234",
+            cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: "secret-key"),
+            cloudbase_ai_model="hy3",
+            model_timeout_seconds=8,
+        ),
+    )
+    runtime_module.get_model_gateway.cache_clear()
+    gateway = runtime_module.get_model_gateway()
+    assert isinstance(gateway._primary, model_gateway_module.CloudBaseAIHarness)
+    assert isinstance(gateway._fallback, model_gateway_module.UnavailableHarness)
+    runtime_module.get_model_gateway.cache_clear()
+
+
+def test_partial_cloudbase_runtime_does_not_use_cli_harnesses(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=False,
+            cloudbase_ai_env_id="fitcrew-1234",
+            cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: ""),
+            cloudbase_ai_model="hy3",
+            model_timeout_seconds=8,
+        ),
+    )
+    runtime_module.get_model_gateway.cache_clear()
+    gateway = runtime_module.get_model_gateway()
+    with pytest.raises(HarnessFailure):
+        gateway.respond(envelope())
+    runtime_module.get_model_gateway.cache_clear()
+
+
+def test_private_cloud_runtime_without_ai_config_never_uses_cli_harnesses(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=True,
+            cloudbase_ai_env_id="",
+            cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: ""),
+            cloudbase_ai_model="",
+            model_timeout_seconds=8,
+        ),
+    )
+    runtime_module.get_model_gateway.cache_clear()
+    gateway = runtime_module.get_model_gateway()
+    with pytest.raises(HarnessFailure):
+        gateway.respond(envelope())
+    runtime_module.get_model_gateway.cache_clear()

@@ -48,6 +48,7 @@ services:
 
   api:
     <<: *app
+    image: fitcrew-bodyos:${FITCREW_API_IMAGE_TAG:-${FITCREW_IMAGE_TAG:-local}}
     depends_on:
       db:
         condition: service_healthy

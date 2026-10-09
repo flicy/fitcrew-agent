@@ -54,9 +54,13 @@ def hash_subject(subject: str, pepper: str) -> str:
 
 
 def build_pairing_url(payload: dict) -> str:
-    encoded = base64.urlsafe_b64encode(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
+    encoded = (
+        base64.urlsafe_b64encode(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
     return f"fitcrew-health://configure?{urlencode({'payload': encoded})}"
 
 
@@ -76,9 +80,13 @@ def _pairing_code(
     *, idempotency_key: str, fitcrew_user_id: str, device_public_id: str, categories_json: str
 ) -> str:
     message = f"{fitcrew_user_id}:{device_public_id}:{categories_json}".encode()
-    return base64.urlsafe_b64encode(
-        hmac.new(idempotency_key.encode("utf-8"), message, hashlib.sha256).digest()
-    ).decode("ascii").rstrip("=")
+    return (
+        base64.urlsafe_b64encode(
+            hmac.new(idempotency_key.encode("utf-8"), message, hashlib.sha256).digest()
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
 
 
 def _require_https(base_url: str) -> None:
@@ -220,7 +228,10 @@ def issue_pairing_exchange(
     categories: set[HealthKind],
     public_base_url: str,
     idempotency_key: str,
+    preserve_consents: bool = False,
 ) -> PairingInvitation:
+    if preserve_consents and categories:
+        raise EnrollmentConflict("device-only pairing cannot grant health consent")
     _require_https(public_base_url)
     categories_json = _categories_json(categories)
     key_hash = _hash_secret(idempotency_key)
@@ -235,6 +246,7 @@ def issue_pairing_exchange(
             or existing.device_public_id != device_public_id
             or existing.categories_json != categories_json
             or existing.base_url != public_base_url
+            or existing.preserve_consents != preserve_consents
         ):
             raise EnrollmentConflict("idempotency key was reused with different pairing details")
         if existing.consumed_at is not None or existing.invalidated_at is not None:
@@ -273,6 +285,7 @@ def issue_pairing_exchange(
         fitcrew_user_id=fitcrew_user_id,
         device_public_id=device_public_id,
         categories_json=categories_json,
+        preserve_consents=preserve_consents,
         base_url=public_base_url,
         idempotency_key_hash=key_hash,
         pairing_code_hash=_hash_secret(pairing_code),
@@ -295,6 +308,7 @@ def issue_pairing_exchange(
             or conflicting.device_public_id != device_public_id
             or conflicting.categories_json != categories_json
             or conflicting.base_url != public_base_url
+            or conflicting.preserve_consents != preserve_consents
         ):
             raise EnrollmentConflict(
                 "idempotency key was reused with different pairing details"
@@ -322,10 +336,26 @@ def issue_pairing_exchange(
 def redeem_pairing_exchange(session: Session, *, pairing_code: str) -> PairingExchangeResult:
     now = datetime.now(UTC)
     try:
+        candidate = session.scalar(
+            select(PairingExchangeSession).where(
+                PairingExchangeSession.pairing_code_hash == _hash_secret(pairing_code)
+            )
+        )
+        if candidate is None:
+            raise EnrollmentNotFound("pairing exchange is unavailable")
+        user = session.scalar(
+            select(User)
+            .where(User.fitcrew_user_id == candidate.fitcrew_user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if user is None or user.status not in {"active", "invited"}:
+            raise EnrollmentNotFound("invited user not found")
         exchange = session.scalar(
             select(PairingExchangeSession)
             .where(PairingExchangeSession.pairing_code_hash == _hash_secret(pairing_code))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if exchange is None:
             raise EnrollmentNotFound("pairing exchange is unavailable")
@@ -363,6 +393,16 @@ def redeem_pairing_exchange(session: Session, *, pairing_code: str) -> PairingEx
         else:
             binding.token_hash = hash_device_token(device_token)
             binding.revoked_at = None
+
+        if exchange.preserve_consents:
+            binding.expires_at = now + timedelta(days=30)
+            session.commit()
+            return PairingExchangeResult(
+                base_url=exchange.base_url,
+                device_binding_id=binding.id,
+                consent_ids={},
+                device_token=device_token,
+            )
 
         current_consents = session.scalars(
             select(Consent).where(
