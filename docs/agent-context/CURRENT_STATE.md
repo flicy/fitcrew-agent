@@ -4,7 +4,7 @@
 
 ## 中文
 
-**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；已推送提交 `0d9aec2` 的 CI `37878946050` 三项全部成功，后续提交须分别核对其 CI。小程序私有云托管传输和可选的云开发 AI 服务端路由已在本地测试，真实云调用未验证。这些均不是云环境、真机或生产验收。
+**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；已推送提交 `64594d1` 的 CI `37881346541` 三项全部成功，后续提交须分别核对其 CI。小程序私有云托管传输和可选的云开发 AI 服务端路由已在本地测试，真实云调用未验证。这些均不是云环境、真机或生产验收。
 
 ### 已有实现与验证边界
 
@@ -18,6 +18,7 @@
 - iOS 有发布地址构建变量和产物检查，见[发布配置](../release/2026-09-10-ios-release-configuration.md)。正式签名与真实 HealthKit 验收未完成。
 - 官方微信工具的基础库及 Profile 模块已修复，见[原生排错](../release/2026-09-10-native-wechat-runtime.md)。9 月 16 日测试预览生成成功（126,337 字节），只证明测试包生成，二维码可能过期。用户已于 9 月 24 日确认正式 AppID 为 `wxae59705a7cce30f9`，并已写入发布工程；该声明尚未通过后台凭据或上传回执独立验证。现支持云托管私有链路配置，见[传输准备](../release/2026-10-09-cloudbase-transport.md)，但环境 ID、服务名、API `baseURL` 仍为空。浏览器预览使用合成数据，没有真实持久化服务。
 - CloudBase PG 有离线私有 schema 清单生成器与受控运行时路由；专用模式只读核对表、列名、索引、唯一约束、外键目标和版本，不自动迁移。它尚未连接真实云数据库，也未验证列类型、权限、TLS、备份恢复或业务闭环。
+- 云托管 API 专用轻量 Dockerfile 与只收录已提交 API 文件的打包脚本正在本分支准备；其启动检查要求显式生产、私有微信、CloudBase PG 模式、持久 PostgreSQL URL 和服务端密钥。离线依赖安装和导入成功，但尚未执行容器构建或真实云部署。
 
 ### 服务器与阻塞
 
@@ -35,7 +36,7 @@
 
 ## English
 
-**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. All three CI jobs passed for pushed commit `0d9aec2` in run `37878946050`; check later commits against their own runs. The private WeChat Cloud Hosting transport and optional CloudBase AI server route have local test coverage but have not been called through a real cloud account. None of this is cloud, device, or production acceptance.
+**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. All three CI jobs passed for pushed commit `64594d1` in run `37881346541`; check later commits against their own runs. The private WeChat Cloud Hosting transport and optional CloudBase AI server route have local test coverage but have not been called through a real cloud account. None of this is cloud, device, or production acceptance.
 
 ### Implementation and evidence limits
 
@@ -49,6 +50,7 @@ Both clients have five native pages, a 90-day journey, manual records, experimen
 - iOS has release URL build variables and artifact checks; formal signing and real HealthKit acceptance remain incomplete. See the linked release configuration document.
 - Official WeChat base-library and Profile dependency problems were repaired. The September 16 sandbox preview succeeded (126,337 bytes), proving packaging only; its QR may expire. The owner confirmed `wxae59705a7cce30f9` as the formal AppID on September 24 and it is now in the release project; that declaration is not independently verified by dashboard credentials or an upload receipt. The private Cloud Hosting client transport is locally prepared, but environment ID, service name and API `baseURL` remain empty. Browser previews use synthetic fixtures without real persistence.
 - An offline CloudBase PG private-schema generator lists tables, indexes and the revision stamp; controlled runtime routing and read-only startup checks now cover table and column names, indexes, unique constraints, foreign-key targets, and revision. No real cloud database, column types, role/TLS configuration, backup recovery, or user flow has been verified.
+- An API-only Cloud Hosting Dockerfile and a staging script that copies only committed API files are being prepared on this branch. Its startup guard requires explicit production/private-WeChat/CloudBase-PG settings, a persistent PostgreSQL URL, and server-side secrets. Offline dependency installation and imports passed; no container build or actual cloud deployment has run.
 
 ### Server and blockers
 

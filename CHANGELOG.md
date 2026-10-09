@@ -8,6 +8,7 @@
 - 后端增加可选的腾讯云开发 AI 服务端路由。只有环境、模型和密钥完整时启用；配置不全时不向用户展示可用 AI，也不回退到未披露的其他服务商。尚未在真实云账号调用。
 - 增加 CloudBase PG 专用 schema 的离线建表清单生成器，包含当前模型、索引和 Alembic 版本戳；只供审核，不连接或修改数据库。
 - 增加 CloudBase PG 独立 schema 的运行时路由与只读启动核对；专用模式禁止容器自动迁移，缺表、列、索引、唯一约束、外键或版本不符时拒绝启动，尚未连接真实云数据库。
+- 准备独立的小程序云托管 API 镜像入口，排除 Feishu/Hermes/Codex 运行组件；生产启动缺少持久 PG、微信私有模式或服务器密钥时拒绝。新增仅从已提交文件生成云托管源码包的脚本，防止本地忽略文件随源码上传；镜像尚未实际构建或部署。
 
 ### 未发布：微信正式 AppID 配置（2026-09-24）
 
@@ -57,6 +58,7 @@
 - An optional server-side CloudBase AI route now requires a complete environment, model, and secret key. Partial configuration does not advertise AI or fall back to an undisclosed provider. No real cloud-account invocation has been verified.
 - Add an offline CloudBase PG private-schema manifest generator covering current models, indexes, and the Alembic revision. It is review-only and never connects to or mutates a database.
 - Add private-schema ORM routing and read-only startup checks for CloudBase PG. Managed mode skips automatic container migrations and refuses missing tables, columns, indexes, unique constraints, foreign keys, or a mismatched revision; no real cloud database has been connected.
+- Prepare an API-only Cloud Hosting image entrypoint without the Feishu/Hermes/Codex runtime. It refuses startup without persistent PG, private WeChat mode, or server-side secrets. A new staging script packages only committed files to avoid uploading ignored local files; the image has not been built or deployed.
 
 ### Unreleased: formal WeChat AppID configuration (2026-09-24)
 
