@@ -2,6 +2,10 @@
 
 ## 中文
 
+### 未发布：微信云托管私有传输准备（2026-10-09）
+
+- 小程序可配置 `wx.cloud.callContainer`，沿用现有 `/v3` API、设备令牌和隐私边界；无环境 ID、服务名或 HTTPS 配对地址时保持拒绝请求。新增本地传输与配置验证测试。尚未开通云环境、部署数据库或后端、真机验收、上传或提审；见[传输准备](docs/release/2026-10-09-cloudbase-transport.md)。
+
 ### 未发布：微信正式 AppID 配置（2026-09-24）
 
 - 按运营者确认，将 `wxae59705a7cce30f9` 写入小程序发布工程，并移除本地校验器中针对该 AppID 的历史测试号硬编码拒绝；校验仍要求合法 HTTPS 业务域名与启用域名校验。运营者声明尚未由后台凭据或正式上传回执独立证实，未因此部署或提审。
@@ -43,6 +47,10 @@
 首个多群健康搭子 Agent 包，提供群运营、行为打卡、私聊与基础隔离。V2 收紧了 V1 的自由群聊和文件记忆边界；旧行为不得绕过 V2 策略层。
 
 ## English
+
+### Unreleased: private WeChat Cloud Hosting transport preparation (2026-10-09)
+
+- The Mini Program can use `wx.cloud.callContainer` against the existing `/v3` API, device tokens, and privacy boundary. Missing environment ID, service name, or HTTPS pairing URL fails closed. Local transport/configuration tests were added. No cloud environment, database, backend deployment, device acceptance, upload, or formal submission exists yet; see the [transport note](docs/release/2026-10-09-cloudbase-transport.md).
 
 ### Unreleased: formal WeChat AppID configuration (2026-09-24)
 

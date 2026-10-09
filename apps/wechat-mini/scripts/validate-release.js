@@ -1,6 +1,6 @@
 const {isIP}=require('node:net');
 const fs=require('node:fs'),path=require('node:path');
-const {validBase}=require('../lib/client');
+const {validBase,validCloud}=require('../lib/client');
 
 function effectiveProject(project,privateProject={}){
  return {...project,...privateProject,setting:{...project.setting,...privateProject.setting}};
@@ -19,6 +19,7 @@ function validateRelease(project,config){
   }catch(_){}
  }
  if(!domain)failures.push('Missing production HTTPS domain; IPs and reserved test hosts are not production configuration');
+ if(config.cloud&&!validCloud(config.cloud))failures.push('Missing CloudBase environment ID or service name');
  if(project.setting?.urlCheck!==true)failures.push('Legal-domain validation must stay enabled');
  return failures;
 }

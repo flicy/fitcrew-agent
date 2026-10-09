@@ -1,6 +1,6 @@
 const {base,confirm}=require('../../lib/page');
 const lifecycle=require('../../lib/session');
-const {validBase}=require('../../lib/client');
+const {validTransport}=require('../../lib/client');
 const config=require('../../config');
 const devicePairing=require('../../lib/device-pairing');
 Page(base({
@@ -16,7 +16,7 @@ Page(base({
   if(!await confirm('FitCrew 隐私说明 · 2026-09-07','登录将使用微信临时凭证创建私有账户。你主动提交的目标、身体感受与实验记录用于个人生活方式观察，支持导出、删除及注销；不向群聊公开。AI 使用需另行同意。请先阅读平台隐私保护指引。'))return;
   if(!lifecycle.current(wx,epoch))return;this.setData({busy:true,error:''});
   try{
-   if(!validBase(config.baseURL))throw new Error('服务地址尚未配置，暂时无法登录。');
+   if(!validTransport(config))throw new Error('服务地址尚未配置，暂时无法登录。');
    if(!wx.requirePrivacyAuthorize)throw new Error('请升级微信后使用隐私授权。');
    await new Promise((resolve,reject)=>wx.requirePrivacyAuthorize({success:resolve,fail:()=>reject(new Error('未完成微信隐私授权。'))}));
    if(!lifecycle.current(wx,epoch))return;
