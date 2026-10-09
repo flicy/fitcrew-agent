@@ -31,7 +31,7 @@
 
 优先微信，再完成 iOS；首发免费，提醒可后置，保留 AI 方向。用户要求国庆假期前提审；原定 9 月 23 日首轮和 9 月 30 日前处理退回均已错过，不能表述为完成。当前须尽快确定可持续生产后端、完成备份恢复与数据库部署、正式配置和真机验收、上传提审。最后必须有平台版本号、提交时间和审核状态证据，测试号、预览、CI 或健康检查不能替代。
 
-用户提供的比赛要求包含 2026 年 7 月 17 日至 10 月 17 日正式上线，仍须核验官方规则，不能把提审当作上线。发布与招募已有[飞书审阅稿](https://my.feishu.cn/docx/VPUSdNJocoFpqixiS8Jc0ReYn3b)，未发帖、建群或报名。先提供真实可用的体验入口，再招募。继续每两小时真实进度同步，不把本地工作报告成生产进展。
+10 月 9 日从[微信赛事平台公开赛事详情](https://contest.weixin.qq.com/eventDetails?id=4598379302114656257)的官方接口核实：2026 微信小程序开发大赛作品提报截至 **10 月 17 日 23:59:59（北京时间）**；作品须在 7 月 17 日至 10 月 17 日提报期内通过微信公众平台正式上线，并能在微信内正常运行。参赛材料包括实名身份证件、作品名称、AppID、正式小程序二维码、PDF 说明文档及已签署授权书。提审不等于正式上线，当前时间已紧迫。发布与招募已有[飞书审阅稿](https://my.feishu.cn/docx/VPUSdNJocoFpqixiS8Jc0ReYn3b)，未发帖、建群或报名。先提供真实可用的体验入口，再招募。继续每两小时真实进度同步，不把本地工作报告成生产进展。
 
 ## English
 
@@ -62,4 +62,4 @@ Remaining: CloudBase environment/service, persistent database and deployment; iO
 
 Prioritize WeChat, then finish iOS. Launch is free; reminders may follow later, while retaining AI. The original September 23 first-submission and September 30 correction targets were missed; do not present them as completed. The immediate sequence is a sustainable production backend, backup/restore and database deployment, final configuration and device acceptance, then upload and submission. Completion requires platform version, submission time and review status; sandbox previews, CI and health checks are insufficient.
 
-The user-provided contest rules require going live between July 17 and October 17, 2026; official verification remains necessary, and submission is not publication. The linked Feishu launch/early-user review draft exists, but no posts, group or contest entry have been published. Establish a working trial entry before recruitment. Continue truthful two-hour updates, separating local work from production progress.
+The [official WeChat contest details](https://contest.weixin.qq.com/eventDetails?id=4598379302114656257) were checked through the platform's public event API on October 9: entry submission ends **October 17, 2026 at 23:59:59 China time**. The Mini Program must be formally published through the WeChat platform within the July 17–October 17 submission period and work in WeChat. Materials include participant identity documents, product name, AppID, the live Mini Program QR code, a PDF product description, and a signed authorization letter. Review submission is not publication, and the deadline is now close. The linked Feishu launch/early-user review draft exists, but no posts, group or contest entry have been published. Establish a working trial entry before recruitment. Continue truthful two-hour updates, separating local work from production progress.
