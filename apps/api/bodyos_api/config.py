@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     public_auth_enabled: bool = False
+    private_wechat_cloud_enabled: bool = False
     product_ai_enabled: bool = False
     product_ai_provider: str = ""
     product_ai_notice_version: str = ""

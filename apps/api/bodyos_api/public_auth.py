@@ -49,8 +49,14 @@ class ConsentInput(LoginInput):
     categories: list[HealthKind] = Field(max_length=20)
 
 
-def enabled(settings):
-    if not settings.public_auth_enabled or not settings.public_base_url.startswith("https://"):
+def enabled(settings, *, allow_private_wechat=False):
+    public_url = settings.public_base_url.startswith("https://")
+    private_wechat = (
+        allow_private_wechat
+        and settings.private_wechat_cloud_enabled
+        and settings.public_base_url == ""
+    )
+    if not settings.public_auth_enabled or not (public_url or private_wechat):
         raise HTTPException(503, "public sign-in is not configured")
     if not settings.identity_pepper.get_secret_value():
         raise HTTPException(503, "public sign-in is not configured")
@@ -203,7 +209,7 @@ def wechat_login(
     cipher: CipherDep,
     response: Response,
 ):
-    enabled(settings)
+    enabled(settings, allow_private_wechat=True)
     response.headers["Cache-Control"] = "no-store"
     subject = verify_wechat(body.code, settings)
     return provision(session, cipher, settings, "wechat:" + settings.wechat_app_id, subject)

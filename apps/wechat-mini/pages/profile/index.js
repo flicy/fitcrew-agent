@@ -1,14 +1,14 @@
 const {base,confirm}=require('../../lib/page');
 const lifecycle=require('../../lib/session');
-const {validTransport}=require('../../lib/client');
+const {validBase,validTransport}=require('../../lib/client');
 const config=require('../../config');
 const devicePairing=require('../../lib/device-pairing');
 Page(base({
  ...devicePairing,
  onHide(){this.clearPairingView();},
  async forgetMemory(e){this.syncBoundary();const epoch=lifecycle.epoch(wx);if(this.data.busy||!await confirm('撤回这条记忆？','仅移除确认记忆；实验里的主观反馈仍保留。'))return;if(!lifecycle.current(wx,epoch))return;await this.write('forgetMemory','/v3/memories/'+e.currentTarget.dataset.id,{},'DELETE');},
- data:{pairedDevices:[],pairingURL:'',pairingExpires:'',pairingBusy:false,deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
- async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn){await this.capabilities();await this.loadPairedDevices();}},
+ data:{pairedDevices:[],pairingURL:'',pairingExpires:'',pairingBusy:false,pairingAvailable:validBase(config.baseURL),deleteScopes:['全部私有数据','仅全部手动身体记录'],deleteScopeIndex:0,exportScopes:['全部数据','手动记录与实验','Apple 健康数据'],exportScopeIndex:0,signedIn:false,caps:null,receipt:'',exportPath:''},
+ async onShow(){this.setData({signedIn:!!wx.getStorageSync('fitcrew.session')});await this.refresh();if(this.data.signedIn){await this.capabilities();if(this.data.pairingAvailable)await this.loadPairedDevices();}},
  async capabilities(){const epoch=lifecycle.epoch(wx);try{const caps=await getApp().api.request('/v3/capabilities');if(lifecycle.current(wx,epoch))this.setData({caps});}catch(e){if(lifecycle.current(wx,epoch))this.setData({caps:null,error:e.message});}},
  openPrivacy(){if(wx.openPrivacyContract)wx.openPrivacyContract({fail:()=>this.setData({error:'平台隐私保护指引尚未配置，请由运营者在小程序后台补全后再登录。'})});},
  async login(){
@@ -26,7 +26,7 @@ Page(base({
    if(!lifecycle.current(wx,epoch))return;
    if(!session.device_token||!session.device_binding_id)throw new Error('登录响应缺少设备凭据。');
    // Never forward the bearer to a server-selected different origin.
-   if(session.base_url&&session.base_url.replace(/\/$/,'')!==config.baseURL.replace(/\/$/,''))throw new Error('登录返回的服务地址与已配置地址不一致，请联系运营者。');
+   if(session.base_url&&(!validBase(config.baseURL)||session.base_url.replace(/\/$/,'')!==config.baseURL.replace(/\/$/,'')))throw new Error('登录返回的服务地址与已配置地址不一致，请联系运营者。');
    lifecycle.install(wx,{device_token:session.device_token,device_binding_id:session.device_binding_id,consent_ids:session.consent_ids});epoch=lifecycle.epoch(wx);
    this.setData({signedIn:true});await this.refresh();await this.capabilities();
   }catch(e){if(lifecycle.current(wx,epoch))this.setData({error:e.message});}finally{if(lifecycle.current(wx,epoch))this.setData({busy:false});}

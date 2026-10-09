@@ -18,7 +18,7 @@ module.exports={
  clearPairingView(){this._pairingRevision=(this._pairingRevision||0)+1;this.setData({pairingURL:'',pairingExpires:'',pairingBusy:false});},
  async createPairing(){
   this.syncBoundary();const epoch=lifecycle.epoch(wx);
-  if(this.data.busy||this.data.pairingBusy||!this.data.signedIn)return;
+  if(this.data.busy||this.data.pairingBusy||!this.data.signedIn||!this.data.pairingAvailable)return;
   if(!await confirm('连接自己的 iPhone','连接将让 FitCrew iOS 访问当前账号的私人记录。链接 15 分钟有效、只能使用一次，请勿发送给他人。健康上传仍需在 iOS 单独选择并授权。已有 Apple 登录账号的数据不会自动合并。'))return;
   if(!lifecycle.current(wx,epoch)||this.data.busy||this.data.pairingBusy)return;
   const revision=(this._pairingRevision||0)+1;this._pairingRevision=revision;

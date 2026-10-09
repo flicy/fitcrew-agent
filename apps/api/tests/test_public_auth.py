@@ -36,6 +36,59 @@ def test_public_login_disabled_without_deployment_configuration(session, field_c
     assert response.status_code == 503
 
 
+def test_explicit_private_cloud_wechat_login_needs_no_public_url_but_cannot_pair(
+    session, field_cipher, monkeypatch
+):
+    import bodyos_api.public_auth as auth
+
+    monkeypatch.setattr(auth, "verify_wechat", lambda code, settings: "private-cloud-openid")
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_field_cipher] = lambda: field_cipher
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        public_base_url="",
+        public_auth_enabled=True,
+        private_wechat_cloud_enabled=True,
+        identity_pepper="synthetic-pepper",
+        wechat_app_id="synthetic-app",
+        wechat_app_secret="synthetic",
+    )
+    client = TestClient(app)
+    login = client.post(
+        "/v3/auth/wechat", json={"code": "synthetic-code", "privacy_version": "2026-09-07"}
+    )
+    assert login.status_code == 200
+    assert login.json()["base_url"] == ""
+    client.headers["Authorization"] = f"Bearer {login.json()['device_token']}"
+    assert client.get("/v3/state").status_code == 200
+    assert client.post("/v3/auth/apple/challenge", json={}).status_code == 503
+    assert (
+        client.post(
+            "/v3/device-pairing",
+            json={"request_id": str(uuid4()), "privacy_version": "2026-09-07"},
+        ).status_code
+        == 503
+    )
+
+
+def test_empty_public_url_without_explicit_private_flag_refuses_wechat(
+    session, field_cipher, monkeypatch
+):
+    import bodyos_api.public_auth as auth
+
+    monkeypatch.setattr(auth, "verify_wechat", lambda code, settings: "unused-openid")
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_field_cipher] = lambda: field_cipher
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        public_base_url="", public_auth_enabled=True, identity_pepper="synthetic-pepper"
+    )
+    response = TestClient(app).post(
+        "/v3/auth/wechat", json={"code": "synthetic-code", "privacy_version": "2026-09-07"}
+    )
+    assert response.status_code == 503
+
+
 def test_wechat_verified_identity_reuses_user_not_device_secret(session, field_cipher, monkeypatch):
     import bodyos_api.public_auth as auth
 

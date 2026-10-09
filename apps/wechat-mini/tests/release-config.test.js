@@ -20,9 +20,15 @@ test('release validation refuses IP and local endpoints even with HTTPS and an A
  assert.deepEqual(validateRelease(project,{baseURL:'https://api.fitcrew.cn'}),[]);
  assert.match(validateRelease({...project,setting:{urlCheck:false}},{baseURL:'https://api.fitcrew.cn'}).join('\n'),/validation must stay enabled/);
 });
-test('cloud release needs an environment and service as well as a public pairing URL',()=>{
+test('cloud release needs an environment and service; a supplied pairing URL must be production HTTPS',()=>{
  const baseURL='https://fitcrew-123.tcloudbaseapp.com';
  assert.match(validateRelease(project,{baseURL,cloud:{env:'',service:'fitcrew-api'}}).join('\n'),/CloudBase environment/);
- assert.match(validateRelease(project,{baseURL:'',cloud:{env:'fitcrew-prod-123',service:'fitcrew-api'}}).join('\n'),/production HTTPS domain/);
+ assert.deepEqual(validateRelease(project,{baseURL:'',cloud:{env:'fitcrew-prod-123',service:'fitcrew-api'}}),[]);
  assert.deepEqual(validateRelease(project,{baseURL,cloud:{env:'fitcrew-prod-123',service:'fitcrew-api'}}),[]);
+});
+test('private cloud release can defer iOS pairing without a public domain',()=>{
+ const cloud={env:'fitcrew-prod-123',service:'fitcrew-api'};
+ assert.deepEqual(validateRelease(project,{baseURL:'',cloud}),[]);
+ assert.match(validateRelease(project,{baseURL:'',cloud:{...cloud,service:''}}).join('\n'),/CloudBase environment/);
+ assert.match(validateRelease(project,{baseURL:'https://api.fitcrew.test',cloud}).join('\n'),/production HTTPS domain/);
 });

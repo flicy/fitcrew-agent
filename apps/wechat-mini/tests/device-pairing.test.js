@@ -4,11 +4,16 @@ function setup(){
  const storage={},copies=[];
  global.wx={getStorageSync:k=>storage[k],setStorageSync:(k,v)=>storage[k]=v,removeStorageSync:k=>delete storage[k],getStorageInfoSync:()=>({keys:Object.keys(storage)}),showModal:o=>o.success({confirm:true}),setClipboardData:o=>{copies.push(o.data);o.success();}};
  lifecycle.install(wx,{device_token:'synthetic'});
- const p=base({...actions,data:{pairingURL:'',pairingExpires:'',pairingBusy:false}});
+ const p=base({...actions,data:{pairingURL:'',pairingExpires:'',pairingBusy:false,pairingAvailable:true}});
  p.setData=function(v){Object.assign(this.data,v);};p.syncBoundary();
  return {p,storage,copies};
 }
 const result=()=>({pairing_url:'fitcrew-health://configure?payload=synthetic-secret',expires_at:new Date(Date.now()+900000).toISOString()});
+test('private cloud profile refuses pairing without public HTTPS',async()=>{
+ const {p}=setup();let calls=0;p.setData({pairingAvailable:false});
+ global.getApp=()=>({api:{request:async()=>{calls++;return result();}}});
+ await p.createPairing();assert.equal(calls,0);assert.equal(p.data.pairingURL,'');
+});
 test('connection needs confirmation; never copies or stores the link automatically',async()=>{
  const {p,storage,copies}=setup();let calls=0;
  global.getApp=()=>({api:{request:async()=>{calls++;return result();}}});

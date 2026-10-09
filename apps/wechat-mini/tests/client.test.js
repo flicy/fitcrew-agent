@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {makeClient,mutation,finish,clearPrivate,validBase,validCloud}=require('../lib/client');
+const {makeClient,mutation,finish,clearPrivate,validBase,validCloud,validTransport}=require('../lib/client');
 function platform(){const store={};return {store,getStorageSync:k=>store[k],setStorageSync:(k,v)=>store[k]=v,removeStorageSync:k=>delete store[k],getStorageInfoSync:()=>({keys:Object.keys(store)})};}
 test('fails closed for missing production config and missing identity',async()=>{const wx=platform();await assert.rejects(makeClient(wx,'').request('/v3/state'));await assert.rejects(makeClient(wx,'https://api.fitcrew.test').request('/v3/state'));assert.equal(validBase('http://localhost'),false);});
 test('login has no authorization; private mutations serialize bearer and exact body',async()=>{const wx=platform();let sent;wx.request=o=>{sent=o;o.success({statusCode:200,data:{ok:true}});};const api=makeClient(wx,'https://api.fitcrew.test');await api.request('/v3/auth/wechat','POST',{code:'synthetic-code',privacy_version:'2026-09-07'},true);assert.equal(sent.header.Authorization,undefined);wx.setStorageSync('fitcrew.session',{device_token:'synthetic-token',created_at:Date.now()});const body=mutation(wx,'log',{energy:3});await api.request('/v3/logs','POST',body);assert.equal(sent.header.Authorization,'Bearer synthetic-token');assert.deepEqual(sent.data,body);assert.equal(sent.url,'https://api.fitcrew.test/v3/logs');});
@@ -20,6 +20,15 @@ test('cloud transport keeps the same authenticated API contract without a reques
  await makeClient(wx,config).request('/v3/state');
  assert.equal(sent.header.Authorization,'Bearer synthetic-token');
  assert.equal(sent.path,'/v3/state');
+});
+test('private CloudBase transport works without public pairing URL',async()=>{
+ const wx=platform();let sent;
+ wx.cloud={callContainer:o=>{sent=o;return Promise.resolve({statusCode:200,data:{ok:true}});}};
+ const config={baseURL:'',cloud:{env:'fitcrew-prod-123',service:'fitcrew-api'}};
+ assert.equal(validTransport(config),true);
+ assert.deepEqual(await makeClient(wx,config).request('/v3/auth/wechat','POST',{code:'synthetic'},true),{ok:true});
+ assert.equal(sent.path,'/v3/auth/wechat');
+ assert.equal(validTransport({...config,baseURL:'http://unsafe.example'}),false);
 });
 test('cloud transport fails closed for incomplete settings and treats 401 as logout',async()=>{
  const wx=platform();wx.cloud={callContainer:()=>Promise.resolve({statusCode:401,data:{detail:'expired'}})};

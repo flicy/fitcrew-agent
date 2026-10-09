@@ -12,7 +12,9 @@ function validCloud(value) {
 }
 function validTransport(value) {
  const config=typeof value==='string'?{baseURL:value}:value||{};
- return validBase(config.baseURL) && (!config.cloud || validCloud(config.cloud));
+ if(config.cloud)return validCloud(config.cloud) &&
+  (config.baseURL==='' || config.baseURL===undefined || validBase(config.baseURL));
+ return validBase(config.baseURL);
 }
 function makeClient(wx,value) {
  const config=typeof value==='string'?{baseURL:value}:value||{};
