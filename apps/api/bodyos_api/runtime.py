@@ -24,7 +24,12 @@ def get_field_cipher() -> FieldCipher:
 def get_model_gateway() -> RoutedModelGateway:
     settings = get_settings()
     cloudbase_key = settings.cloudbase_ai_api_key.get_secret_value()
-    if settings.cloudbase_ai_env_id or cloudbase_key or settings.cloudbase_ai_model:
+    if (
+        settings.private_wechat_cloud_enabled
+        or settings.cloudbase_ai_env_id
+        or cloudbase_key
+        or settings.cloudbase_ai_model
+    ):
         if not cloudbase_ai_settings_valid(
             settings.cloudbase_ai_env_id, cloudbase_key, settings.cloudbase_ai_model
         ):

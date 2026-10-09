@@ -45,6 +45,38 @@ def test_partial_cloudbase_ai_config_does_not_offer_consent(session, field_ciphe
     assert client.get("/v3/capabilities").json()["ai_available"] is False
 
 
+def test_private_cloud_requires_a_configured_ai_route_before_offering_consent(
+    session, field_cipher
+):
+    client, _ = client_for(session, field_cipher)
+    client.app.dependency_overrides[get_settings] = lambda: Settings(
+        private_wechat_cloud_enabled=True,
+        product_ai_enabled=True,
+        product_ai_provider="腾讯云开发 AI",
+        product_ai_notice_version="cloudbase-v1",
+    )
+    unavailable = client.get("/v3/capabilities").json()
+    assert unavailable["ai_available"] is False
+    assert (
+        client.post(
+            "/v3/ai-consent",
+            json={"granted": True, "provider_notice_version": unavailable["ai_notice_version"]},
+        ).status_code
+        == 409
+    )
+
+    client.app.dependency_overrides[get_settings] = lambda: Settings(
+        private_wechat_cloud_enabled=True,
+        product_ai_enabled=True,
+        product_ai_provider="腾讯云开发 AI",
+        product_ai_notice_version="cloudbase-v1",
+        cloudbase_ai_env_id="fitcrew-1234",
+        cloudbase_ai_api_key="synthetic-key",
+        cloudbase_ai_model="hy3",
+    )
+    assert client.get("/v3/capabilities").json()["ai_available"] is True
+
+
 def test_ai_receives_only_minimum_aggregates_and_selects_approved_action(session, field_cipher):
     client, uid = client_for(session, field_cipher)
     captured = []

@@ -34,7 +34,11 @@ def capabilities(svc, settings):
     version = disclosure_version(settings)
     cloudbase_key = settings.cloudbase_ai_api_key.get_secret_value()
     cloudbase_fields = (settings.cloudbase_ai_env_id, cloudbase_key, settings.cloudbase_ai_model)
-    cloudbase_ready = not any(cloudbase_fields) or cloudbase_ai_settings_valid(*cloudbase_fields)
+    cloudbase_ready = (
+        cloudbase_ai_settings_valid(*cloudbase_fields)
+        if settings.private_wechat_cloud_enabled
+        else (not any(cloudbase_fields) or cloudbase_ai_settings_valid(*cloudbase_fields))
+    )
     available = bool(
         settings.product_ai_enabled
         and settings.product_ai_provider

@@ -251,6 +251,7 @@ def test_cloudbase_runtime_has_no_undisclosed_cli_fallback(monkeypatch) -> None:
         runtime_module,
         "get_settings",
         lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=False,
             cloudbase_ai_env_id="fitcrew-1234",
             cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: "secret-key"),
             cloudbase_ai_model="hy3",
@@ -269,9 +270,29 @@ def test_partial_cloudbase_runtime_does_not_use_cli_harnesses(monkeypatch) -> No
         runtime_module,
         "get_settings",
         lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=False,
             cloudbase_ai_env_id="fitcrew-1234",
             cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: ""),
             cloudbase_ai_model="hy3",
+            model_timeout_seconds=8,
+        ),
+    )
+    runtime_module.get_model_gateway.cache_clear()
+    gateway = runtime_module.get_model_gateway()
+    with pytest.raises(HarnessFailure):
+        gateway.respond(envelope())
+    runtime_module.get_model_gateway.cache_clear()
+
+
+def test_private_cloud_runtime_without_ai_config_never_uses_cli_harnesses(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            private_wechat_cloud_enabled=True,
+            cloudbase_ai_env_id="",
+            cloudbase_ai_api_key=SimpleNamespace(get_secret_value=lambda: ""),
+            cloudbase_ai_model="",
             model_timeout_seconds=8,
         ),
     )
