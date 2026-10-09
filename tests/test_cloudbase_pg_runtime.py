@@ -5,10 +5,41 @@ from unittest.mock import MagicMock
 
 import pytest
 from bodyos_api.models import Base, User
-from sqlalchemy import select
+from sqlalchemy import UniqueConstraint, select
 from sqlalchemy.dialects import postgresql
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _schema_inspector() -> MagicMock:
+    inspector = MagicMock()
+    inspector.get_table_names.return_value = [*Base.metadata.tables, "alembic_version"]
+    inspector.get_columns.side_effect = lambda name, **_kwargs: [
+        {"name": column.name} for column in Base.metadata.tables[name].columns
+    ]
+    inspector.get_indexes.side_effect = lambda name, **_kwargs: [
+        {
+            "name": index.name,
+            "column_names": list(index.columns.keys()),
+            "unique": index.unique,
+        }
+        for index in Base.metadata.tables[name].indexes
+    ]
+    inspector.get_unique_constraints.side_effect = lambda name, **_kwargs: [
+        {"column_names": list(constraint.columns.keys())}
+        for constraint in Base.metadata.tables[name].constraints
+        if isinstance(constraint, UniqueConstraint)
+    ]
+    inspector.get_foreign_keys.side_effect = lambda name, **_kwargs: [
+        {
+            "constrained_columns": [element.parent.name for element in constraint.elements],
+            "referred_schema": "fitcrew",
+            "referred_table": constraint.elements[0].column.table.name,
+            "referred_columns": [element.column.name for element in constraint.elements],
+        }
+        for constraint in Base.metadata.tables[name].foreign_key_constraints
+    ]
+    return inspector
 
 
 def test_database_engine_maps_models_to_private_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,8 +85,7 @@ def test_cloudbase_preflight_is_read_only_and_requires_current_schema(
 ) -> None:
     from bodyos_api import cloudbase_pg_runtime as runtime
 
-    inspector = MagicMock()
-    inspector.get_table_names.return_value = [*Base.metadata.tables, "alembic_version"]
+    inspector = _schema_inspector()
     monkeypatch.setattr(runtime, "inspect", lambda _engine: inspector)
     connection = MagicMock()
     connection.execute.return_value.scalars.return_value.all.return_value = [
@@ -68,6 +98,8 @@ def test_cloudbase_preflight_is_read_only_and_requires_current_schema(
     runtime.verify_cloudbase_schema(engine, schema="fitcrew")
 
     inspector.get_table_names.assert_called_once_with(schema="fitcrew")
+    assert inspector.get_columns.call_count == len(Base.metadata.tables)
+    assert inspector.get_unique_constraints.call_count == len(Base.metadata.tables)
     assert str(connection.execute.call_args.args[0]) == (
         "SELECT version_num FROM fitcrew.alembic_version"
     )
@@ -78,7 +110,7 @@ def test_cloudbase_preflight_rejects_missing_table_or_wrong_revision(
 ) -> None:
     from bodyos_api import cloudbase_pg_runtime as runtime
 
-    inspector = MagicMock()
+    inspector = _schema_inspector()
     inspector.get_table_names.return_value = ["alembic_version"]
     monkeypatch.setattr(runtime, "inspect", lambda _engine: inspector)
     engine = MagicMock()
@@ -92,6 +124,61 @@ def test_cloudbase_preflight_rejects_missing_table_or_wrong_revision(
     connection.execute.return_value.scalars.return_value.all.return_value = ["0004_product_records"]
     with pytest.raises(RuntimeError, match="revision"):
         runtime.verify_cloudbase_schema(engine, schema="fitcrew")
+
+
+@pytest.mark.parametrize(
+    ("method", "table_name", "message"),
+    [
+        ("get_columns", "identity_bindings", "missing columns"),
+        ("get_indexes", "health_samples", "index mismatch"),
+        ("get_unique_constraints", "identity_bindings", "unique constraint mismatch"),
+        ("get_foreign_keys", "health_samples", "foreign key mismatch"),
+    ],
+)
+def test_cloudbase_preflight_rejects_partial_privacy_schema(
+    monkeypatch: pytest.MonkeyPatch, method: str, table_name: str, message: str
+) -> None:
+    from bodyos_api import cloudbase_pg_runtime as runtime
+
+    inspector = _schema_inspector()
+    original = getattr(inspector, method).side_effect
+    getattr(inspector, method).side_effect = lambda name, **kwargs: (
+        [] if name == table_name else original(name, **kwargs)
+    )
+    monkeypatch.setattr(runtime, "inspect", lambda _engine: inspector)
+    engine = MagicMock()
+    engine.dialect.name = "postgresql"
+
+    with pytest.raises(RuntimeError, match=message):
+        runtime.verify_cloudbase_schema(engine, schema="fitcrew")
+    engine.connect.assert_not_called()
+
+
+def test_cloudbase_preflight_rejects_foreign_key_into_public_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bodyos_api import cloudbase_pg_runtime as runtime
+
+    inspector = _schema_inspector()
+    original = inspector.get_foreign_keys.side_effect
+
+    def foreign_keys(name: str, **kwargs: object) -> list[dict]:
+        keys = original(name, **kwargs)
+        if name == "health_samples":
+            return [{**key, "referred_schema": "public"} for key in keys]
+        return keys
+
+    inspector.get_foreign_keys.side_effect = foreign_keys
+    monkeypatch.setattr(runtime, "inspect", lambda _engine: inspector)
+    engine = MagicMock()
+    engine.dialect.name = "postgresql"
+
+    with pytest.raises(RuntimeError, match="foreign key mismatch"):
+        runtime.verify_cloudbase_schema(engine, schema="fitcrew")
+    engine.connect.assert_not_called()
+    inspector.get_foreign_keys.assert_any_call(
+        "health_samples", schema="fitcrew", postgresql_ignore_search_path=True
+    )
 
 
 @pytest.mark.parametrize(

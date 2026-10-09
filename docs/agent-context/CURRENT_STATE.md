@@ -4,7 +4,7 @@
 
 ## 中文
 
-**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；微信云托管传输提交 `8670061` 的 CI `37871491672` 成功。10 月 9 日客户端私有传输适配通过 45 项小程序本地测试；随后增加可选的云开发 AI 服务端路由，后端本地测试通过，真实云调用未验证。这些均不是云环境、真机或生产验收。
+**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；最新已推送提交 `0d9aec2` 的 CI `37878946050` 三项全部成功。小程序私有云托管传输和可选的云开发 AI 服务端路由已在本地测试，真实云调用未验证。这些均不是云环境、真机或生产验收。
 
 ### 已有实现与验证边界
 
@@ -17,7 +17,7 @@
 - `7f63bbd` / `1386968`：重复确认未变化的授权保留原授权；单独同意后 AI 接收同目标最多 10 条已确认结构化反馈；撤回记忆使相关待执行建议失效。这不证明微信 AI 灰度资格或完整主动干预能力。
 - iOS 有发布地址构建变量和产物检查，见[发布配置](../release/2026-09-10-ios-release-configuration.md)。正式签名与真实 HealthKit 验收未完成。
 - 官方微信工具的基础库及 Profile 模块已修复，见[原生排错](../release/2026-09-10-native-wechat-runtime.md)。9 月 16 日测试预览生成成功（126,337 字节），只证明测试包生成，二维码可能过期。用户已于 9 月 24 日确认正式 AppID 为 `wxae59705a7cce30f9`，并已写入发布工程；该声明尚未通过后台凭据或上传回执独立验证。现支持云托管私有链路配置，见[传输准备](../release/2026-10-09-cloudbase-transport.md)，但环境 ID、服务名、API `baseURL` 仍为空。浏览器预览使用合成数据，没有真实持久化服务。
-- CloudBase PG 有离线私有 schema 清单生成器与受控运行时路由；专用模式只读核对表和版本，不自动迁移。它尚未连接真实云数据库，也未验证权限、TLS、备份恢复或业务闭环。
+- CloudBase PG 有离线私有 schema 清单生成器与受控运行时路由；专用模式只读核对表、列名、索引、唯一约束、外键目标和版本，不自动迁移。它尚未连接真实云数据库，也未验证列类型、权限、TLS、备份恢复或业务闭环。
 
 ### 服务器与阻塞
 
@@ -25,7 +25,7 @@
 
 该次快照中根分区 59 GB 已用 56 GB，仅余 1.2 GB（99%）。尚未清理、验证备份恢复或升级。这是 9 月 16 日快照，不是实时读数。既往 `root@124.156.218.104` SSH 返回 `Permission denied (publickey,password)`，不能据此判断当前控制台状态。备用只读检查见 [API 独立发布流程](../operations/api-only-release.md) 和 `infra/tencent/release-preflight.py`；不读取秘密内容、不清理、不迁移、不部署。
 
-其他未完成项：CloudBase 环境/服务/持久数据库及部署；iOS 配对另需公网 HTTPS 地址。微信类目与平台隐私配置、真实 AI 服务商及资格、Apple 会员/账号/签名、微信真实登录—保存—重登—删除验收、iPhone 安装与真实授权/同步/拒绝/撤回验收也未完成。微信工具 CLI 的 `islogin` 于 10 月 8 日返回 `true`，但 `cloud env list` 要求重新登录。10 月 9 日扫码登录二维码生成后无人完成确认并超时，仍不能确认云环境。云托管私有传输和 AI 服务端路由只有本地代码，环境未开通或部署，不宣称免费长期运行，不自动购买资源。
+其他未完成项：CloudBase 环境/服务/持久数据库及部署；iOS 配对另需公网 HTTPS 地址。微信类目与平台隐私配置、真实 AI 服务商及资格、Apple 会员/账号/签名、微信真实登录—保存—重登—删除验收、iPhone 安装与真实授权/同步/拒绝/撤回验收也未完成。10 月 9 日微信工具 CLI 的 `islogin` 为 `false`，`cloud env list` 要求重新登录；此前生成的扫码登录二维码已超时，仍不能确认云环境。云托管私有传输和 AI 服务端路由只有本地代码，环境未开通或部署，不宣称免费长期运行，不自动购买资源。
 
 ### 后续目标与证明
 
@@ -35,7 +35,7 @@
 
 ## English
 
-**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. Cloud Hosting transport commit `8670061` passed CI run `37871491672`. The October 9 private WeChat transport adapter passed 45 local Mini Program tests. An optional CloudBase AI server route was then added and tested locally, but has not been called through a real cloud account. None of this is cloud, device, or production acceptance.
+**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. All three CI jobs passed for the latest pushed commit `0d9aec2` in run `37878946050`. The private WeChat Cloud Hosting transport and optional CloudBase AI server route have local test coverage but have not been called through a real cloud account. None of this is cloud, device, or production acceptance.
 
 ### Implementation and evidence limits
 
@@ -48,7 +48,7 @@ Both clients have five native pages, a 90-day journey, manual records, experimen
 - `7f63bbd` / `1386968`: unchanged consent preserves grants. Separate AI consent permits up to ten confirmed structured feedback items for the same goal; withdrawing memory invalidates dependent pending proposals. This establishes neither WeChat AI eligibility nor complete proactive intervention.
 - iOS has release URL build variables and artifact checks; formal signing and real HealthKit acceptance remain incomplete. See the linked release configuration document.
 - Official WeChat base-library and Profile dependency problems were repaired. The September 16 sandbox preview succeeded (126,337 bytes), proving packaging only; its QR may expire. The owner confirmed `wxae59705a7cce30f9` as the formal AppID on September 24 and it is now in the release project; that declaration is not independently verified by dashboard credentials or an upload receipt. The private Cloud Hosting client transport is locally prepared, but environment ID, service name and API `baseURL` remain empty. Browser previews use synthetic fixtures without real persistence.
-- An offline CloudBase PG private-schema generator lists tables, indexes and the revision stamp; controlled runtime routing and read-only startup checks are also implemented. No real cloud database, role/TLS configuration, backup recovery, or user flow has been verified.
+- An offline CloudBase PG private-schema generator lists tables, indexes and the revision stamp; controlled runtime routing and read-only startup checks now cover table and column names, indexes, unique constraints, foreign-key targets, and revision. No real cloud database, column types, role/TLS configuration, backup recovery, or user flow has been verified.
 
 ### Server and blockers
 
@@ -56,7 +56,7 @@ On September 16, read-only diagnostics succeeded through the user's logged-in Te
 
 That remote snapshot showed 56 GB used on a 59 GB root partition, with 1.2 GB free (99%). No cleanup, backup restore verification or upgrade occurred. These are September 16 observations, not live readings. Earlier `root@124.156.218.104` SSH attempts returned `Permission denied (publickey,password)`; this does not establish current console state. The standalone `infra/tencent/release-preflight.py`, documented in the API-only procedure, is a read-only fallback; it does not read secrets, clean up, migrate or deploy.
 
-Remaining: CloudBase environment/service, persistent database and deployment; iOS pairing additionally needs a public HTTPS address. WeChat category and platform privacy details, real AI provider and eligibility, Apple membership/account/signing, real WeChat login/save/relogin/erasure, and iPhone installation with real HealthKit authorization/sync/denial/revocation are also unfinished. On October 8, DevTools CLI `islogin` was `true` but `cloud env list` required a fresh login. A newly generated login QR code expired without confirmation on October 9, so the environment remains unverified. The private Cloud Hosting transport and AI route are only local code, with no environment or deployed backend. Do not claim indefinite free production or buy resources automatically.
+Remaining: CloudBase environment/service, persistent database and deployment; iOS pairing additionally needs a public HTTPS address. WeChat category and platform privacy details, real AI provider and eligibility, Apple membership/account/signing, real WeChat login/save/relogin/erasure, and iPhone installation with real HealthKit authorization/sync/denial/revocation are also unfinished. On October 9, DevTools CLI `islogin` was `false` and `cloud env list` required a fresh login. Earlier login QR codes expired without confirmation, so the environment remains unverified. The private Cloud Hosting transport and AI route are only local code, with no environment or deployed backend. Do not claim indefinite free production or buy resources automatically.
 
 ### Next goals and evidence
 
