@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     apple_client_id: str = ""
     apple_client_secret: SecretStr = SecretStr("")
     database_url: str = "sqlite+pysqlite:///:memory:"
+    database_schema: str = ""
     encryption_key: SecretStr = SecretStr("")
     owner_token: SecretStr = SecretStr("")
     identity_pepper: SecretStr = SecretStr("")
