@@ -6,7 +6,11 @@ from datetime import timedelta
 
 from sqlalchemy import select, update
 
-from bodyos_api.model_gateway import HarnessFailure, ModelEnvelopeRejected
+from bodyos_api.model_gateway import (
+    HarnessFailure,
+    ModelEnvelopeRejected,
+    cloudbase_ai_settings_valid,
+)
 from bodyos_api.models import Consent
 
 AI_NOTICE = (
@@ -28,10 +32,14 @@ def disclosure_version(settings):
 
 def capabilities(svc, settings):
     version = disclosure_version(settings)
+    cloudbase_key = settings.cloudbase_ai_api_key.get_secret_value()
+    cloudbase_fields = (settings.cloudbase_ai_env_id, cloudbase_key, settings.cloudbase_ai_model)
+    cloudbase_ready = not any(cloudbase_fields) or cloudbase_ai_settings_valid(*cloudbase_fields)
     available = bool(
         settings.product_ai_enabled
         and settings.product_ai_provider
         and settings.product_ai_notice_version
+        and cloudbase_ready
     )
     consent = svc.session.scalar(
         select(Consent).where(

@@ -5,6 +5,7 @@
 ### 未发布：微信云托管私有传输准备（2026-10-09）
 
 - 小程序可配置 `wx.cloud.callContainer`，沿用现有 `/v3` API、设备令牌和隐私边界；无环境 ID、服务名或 HTTPS 配对地址时保持拒绝请求。新增本地传输与配置验证测试。尚未开通云环境、部署数据库或后端、真机验收、上传或提审；见[传输准备](docs/release/2026-10-09-cloudbase-transport.md)。
+- 后端增加可选的腾讯云开发 AI 服务端路由。只有环境、模型和密钥完整时启用；配置不全时不向用户展示可用 AI，也不回退到未披露的其他服务商。尚未在真实云账号调用。
 
 ### 未发布：微信正式 AppID 配置（2026-09-24）
 
@@ -51,6 +52,7 @@
 ### Unreleased: private WeChat Cloud Hosting transport preparation (2026-10-09)
 
 - The Mini Program can use `wx.cloud.callContainer` against the existing `/v3` API, device tokens, and privacy boundary. Missing environment ID, service name, or HTTPS pairing URL fails closed. Local transport/configuration tests were added. No cloud environment, database, backend deployment, device acceptance, upload, or formal submission exists yet; see the [transport note](docs/release/2026-10-09-cloudbase-transport.md).
+- An optional server-side CloudBase AI route now requires a complete environment, model, and secret key. Partial configuration does not advertise AI or fall back to an undisclosed provider. No real cloud-account invocation has been verified.
 
 ### Unreleased: formal WeChat AppID configuration (2026-09-24)
 

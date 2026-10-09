@@ -2,7 +2,14 @@ from functools import lru_cache
 
 from bodyos_api.config import get_settings
 from bodyos_api.crypto import FieldCipher
-from bodyos_api.model_gateway import CodexCLIHarness, HermesCLIHarness, RoutedModelGateway
+from bodyos_api.model_gateway import (
+    CloudBaseAIHarness,
+    CodexCLIHarness,
+    HermesCLIHarness,
+    RoutedModelGateway,
+    UnavailableHarness,
+    cloudbase_ai_settings_valid,
+)
 
 
 @lru_cache
@@ -16,6 +23,21 @@ def get_field_cipher() -> FieldCipher:
 @lru_cache
 def get_model_gateway() -> RoutedModelGateway:
     settings = get_settings()
+    cloudbase_key = settings.cloudbase_ai_api_key.get_secret_value()
+    if settings.cloudbase_ai_env_id or cloudbase_key or settings.cloudbase_ai_model:
+        if not cloudbase_ai_settings_valid(
+            settings.cloudbase_ai_env_id, cloudbase_key, settings.cloudbase_ai_model
+        ):
+            return RoutedModelGateway(UnavailableHarness(), UnavailableHarness())
+        return RoutedModelGateway(
+            CloudBaseAIHarness(
+                env_id=settings.cloudbase_ai_env_id,
+                api_key=cloudbase_key,
+                model=settings.cloudbase_ai_model,
+                timeout_seconds=settings.model_timeout_seconds,
+            ),
+            UnavailableHarness(),
+        )
     return RoutedModelGateway(
         CodexCLIHarness(
             settings.codex_command,

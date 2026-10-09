@@ -4,7 +4,7 @@
 
 ## 中文
 
-**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；最近已推送提交为 `58b2ed8`，CI `35900031916` 成功。10 月 9 日添加微信云托管客户端私有传输适配，本地 45 项小程序测试通过；这仍不是云环境、真机或生产验收。
+**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；微信云托管传输提交 `8670061` 的 CI `37871491672` 成功。10 月 9 日客户端私有传输适配通过 45 项小程序本地测试；随后增加可选的云开发 AI 服务端路由，后端本地测试通过，真实云调用未验证。这些均不是云环境、真机或生产验收。
 
 ### 已有实现与验证边界
 
@@ -22,7 +22,7 @@
 
 该次快照中根分区 59 GB 已用 56 GB，仅余 1.2 GB（99%）。尚未清理、验证备份恢复或升级。这是 9 月 16 日快照，不是实时读数。既往 `root@124.156.218.104` SSH 返回 `Permission denied (publickey,password)`，不能据此判断当前控制台状态。备用只读检查见 [API 独立发布流程](../operations/api-only-release.md) 和 `infra/tencent/release-preflight.py`；不读取秘密内容、不清理、不迁移、不部署。
 
-其他未完成项：CloudBase 环境/服务/持久数据库/公网配对地址及部署，微信类目与平台隐私配置，真实 AI 服务商及资格，Apple 会员/账号/签名，微信真实登录—保存—重登—删除验收，iPhone 安装与真实授权/同步/拒绝/撤回验收。微信工具 CLI 的 `islogin` 于 10 月 8 日返回 `true`，但 `cloud env list` 要求重新登录，不能据此确认云环境。云托管私有传输已有本地代码，环境未开通或部署，不宣称免费长期运行，不自动购买资源。
+其他未完成项：CloudBase 环境/服务/持久数据库/公网配对地址及部署，微信类目与平台隐私配置，真实 AI 服务商及资格，Apple 会员/账号/签名，微信真实登录—保存—重登—删除验收，iPhone 安装与真实授权/同步/拒绝/撤回验收。微信工具 CLI 的 `islogin` 于 10 月 8 日返回 `true`，但 `cloud env list` 要求重新登录。10 月 9 日扫码登录二维码生成后无人完成确认并超时，仍不能确认云环境。云托管私有传输和 AI 服务端路由只有本地代码，环境未开通或部署，不宣称免费长期运行，不自动购买资源。
 
 ### 后续目标与证明
 
@@ -32,7 +32,7 @@
 
 ## English
 
-**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. The latest pushed commit is `58b2ed8`, with successful CI run `35900031916`. The October 9 private WeChat Cloud Hosting transport adapter passed 45 local Mini Program tests; that is not cloud, device, or production acceptance.
+**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. Cloud Hosting transport commit `8670061` passed CI run `37871491672`. The October 9 private WeChat transport adapter passed 45 local Mini Program tests. An optional CloudBase AI server route was then added and tested locally, but has not been called through a real cloud account. None of this is cloud, device, or production acceptance.
 
 ### Implementation and evidence limits
 
@@ -50,7 +50,7 @@ On September 16, read-only diagnostics succeeded through the user's logged-in Te
 
 That remote snapshot showed 56 GB used on a 59 GB root partition, with 1.2 GB free (99%). No cleanup, backup restore verification or upgrade occurred. These are September 16 observations, not live readings. Earlier `root@124.156.218.104` SSH attempts returned `Permission denied (publickey,password)`; this does not establish current console state. The standalone `infra/tencent/release-preflight.py`, documented in the API-only procedure, is a read-only fallback; it does not read secrets, clean up, migrate or deploy.
 
-Remaining: CloudBase environment/service, persistent database, public HTTPS pairing address and deployment; WeChat category and platform privacy details; real AI provider and eligibility; Apple membership/account/signing; real WeChat login/save/relogin/erasure; and iPhone installation with real HealthKit authorization/sync/denial/revocation. On October 8, DevTools CLI `islogin` was `true` but `cloud env list` required a fresh login. The private Cloud Hosting transport is only local code, with no environment or deployed backend. Do not claim indefinite free production or buy resources automatically.
+Remaining: CloudBase environment/service, persistent database, public HTTPS pairing address and deployment; WeChat category and platform privacy details; real AI provider and eligibility; Apple membership/account/signing; real WeChat login/save/relogin/erasure; and iPhone installation with real HealthKit authorization/sync/denial/revocation. On October 8, DevTools CLI `islogin` was `true` but `cloud env list` required a fresh login. A newly generated login QR code expired without confirmation on October 9, so the environment remains unverified. The private Cloud Hosting transport and AI route are only local code, with no environment or deployed backend. Do not claim indefinite free production or buy resources automatically.
 
 ### Next goals and evidence
 

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     identity_pepper: SecretStr = SecretStr("")
     internal_token: SecretStr = SecretStr("")
     model_proxy_token: SecretStr = SecretStr("")
+    cloudbase_ai_env_id: str = ""
+    cloudbase_ai_api_key: SecretStr = SecretStr("")
+    cloudbase_ai_model: str = ""
     public_base_url: str = "http://127.0.0.1:8000"
     codex_command: str = "codex"
     hermes_command: str = "hermes"
