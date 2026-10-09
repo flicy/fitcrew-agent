@@ -15,6 +15,7 @@
 - `7f63bbd` / `1386968`：重复确认未变化的授权保留原授权；单独同意后 AI 接收同目标最多 10 条已确认结构化反馈；撤回记忆使相关待执行建议失效。这不证明微信 AI 灰度资格或完整主动干预能力。
 - iOS 有发布地址构建变量和产物检查，见[发布配置](../release/2026-09-10-ios-release-configuration.md)。正式签名与真实 HealthKit 验收未完成。
 - 官方微信工具的基础库及 Profile 模块已修复，见[原生排错](../release/2026-09-10-native-wechat-runtime.md)。9 月 16 日测试预览生成成功（126,337 字节），只证明测试包生成，二维码可能过期。用户已于 9 月 24 日确认正式 AppID 为 `wxae59705a7cce30f9`，并已写入发布工程；该声明尚未通过后台凭据或上传回执独立验证。现支持云托管私有链路配置，见[传输准备](../release/2026-10-09-cloudbase-transport.md)，但环境 ID、服务名、API `baseURL` 仍为空。浏览器预览使用合成数据，没有真实持久化服务。
+- CloudBase PG 有离线私有 schema 清单生成器，按现有模型列出建表、索引和版本戳；它没有连接数据库，也未解决正式账号、运行时 schema 路由或备份恢复。
 
 ### 服务器与阻塞
 
@@ -43,6 +44,7 @@ Both clients have five native pages, a 90-day journey, manual records, experimen
 - `7f63bbd` / `1386968`: unchanged consent preserves grants. Separate AI consent permits up to ten confirmed structured feedback items for the same goal; withdrawing memory invalidates dependent pending proposals. This establishes neither WeChat AI eligibility nor complete proactive intervention.
 - iOS has release URL build variables and artifact checks; formal signing and real HealthKit acceptance remain incomplete. See the linked release configuration document.
 - Official WeChat base-library and Profile dependency problems were repaired. The September 16 sandbox preview succeeded (126,337 bytes), proving packaging only; its QR may expire. The owner confirmed `wxae59705a7cce30f9` as the formal AppID on September 24 and it is now in the release project; that declaration is not independently verified by dashboard credentials or an upload receipt. The private Cloud Hosting client transport is locally prepared, but environment ID, service name and API `baseURL` remain empty. Browser previews use synthetic fixtures without real persistence.
+- An offline CloudBase PG private-schema generator now lists tables, indexes and the revision stamp from the current models. It does not connect to a database or resolve the formal account, runtime schema routing, or backup recovery.
 
 ### Server and blockers
 
