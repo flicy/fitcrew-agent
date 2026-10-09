@@ -4,7 +4,7 @@
 
 ## 中文
 
-**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；最新已推送提交 `0d9aec2` 的 CI `37878946050` 三项全部成功。小程序私有云托管传输和可选的云开发 AI 服务端路由已在本地测试，真实云调用未验证。这些均不是云环境、真机或生产验收。
+**小程序和 iOS 均未正式提审，本发布分支尚未部署到生产。** 分支为 `codex/free-public-release-20260907`；已推送提交 `0d9aec2` 的 CI `37878946050` 三项全部成功，后续提交须分别核对其 CI。小程序私有云托管传输和可选的云开发 AI 服务端路由已在本地测试，真实云调用未验证。这些均不是云环境、真机或生产验收。
 
 ### 已有实现与验证边界
 
@@ -35,7 +35,7 @@
 
 ## English
 
-**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. All three CI jobs passed for the latest pushed commit `0d9aec2` in run `37878946050`. The private WeChat Cloud Hosting transport and optional CloudBase AI server route have local test coverage but have not been called through a real cloud account. None of this is cloud, device, or production acceptance.
+**Neither the Mini Program nor iOS has been formally submitted, and this release branch is not deployed to production.** Branch: `codex/free-public-release-20260907`. All three CI jobs passed for pushed commit `0d9aec2` in run `37878946050`; check later commits against their own runs. The private WeChat Cloud Hosting transport and optional CloudBase AI server route have local test coverage but have not been called through a real cloud account. None of this is cloud, device, or production acceptance.
 
 ### Implementation and evidence limits
 
