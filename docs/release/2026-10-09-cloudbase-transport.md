@@ -20,9 +20,13 @@ CloudBase CLI 3.8.5 的部署命令需要真实环境 ID、服务名、来源目
 
 微信优先私有调用只改变传输门槛。腾讯云[资源点价格说明](https://cloud.tencent.com/document/product/876/127357)写明：免费体验环境在小程序发布后第 15 天到期，不能支撑长期免费正式版。页面当前展示个人版优惠价每月 19.9 元，但账号所在地域、资格、结算价及超额费用仍需在购买前核对。若采用 CloudBase PG 加云托管，应选同时支持二者的地域；该价格表显示上海 PG 支持云托管，新加坡 PG 不支持。
 
+同一价格表的个人版“数据回档”栏为 `-`，但 CloudBase [PostgreSQL 常见问题](https://docs.cloudbase.net/en/database/postgresql/faq)又说明其底层腾讯云 PostgreSQL 提供自动和手动备份。两处说明不能证明用户账号中 PG 实例的具体恢复权限、保留期或费用。若选最低档，须在真实环境用脱敏测试数据核验实际备份、隔离恢复和删除流程，再承载用户健康数据。
+
 ## English
 
 The private WeChat-first path changes transport requirements only. The [CloudBase resource-point pricing](https://cloud.tencent.com/document/product/876/127357) says the free trial expires on day 15 after Mini Program publication; it cannot support a lasting free release. The cited page currently advertises a 19.9 RMB/month personal plan, but the account's region, eligibility, actual checkout price, and overage need verification before any purchase. For a CloudBase PG plus Cloud Hosting deployment, use a region that supports both; the cited pricing table shows Shanghai supports Cloud Hosting with PG, while Singapore PG does not.
+
+The same pricing table marks the personal tier's “data rewind” as unavailable, while CloudBase's [PostgreSQL FAQ](https://docs.cloudbase.net/en/database/postgresql/faq) says its underlying Tencent Cloud PostgreSQL provides automatic and manual backups. Neither page establishes the actual PG instance's recovery permissions, retention, or cost in this account. The lowest tier still needs an account-specific backup, isolated restore, and erasure rehearsal with synthetic data before storing user health records.
 
 The Mini Program client can now select either its existing HTTPS `wx.request` transport or `wx.cloud.callContainer`. Both call the existing FastAPI `/v3` contract and preserve server-verified WeChat sign-in, device tokens, consent, encrypted storage, export, and deletion. No parallel identity or health-data stack is introduced. The private Cloud Hosting link does not require a Mini Program request-domain entry, but it does not deploy the backend, provision a database, complete privacy review, or provide iOS access by itself.
 
