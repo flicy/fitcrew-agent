@@ -24,5 +24,9 @@ esac
 [ -n "${BODYOS_WECHAT_APP_SECRET:-}" ] || { echo 'Missing BODYOS_WECHAT_APP_SECRET.' >&2; exit 1; }
 [ -n "${BODYOS_IDENTITY_PEPPER:-}" ] || { echo 'Missing BODYOS_IDENTITY_PEPPER.' >&2; exit 1; }
 [ -n "${BODYOS_ENCRYPTION_KEY:-}" ] || { echo 'Missing BODYOS_ENCRYPTION_KEY.' >&2; exit 1; }
+if ! python -c 'from bodyos_api.runtime import get_field_cipher; get_field_cipher()' >/dev/null 2>&1; then
+    echo 'BODYOS_ENCRYPTION_KEY must be a URL-safe base64 encoded 32-byte key.' >&2
+    exit 1
+fi
 
 exec /usr/local/bin/api-entrypoint

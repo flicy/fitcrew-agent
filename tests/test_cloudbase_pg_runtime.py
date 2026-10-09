@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -9,6 +10,37 @@ from sqlalchemy import UniqueConstraint, select
 from sqlalchemy.dialects import postgresql
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_cloudbase_entrypoint_rejects_invalid_field_encryption_key(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python").symlink_to(sys.executable)
+    result = subprocess.run(
+        ["sh", str(ROOT / "infra/tencent/cloudbase-api-entrypoint.sh")],
+        cwd=tmp_path,
+        env={
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "PYTHONPATH": str(ROOT / "apps/api"),
+            "BODYOS_ENVIRONMENT": "production",
+            "BODYOS_PUBLIC_AUTH_ENABLED": "true",
+            "BODYOS_PRIVATE_WECHAT_CLOUD_ENABLED": "true",
+            "BODYOS_DATABASE_SCHEMA": "fitcrew",
+            "BODYOS_DATABASE_MIGRATION_MODE": "verify-cloudbase-pg",
+            "BODYOS_DATABASE_URL": "postgresql://unused:unused@127.0.0.1/unused",
+            "BODYOS_PUBLIC_BASE_URL": "",
+            "BODYOS_WECHAT_APP_ID": "wx-test",
+            "BODYOS_WECHAT_APP_SECRET": "unused",
+            "BODYOS_IDENTITY_PEPPER": "unused",
+            "BODYOS_ENCRYPTION_KEY": "too-short",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "32-byte key" in result.stderr
+    assert "No such file" not in result.stderr
 
 
 def _schema_inspector() -> MagicMock:
